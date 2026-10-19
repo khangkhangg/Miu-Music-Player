@@ -1,8 +1,11 @@
 pub mod decode;
+pub mod eq;
+pub mod eq_service;
 #[cfg(test)]
 pub mod fixtures;
 pub mod pipeline;
 pub mod player;
+pub mod presets;
 pub mod service;
 pub mod spectrum;
 pub mod timeline;

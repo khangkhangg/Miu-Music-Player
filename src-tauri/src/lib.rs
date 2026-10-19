@@ -75,7 +75,8 @@ pub fn run() {
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
             windows::setup(app.handle(), db.clone());
-            library::service::start(app.handle().clone(), db, library_watch);
+            library::service::start(app.handle().clone(), db.clone(), library_watch);
+            audio::eq_service::start(&db, &player);
             audio::service::start(app.handle().clone(), player.clone());
             audio::visualizer::start(app.handle().clone(), player, visualizer_on);
             Ok(())
@@ -97,6 +98,11 @@ pub fn run() {
             audio::service::player_volume,
             audio::service::player_skip,
             windows::open_main,
+            audio::eq_service::eq_state,
+            audio::eq_service::set_eq,
+            audio::eq_service::apply_eq_preset,
+            audio::eq_service::save_eq_preset,
+            audio::eq_service::delete_eq_preset,
             audio::visualizer::visualizer_settings,
             audio::visualizer::set_visualizer_on,
             audio::visualizer::set_visualizer_style,

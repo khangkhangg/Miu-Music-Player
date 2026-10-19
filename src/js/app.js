@@ -6,6 +6,7 @@ import { songRow, visibleRange } from './songs.js';
 import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
+import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
@@ -72,6 +73,7 @@ if (invoke) {
     if (ms != null) invoke('player_seek', { ms });
   });
   document.getElementById('delete-all').addEventListener('click', () => confirmDelete(shown.filter(x => x.rating === -1)));
+  setupEq();
   document.getElementById('np-volume').addEventListener('input', e =>
     invoke('player_volume', { volume: Number(e.target.value) / 100 }));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
@@ -300,4 +302,99 @@ function showPrereqNotice(report) {
   notice.querySelector('.notice-title').textContent = message.title;
   notice.querySelector('.notice-body').textContent = message.body;
   notice.querySelector('.notice-detail').textContent = message.detail;
+}
+
+// ---- Equalizer panel (F7.7) ----
+let eq = null;
+let eqSendTimer = null;
+let eqDragging = -2; // index of the slider being dragged (-1 = preamp), -2 = none
+
+function setupEq() {
+  const $ = id => document.getElementById(id);
+  $('eq-open').addEventListener('click', () => {
+    const panel = $('eq-panel');
+    panel.hidden = !panel.hidden;
+    $('eq-open').setAttribute('aria-expanded', String(!panel.hidden));
+  });
+  $('eq-enabled').addEventListener('change', e => sendEq({ ...eq.settings, enabled: e.target.checked }, true));
+  $('eq-preset').addEventListener('change', e => {
+    if (e.target.value) invoke('apply_eq_preset', { name: e.target.value }).then(renderEq).catch(showEqError);
+  });
+  $('eq-save-open').addEventListener('click', () => { $('eq-save-row').hidden = false; $('eq-save-name').focus(); });
+  $('eq-save').addEventListener('click', () => {
+    invoke('save_eq_preset', { name: $('eq-save-name').value })
+      .then(st => { $('eq-save-row').hidden = true; $('eq-save-name').value = ''; renderEq(st); })
+      .catch(showEqError);
+  });
+  $('eq-delete').addEventListener('click', () => {
+    if (eq?.preset) invoke('delete_eq_preset', { name: eq.preset }).then(renderEq).catch(showEqError);
+  });
+  window.__TAURI__.event.listen('eq-changed', e => renderEq(e.payload));
+  invoke('eq_state').then(renderEq);
+}
+
+function showEqError(message) {
+  const el = document.getElementById('eq-error');
+  el.textContent = String(message);
+  setTimeout(() => { el.textContent = ''; }, 5000);
+}
+
+/** Send settings to the engine; while dragging, at most every 50 ms. */
+function sendEq(settings, now = false) {
+  eq = { ...eq, settings };
+  clearTimeout(eqSendTimer);
+  const go = () => invoke('set_eq', { settings: eq.settings }).then(renderEq).catch(showEqError);
+  if (now) go(); else eqSendTimer = setTimeout(go, 50);
+}
+
+function slider(index, value, label) {
+  const wrap = document.createElement('label');
+  wrap.className = index < 0 ? 'eq-band eq-preamp' : 'eq-band';
+  const readout = document.createElement('span');
+  readout.className = 'eq-db';
+  readout.textContent = dbLabel(value);
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = '-12';
+  input.max = '12';
+  input.step = '0.5';
+  input.value = String(value);
+  input.setAttribute('aria-label', index < 0 ? 'Preamp' : `${label} Hz`);
+  input.addEventListener('pointerdown', () => { eqDragging = index; });
+  input.addEventListener('change', () => { eqDragging = -2; });
+  input.addEventListener('input', () => {
+    readout.textContent = dbLabel(Number(input.value));
+    sendEq(withGain(eq.settings, index, Number(input.value)));
+  });
+  const name = document.createElement('span');
+  name.className = 'eq-hz muted';
+  name.textContent = label;
+  wrap.append(readout, input, name);
+  return wrap;
+}
+
+function renderEq(state) {
+  if (!state) return;
+  eq = state;
+  const $ = id => document.getElementById(id);
+  $('eq-enabled').checked = state.settings.enabled;
+  const select = $('eq-preset');
+  select.replaceChildren(...presetOptions(state).map(o => {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.user ? `${o.label} (yours)` : o.label;
+    return opt;
+  }));
+  select.value = state.preset ?? '';
+  $('eq-delete').hidden = !state.user.some(p => p.name === state.preset);
+  if (eqDragging === -2) {
+    $('eq-sliders').replaceChildren(
+      slider(-1, state.settings.preampDb, 'Preamp'),
+      ...state.bandsHz.map((hz, i) => slider(i, state.settings.gainsDb[i], bandLabel(hz))),
+    );
+  }
+  $('eq-sliders').classList.toggle('off', !state.settings.enabled);
+  const clip = clipText(state);
+  $('eq-clip').hidden = !clip;
+  $('eq-clip').textContent = clip ?? '';
 }

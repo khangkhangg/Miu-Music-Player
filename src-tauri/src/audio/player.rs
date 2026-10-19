@@ -12,6 +12,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
 use crate::audio::decode::AudioError;
+use crate::audio::eq::{EqSettings, Equalizer};
 use crate::audio::pipeline::Feeder;
 use crate::audio::timeline::Timeline;
 
@@ -51,6 +52,7 @@ pub struct Player {
     status: Arc<Mutex<Status>>,
     tap: Tap,
     rate: u32,
+    eq: Arc<Mutex<Option<EqSettings>>>,
 }
 
 impl Player {
@@ -62,12 +64,14 @@ impl Player {
         let engine_status = status.clone();
         let tap: Tap = Arc::new(Mutex::new(VecDeque::with_capacity(TAP_LEN * 2)));
         let engine_tap = tap.clone();
+        let eq: Arc<Mutex<Option<EqSettings>>> = Arc::new(Mutex::new(None));
+        let engine_eq = eq.clone();
         std::thread::Builder::new()
             .name("audio-engine".into())
-            .spawn(move || engine(rx, engine_status, engine_tap, ready_tx))
+            .spawn(move || engine(rx, engine_status, engine_tap, engine_eq, ready_tx))
             .map_err(|e| AudioError(e.to_string()))?;
         let rate = ready_rx.recv().map_err(|_| AudioError("audio engine stopped".into()))??;
-        Ok(Self { tx, status, tap, rate })
+        Ok(Self { tx, status, tap, rate, eq })
     }
 
     pub fn play(&self, tracks: Vec<PathBuf>, start: usize) {
@@ -92,6 +96,12 @@ impl Player {
     pub fn status(&self) -> Status {
         self.status.lock().map(|s| s.clone()).unwrap_or_default()
     }
+    /// Apply new equalizer settings (takes effect within one device buffer).
+    pub fn set_eq(&self, settings: EqSettings) {
+        if let Ok(mut e) = self.eq.lock() {
+            *e = Some(settings);
+        }
+    }
     /// Output sample rate of the device.
     pub fn rate(&self) -> u32 {
         self.rate
@@ -102,7 +112,13 @@ impl Player {
     }
 }
 
-fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, tap: Tap, ready: Sender<Result<u32, AudioError>>) {
+fn engine(
+    rx: Receiver<Cmd>,
+    status: Arc<Mutex<Status>>,
+    tap: Tap,
+    eq_update: Arc<Mutex<Option<EqSettings>>>,
+    ready: Sender<Result<u32, AudioError>>,
+) {
     let fail = |e: String| AudioError(e);
     let host = cpal::default_host();
     let Some(device) = host.default_output_device() else {
@@ -125,6 +141,8 @@ fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, tap: Tap, ready: Sender
         volume: AtomicU32::new(1.0f32.to_bits()),
         played: AtomicU64::new(0),
     });
+    // New EQ settings arrive through `eq_update`; the callback picks them up without waiting.
+    let mut eq = Equalizer::new(rate, channels);
     let cb = shared.clone();
     let stream = device.build_output_stream(
         &config.config(),
@@ -140,6 +158,11 @@ fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, tap: Tap, ready: Sender
                 out.fill(0.0);
                 return;
             }
+            if let Ok(mut pending) = eq_update.try_lock() {
+                if let Some(s) = pending.take() {
+                    eq.set(&s);
+                }
+            }
             let vol = f32::from_bits(cb.volume.load(Ordering::Relaxed));
             let n = out.len().min(consumer.slots());
             if let Ok(chunk) = consumer.read_chunk(n) {
@@ -149,6 +172,7 @@ fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, tap: Tap, ready: Sender
                 }
                 chunk.commit_all();
             }
+            eq.process(&mut out[..n]);
             out[n..].fill(0.0);
             cb.played.fetch_add((n / channels) as u64, Ordering::AcqRel);
             // Never wait in the audio callback: skip the tap if the visualizer is reading it.
@@ -311,6 +335,11 @@ mod tests {
         let tap = player.recent_mono();
         assert_eq!(tap.len(), 2048, "visualizer tap holds the last 2048 samples");
         assert!(tap.iter().any(|v| v.abs() > 0.05), "tap carries the played signal (before volume)");
+
+        // Changing the EQ mid-song must not interrupt playback.
+        player.set_eq(crate::audio::eq::EqSettings { enabled: true, preamp_db: -6.0, gains_db: [6.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] });
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(player.status().playing, "still playing after an EQ change");
 
         player.pause();
         std::thread::sleep(Duration::from_millis(200));

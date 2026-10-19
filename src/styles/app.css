@@ -100,3 +100,23 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .danger-btn:hover { background: var(--danger); color: var(--surface); }
 .delete-result { margin: 0 20px 8px; font-size: 12px; }
 .song-spacer .delete-btn { color: var(--danger); }
+.main { position: relative; }
+.now-playing { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr) 150px; }
+.np-right { display: flex; align-items: center; gap: 10px; }
+.eq-toggle { font: inherit; font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius); background: none; color: var(--text-muted); padding: 3px 8px; cursor: pointer; }
+.eq-toggle[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.eq-panel { position: absolute; right: 16px; bottom: 74px; z-index: 5; width: min(640px, calc(100% - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); padding: 12px 14px; }
+.eq-panel[hidden], .eq-save[hidden], .eq-clip[hidden], #eq-delete[hidden] { display: none; }
+.eq-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.eq-head select, .eq-head input[type="text"] { font: inherit; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.eq-switch { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.eq-btn { font: inherit; font-size: 12px; border: 1px solid var(--border); background: none; color: var(--text); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.eq-btn:hover { background: var(--surface-muted); }
+.eq-error { font-size: 12px; color: var(--danger); }
+.eq-sliders { display: flex; justify-content: space-between; gap: 4px; margin-top: 12px; }
+.eq-sliders.off { opacity: 0.45; }
+.eq-band { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; }
+.eq-preamp { padding-right: 10px; border-right: 1px solid var(--border); margin-right: 4px; }
+.eq-band input[type="range"] { writing-mode: vertical-lr; direction: rtl; width: 18px; height: 120px; margin: 0; accent-color: var(--accent); }
+.eq-db { font-variant-numeric: tabular-nums; min-width: 30px; text-align: center; }
+.eq-clip { margin: 8px 0 0; font-size: 12px; color: var(--danger); }

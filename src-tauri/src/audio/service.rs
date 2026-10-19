@@ -50,6 +50,12 @@ impl PlayerHandle {
         PlayerEvent { available: true, playing: s.playing, song_id, position_ms: s.position_ms, volume: s.volume }
     }
 
+    pub fn set_eq(&self, settings: crate::audio::eq::EqSettings) {
+        if let Some(p) = &self.player {
+            p.set_eq(settings);
+        }
+    }
+
     pub fn rate(&self) -> Option<u32> {
         self.player.as_ref().map(Player::rate)
     }

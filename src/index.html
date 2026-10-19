@@ -94,8 +94,27 @@
           <div class="np-bar" id="np-bar" role="slider" aria-label="Position" tabindex="0"><div class="np-fill" id="np-fill"></div></div>
           <span class="muted np-time" id="np-duration"></span>
         </div>
-        <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume">
+        <div class="np-right">
+          <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel">EQ</button>
+          <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume">
+        </div>
       </div>
+      <section class="eq-panel" id="eq-panel" aria-label="Equalizer" hidden>
+        <div class="eq-head">
+          <strong>Equalizer</strong>
+          <label class="eq-switch"><input type="checkbox" id="eq-enabled"> On</label>
+          <select id="eq-preset" aria-label="Preset"></select>
+          <button class="eq-btn" id="eq-save-open" type="button">Save as…</button>
+          <span class="eq-save" id="eq-save-row" hidden>
+            <input id="eq-save-name" type="text" maxlength="40" placeholder="My preset" aria-label="Preset name">
+            <button class="eq-btn" id="eq-save" type="button">Save</button>
+          </span>
+          <button class="eq-btn" id="eq-delete" type="button" hidden>Delete preset</button>
+          <span class="eq-error" id="eq-error" role="alert"></span>
+        </div>
+        <div class="eq-sliders" id="eq-sliders"></div>
+        <p class="eq-clip" id="eq-clip" role="status" hidden></p>
+      </section>
       <footer class="status muted" id="app-version"></footer>
     </main>
   </div>
