@@ -93,6 +93,7 @@ pub fn run() {
             library::service::delete_songs,
             library::service::add_folder,
             library::service::remove_folder,
+            library::service::set_folder_encoding,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

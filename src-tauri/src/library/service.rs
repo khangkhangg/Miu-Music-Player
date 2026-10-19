@@ -164,3 +164,16 @@ pub fn remove_folder(
     restart_watch(&app, &db, &watch);
     Ok(folder_list(&db))
 }
+
+/// Force (or clear, with `None`) a folder's legacy tag encoding, then re-read its tags (F8.1).
+#[tauri::command]
+pub fn set_folder_encoding(id: i64, encoding: Option<String>, app: AppHandle, db: State<'_, SharedDb>) -> Result<Vec<WatchedFolder>, String> {
+    {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        folders::set_tag_encoding(&d, id, encoding.as_deref().filter(|e| !e.is_empty()))?;
+    }
+    rescan(&db, &[id]);
+    let list = folder_list(&db);
+    let _ = app.emit("library-changed", &list);
+    Ok(list)
+}

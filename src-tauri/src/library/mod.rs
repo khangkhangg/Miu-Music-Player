@@ -9,4 +9,5 @@ pub mod scan;
 pub mod service;
 pub mod songs;
 pub mod tags;
+pub mod legacy;
 pub mod watch;

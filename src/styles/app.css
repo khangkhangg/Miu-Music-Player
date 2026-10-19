@@ -46,6 +46,12 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .folder-count { font-size: 12px; }
 .folder-remove { visibility: hidden; }
 .folder-item:hover .folder-remove, .folder-remove:focus-visible { visibility: visible; }
+.folder-item { flex-wrap: wrap; }
+.folder-encoding-btn { visibility: hidden; font-size: 11px; font-weight: 600; }
+.folder-item:hover .folder-encoding-btn, .folder-encoding-btn:focus-visible, .folder-encoding-btn.on { visibility: visible; }
+.folder-encoding-btn.on { color: var(--accent); }
+.folder-encoding { flex-basis: 100%; font: inherit; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.folder-encoding[hidden] { display: none; }
 .folder-error { font-size: 12px; color: var(--danger); margin: 4px 10px; }
 .folder-error[hidden], .empty-state[hidden] { display: none; }
 .main { min-height: 0; }

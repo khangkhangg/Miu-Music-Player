@@ -49,6 +49,8 @@ pub const MIGRATIONS: &[&str] = &[
     // 6: audio fingerprint for duplicate detection (F3.6); NULL = not hashed yet, '' = unreadable
     "ALTER TABLE songs ADD COLUMN audio_hash TEXT;
      CREATE INDEX songs_audio_hash ON songs(audio_hash);",
+    // 7: per-folder legacy tag encoding override (F8.1); NULL = detect
+    "ALTER TABLE watched_folders ADD COLUMN tag_encoding TEXT;",
 ];
 
 #[derive(Debug, thiserror::Error)]

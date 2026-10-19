@@ -1,7 +1,7 @@
 import { resolveTheme } from './theme.js';
 import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
-import { folderItems, librarySummary } from './folders.js';
+import { folderItems, librarySummary, encodingOptions } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
 import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
@@ -313,7 +313,31 @@ function showFolders(folders) {
     remove.title = t('folders.remove');
     remove.setAttribute('aria-label', t('folders.removeNamed', { name: item.name }));
     remove.addEventListener('click', () => removeFolder(item.id));
-    li.append(name, count, remove);
+    // Tag encoding (F8.1): "Aa" opens a picker for old files with garbled titles.
+    const enc = document.createElement('button');
+    enc.className = 'icon-btn folder-encoding-btn';
+    enc.classList.toggle('on', Boolean(item.encoding));
+    enc.type = 'button';
+    enc.textContent = 'Aa';
+    enc.title = t('folders.encodingTitle');
+    enc.setAttribute('aria-label', t('folders.encoding', { name: item.name }));
+    const pick = document.createElement('select');
+    pick.className = 'folder-encoding';
+    pick.hidden = true;
+    pick.setAttribute('aria-label', t('folders.encoding', { name: item.name }));
+    pick.append(...encodingOptions(item.encoding).map(o => {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      opt.selected = o.selected;
+      return opt;
+    }));
+    enc.addEventListener('click', () => { pick.hidden = !pick.hidden; if (!pick.hidden) pick.focus(); });
+    pick.addEventListener('change', () => {
+      pick.disabled = true;
+      invoke('set_folder_encoding', { id: item.id, encoding: pick.value || null }).then(showFolders).catch(showFolderError);
+    });
+    li.append(name, count, enc, remove, pick);
     return li;
   }));
   const summary = librarySummary(folders);

@@ -8,7 +8,8 @@ use std::time::UNIX_EPOCH;
 
 use crate::library::db::Db;
 use crate::library::format::{detect_file, Format};
-use crate::library::tags::{read_tags, TrackTags};
+use crate::library::tags::{read_tags_with, TrackTags};
+use rusqlite::OptionalExtension;
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "m4a", "aac", "alac", "flac", "wav", "aif", "aiff", "ogg", "oga", "opus", "wma", "ape", "wv"];
 
@@ -67,7 +68,13 @@ pub fn scan_folder(root: &Path) -> Vec<FileEntry> {
 /// (keeping rating), delete files that are gone. Tags are read only for new or changed files
 /// (and rows that never had them read). One transaction.
 pub fn reconcile(db: &Db, folder_id: i64, found: &[FileEntry], now_unix: u64) -> rusqlite::Result<ScanDiff> {
-    reconcile_with(db, folder_id, found, now_unix, |p| read_tags(p).unwrap_or_default())
+    let forced: Option<String> = db
+        .conn()
+        .query_row("SELECT tag_encoding FROM watched_folders WHERE id = ?1", [folder_id], |r| r.get(0))
+        .optional()?
+        .flatten();
+    let forced = forced.as_deref().and_then(crate::library::legacy::encoding_named);
+    reconcile_with(db, folder_id, found, now_unix, |p| read_tags_with(p, forced).unwrap_or_default())
 }
 
 struct Known {

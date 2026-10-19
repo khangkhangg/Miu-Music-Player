@@ -58,6 +58,11 @@ fn year_of(tag: &Tag) -> Option<u32> {
 }
 
 pub fn read_tags(path: &Path) -> Result<TrackTags, String> {
+    read_tags_with(path, None)
+}
+
+/// Like `read_tags`, repairing legacy-encoded text (F8.1) with `forced` or a detected encoding.
+pub fn read_tags_with(path: &Path, forced: Option<&'static encoding_rs::Encoding>) -> Result<TrackTags, String> {
     let file = lofty::read_from_path(path).map_err(|e| e.to_string())?;
     let props = file.properties();
     let duration = props.duration().as_millis() as u64;
@@ -80,6 +85,7 @@ pub fn read_tags(path: &Path) -> Result<TrackTags, String> {
         t.disc = tag.disk();
         t.has_artwork = !tag.pictures().is_empty();
     }
+    crate::library::legacy::repair(&mut [&mut t.title, &mut t.artist, &mut t.album, &mut t.album_artist, &mut t.genre], forced);
     Ok(t)
 }
 

@@ -11,6 +11,8 @@ pub struct WatchedFolder {
     pub id: i64,
     pub path: String,
     pub song_count: i64,
+    /// Legacy tag encoding forced for this folder (F8.1); `None` = detect per song.
+    pub tag_encoding: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -68,19 +70,33 @@ pub fn add_folder(db: &Db, path: &str, now_unix: u64) -> Result<WatchedFolder, F
     db.conn()
         .execute("INSERT INTO watched_folders (path, added_at) VALUES (?1, ?2)", rusqlite::params![path, now_unix as i64])
         .map_err(db_err)?;
-    Ok(WatchedFolder { id: db.conn().last_insert_rowid(), path, song_count: 0 })
+    Ok(WatchedFolder { id: db.conn().last_insert_rowid(), path, song_count: 0, tag_encoding: None })
+}
+
+/// Force a legacy tag encoding for a folder (`None` = detect). Its songs' tags are read again
+/// on the next rescan.
+pub fn set_tag_encoding(db: &Db, folder_id: i64, label: Option<&str>) -> Result<(), String> {
+    let name = match label {
+        Some(l) => Some(crate::library::legacy::encoding_named(l).ok_or_else(|| format!("unknown encoding {l:?}"))?.name()),
+        None => None,
+    };
+    let c = db.conn();
+    c.execute("UPDATE watched_folders SET tag_encoding = ?1 WHERE id = ?2", rusqlite::params![name.map(str::to_lowercase), folder_id])
+        .map_err(|e| e.to_string())?;
+    c.execute("UPDATE songs SET tags_read = 0 WHERE folder_id = ?1", [folder_id]).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn list_folders(db: &Db) -> Result<Vec<WatchedFolder>, FolderError> {
     let mut stmt = db
         .conn()
         .prepare(
-            "SELECT f.id, f.path, (SELECT count(*) FROM songs s WHERE s.folder_id = f.id)
+            "SELECT f.id, f.path, (SELECT count(*) FROM songs s WHERE s.folder_id = f.id), f.tag_encoding
              FROM watched_folders f ORDER BY f.path COLLATE NOCASE",
         )
         .map_err(db_err)?;
     let rows = stmt
-        .query_map([], |r| Ok(WatchedFolder { id: r.get(0)?, path: r.get(1)?, song_count: r.get(2)? }))
+        .query_map([], |r| Ok(WatchedFolder { id: r.get(0)?, path: r.get(1)?, song_count: r.get(2)?, tag_encoding: r.get(3)? }))
         .map_err(db_err)?;
     rows.collect::<Result<_, _>>().map_err(db_err)
 }
@@ -120,7 +136,7 @@ mod tests {
         let db = db();
         let f = add_folder(&db, r"D:\Music", 100).unwrap();
         let all = list_folders(&db).unwrap();
-        assert_eq!(all, vec![WatchedFolder { id: f.id, path: r"D:\Music".into(), song_count: 0 }]);
+        assert_eq!(all, vec![WatchedFolder { id: f.id, path: r"D:\Music".into(), song_count: 0, tag_encoding: None }]);
     }
 
     #[test]
