@@ -63,7 +63,7 @@ Schema findings from the real device database: **`docs/MEDIALIBRARY_SCHEMA.md`**
    Hardware tests are `#[ignore]` and run manually with the iPhone plugged in. No private data in tests.
 9. Tools are written in Rust (no Python on this machine).
 10. **Never change machine-wide Apple configuration** (HKLM `Apple Inc.` registry keys such as `CoreFP`, Apple
-    services, Apple install folders) and never ask the user to. On 2026-10-20 a `CoreFPLibraryPath` value broke
+    services, Apple install folders) and never ask the user to. On 2026-10-20 a `CoreFP\LibraryPath` value broke
     device detection for iTunes and Miu until removed. Process-local workarounds only.
 
 ## Test device
