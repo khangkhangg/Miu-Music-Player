@@ -1,11 +1,13 @@
 //! Finding songs in a watched folder and keeping the `songs` table in step with the disk (F3.1).
-//! Detection is by extension for now; content-based detection is F3.2.
+//! Candidates are picked by extension, then each file content is sniffed (F3.2); files whose
+//! content is not recognisable audio are left out.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use crate::library::db::Db;
+use crate::library::format::{detect_file, Format};
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "m4a", "aac", "alac", "flac", "wav", "aif", "aiff", "ogg", "oga", "opus", "wma", "ape", "wv"];
 
@@ -15,6 +17,8 @@ pub struct FileEntry {
     pub size: u64,
     /// Seconds since 1970.
     pub mtime: i64,
+    /// From the file content (F3.2), not the extension.
+    pub format: Format,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -45,8 +49,12 @@ pub fn scan_folder(root: &Path) -> Vec<FileEntry> {
                     stack.push(path);
                 }
             } else if meta.is_file() && is_audio_path(&path) {
+                let format = detect_file(&path).unwrap_or(Format::Unknown);
+                if format == Format::Unknown {
+                    continue;
+                }
                 let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
-                out.push(FileEntry { path, size: meta.len(), mtime });
+                out.push(FileEntry { path, size: meta.len(), mtime, format });
             }
         }
     }
@@ -59,10 +67,10 @@ pub fn scan_folder(root: &Path) -> Vec<FileEntry> {
 pub fn reconcile(db: &Db, folder_id: i64, found: &[FileEntry], now_unix: u64) -> rusqlite::Result<ScanDiff> {
     let conn = db.conn();
     let tx = conn.unchecked_transaction()?;
-    let mut known: HashMap<String, (i64, i64, i64)> = HashMap::new();
+    let mut known: HashMap<String, (i64, i64, i64, String)> = HashMap::new();
     {
-        let mut stmt = tx.prepare("SELECT id, path, size, mtime FROM songs WHERE folder_id = ?1")?;
-        let rows = stmt.query_map([folder_id], |r| Ok((r.get::<_, String>(1)?.to_lowercase(), (r.get(0)?, r.get(2)?, r.get(3)?))))?;
+        let mut stmt = tx.prepare("SELECT id, path, size, mtime, format FROM songs WHERE folder_id = ?1")?;
+        let rows = stmt.query_map([folder_id], |r| Ok((r.get::<_, String>(1)?.to_lowercase(), (r.get(0)?, r.get(2)?, r.get(3)?, r.get(4)?))))?;
         for row in rows {
             let (path, v) = row?;
             known.insert(path, v);
@@ -74,19 +82,22 @@ pub fn reconcile(db: &Db, folder_id: i64, found: &[FileEntry], now_unix: u64) ->
         match known.remove(&path.to_lowercase()) {
             None => {
                 tx.execute(
-                    "INSERT INTO songs (folder_id, path, size, mtime, added_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-                    rusqlite::params![folder_id, path, f.size as i64, f.mtime, now_unix as i64],
+                    "INSERT INTO songs (folder_id, path, size, mtime, added_at, format) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    rusqlite::params![folder_id, path, f.size as i64, f.mtime, now_unix as i64, f.format.name()],
                 )?;
                 diff.added += 1;
             }
-            Some((id, size, mtime)) if size != f.size as i64 || mtime != f.mtime => {
-                tx.execute("UPDATE songs SET size = ?1, mtime = ?2 WHERE id = ?3", rusqlite::params![f.size as i64, f.mtime, id])?;
+            Some((id, size, mtime, format)) if size != f.size as i64 || mtime != f.mtime || format != f.format.name() => {
+                tx.execute(
+                    "UPDATE songs SET size = ?1, mtime = ?2, format = ?3 WHERE id = ?4",
+                    rusqlite::params![f.size as i64, f.mtime, f.format.name(), id],
+                )?;
                 diff.updated += 1;
             }
             Some(_) => {}
         }
     }
-    for (id, _, _) in known.into_values() {
+    for (id, ..) in known.into_values() {
         tx.execute("DELETE FROM songs WHERE id = ?1", [id])?;
         diff.removed += 1;
     }
@@ -106,7 +117,10 @@ mod tests {
 
     fn touch(path: &Path, bytes: usize) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, vec![0u8; bytes]).unwrap();
+        // An MPEG Layer III frame header, so content sniffing (F3.2) sees an MP3.
+        let mut data = vec![0xFF, 0xFB, 0x90, 0x00];
+        data.resize(bytes.max(4), 0);
+        fs::write(path, data).unwrap();
     }
 
     fn rating_of(db: &Db, path: &Path) -> i64 {
@@ -200,10 +214,58 @@ mod rescan_tests {
     #[test]
     fn rescan_folder_scans_and_reconciles_in_one_step() {
         let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("a.mp3"), b"x").unwrap();
+        std::fs::write(d.path().join("a.mp3"), [0xFF, 0xFB, 0x90, 0x00]).unwrap();
         let db = Db::open_in_memory().unwrap();
         let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
         assert_eq!(rescan_folder(&db, f.id, &f.path, 10).unwrap().added, 1);
         assert_eq!(rescan_folder(&db, f.id, &f.path, 20).unwrap(), ScanDiff::default());
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+    use crate::library::format::Format;
+
+    #[test]
+    fn scan_records_the_real_format_and_skips_non_audio_content() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("really flac.mp3"), b"fLaC\x00\x00\x00\x22").unwrap();
+        std::fs::write(d.path().join("song.mp3"), [0xFF, 0xFB, 0x90, 0x00]).unwrap();
+        std::fs::write(d.path().join("readme.mp3"), b"this is text").unwrap();
+        let found = scan_folder(d.path());
+        let got: Vec<(String, Format)> = found.iter().map(|e| (e.path.file_name().unwrap().to_string_lossy().into_owned(), e.format)).collect();
+        assert_eq!(got, vec![("really flac.mp3".into(), Format::Flac), ("song.mp3".into(), Format::Mp3)]);
+    }
+
+    #[test]
+    fn reconcile_stores_the_format() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("x.mp3"), b"fLaC\x00\x00\x00\x22").unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        let fmt: String = db.conn().query_row("SELECT format FROM songs", [], |r| r.get(0)).unwrap();
+        assert_eq!(fmt, "flac");
+    }
+}
+
+#[cfg(test)]
+mod backfill_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+
+    #[test]
+    fn songs_stored_before_format_detection_get_their_format_on_the_next_rescan() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a.mp3"), b"fLaC\x00\x00\x00\x22").unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        db.conn().execute("UPDATE songs SET format = 'unknown'", []).unwrap(); // as stored by F3.1
+        assert_eq!(rescan_folder(&db, f.id, &f.path, 2).unwrap().updated, 1);
+        let fmt: String = db.conn().query_row("SELECT format FROM songs", [], |r| r.get(0)).unwrap();
+        assert_eq!(fmt, "flac");
     }
 }

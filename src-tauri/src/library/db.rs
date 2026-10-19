@@ -26,6 +26,8 @@ pub const MIGRATIONS: &[&str] = &[
          added_at INTEGER NOT NULL
      ) STRICT;
      CREATE INDEX songs_folder ON songs(folder_id);",
+    // 3: detected file format (F3.2), as `format::Format::name()`
+    "ALTER TABLE songs ADD COLUMN format TEXT NOT NULL DEFAULT 'unknown';",
 ];
 
 #[derive(Debug, thiserror::Error)]

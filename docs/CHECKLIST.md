@@ -89,7 +89,8 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 ## Phase 3 – Library and conversion
 - [x] **F3.1 Watched folders + drag-and-drop** — *Test first:* add/remove folders; watcher events
   (create/rename/delete in a temp dir) update the library; nested/duplicate folders rejected.
-- [ ] **F3.2 Content-based format detection** — *Test first:* a FLAC renamed `.mp3` is detected as FLAC.
+- [x] **F3.2 Content-based format detection** — *Test first:* a FLAC renamed `.mp3` is detected as FLAC.
+  Done with file signatures in Rust (no ffprobe): MP3, AAC (ADTS + M4A), ALAC, FLAC, WAV, AIFF, Opus, Vorbis, WMA, APE, WavPack; non-audio content is skipped.
 - [ ] **F3.3 Tags + artwork** — *Test first:* fixtures with Vietnamese, CJK and RTL tags read exactly; artwork extracted.
 - [ ] **F3.4 Conversion policy + Hi-res for iPhone** — *Test first:* table test format/bit depth/rate → action
   (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected.
