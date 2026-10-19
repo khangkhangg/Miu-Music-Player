@@ -56,7 +56,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   *Test first:* parses exports of a known system DLL (e.g. `kernel32.dll`) and finds `CreateFileW`.
 - [x] **F1.1 DLL loader** — Store packages are copied to `%LOCALAPPDATA%\MiuMusic\apple\<package>` (Windows blocks loading from WindowsApps); classic installs load in place.
   *Test first:* search-path builder orders registry → Program Files → WindowsApps; missing DLL → typed error.
-- [ ] **F1.2 CoreFoundation bridge**
+- [x] **F1.2 CoreFoundation bridge**
   *Test first (hardware-free once DLL present, else `#[ignore]`):* round-trip String (incl. Vietnamese/CJK),
   i64, f64, bool, Vec, HashMap, bytes through CF types; no leaks (retain counts back to 1).
 - [ ] **F1.3 Device discovery + hot-plug** — *Test first:* event mapping (connect/disconnect/untrusted) via a fake
