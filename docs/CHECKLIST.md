@@ -67,7 +67,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   *Test first:* backup copies all three files into a timestamped dir and refuses to proceed if any copy fails;
   diff of two synthetic DBs reports added/changed rows per table.
 - [x] **F2.2 ATC message logger** — *Test first:* message → JSON serialization; `#[ignore]` live capture.
-- [ ] **Gate decision:** stay Rust FFI / switch device layer to C# helper.
+- [x] **Gate decision:** stay Rust FFI / switch device layer to C# helper. → **Stay with Rust FFI** (user, 2026-10-20): every Phase 1 call works from Rust.
 
 ## Phase 2 – One-track sync (gate)
 - [ ] **F2.3 Sync session handshake** — *Test first:* session state machine accepts the recorded message
