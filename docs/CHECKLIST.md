@@ -126,7 +126,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   trash API), removes it from the library and queues device removal; undo dislike restores "not rated".
 - [x] **F7.4 Mini player window** — *Test first:* open-on-minimize setting decides mini vs taskbar.
 - [x] **F7.5 Always on top** — *Test first:* pin toggle and setting stay in sync and persist.
-- [ ] **F7.6 Visualizer** — *Test first:* FFT of a 1 kHz sine peaks in the 1 kHz band; no frames emitted while paused/hidden/off.
+- [x] **F7.6 Visualizer** — *Test first:* FFT of a 1 kHz sine peaks in the 1 kHz band; no frames emitted while paused/hidden/off.
 - [ ] **F7.7 Equalizer + presets** — *Test first:* Flat = bit-identical output; +6 dB at 1 kHz raises a 1 kHz sine by
   6 dB ±0.5; clipping warning when preamp + max band > 0; user presets save/load.
 - [ ] **F7.8 Output panel + device picker** — *Test first:* signal-path label = "Bit-perfect" only when EQ off + exclusive.
