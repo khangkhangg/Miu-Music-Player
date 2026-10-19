@@ -204,3 +204,14 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
 - Keys used: `DeviceName` ("khang’s iPhone", note U+2019), `ProductType` (iPhone6,1), `ProductVersion` (12.5.8);
   disk: `TotalDataCapacity` 27,687,563,264, `TotalDataAvailable` 25,046,335,488 (fallback `AmountDataAvailable`).
 - Song count on the phone needs the media DB → comes with F1.6.
+
+## AFC (F1.5) — 2026-10-20, iPhone 5s iOS 12.5.8
+
+- Open: `AMDeviceConnect` → `ValidatePairing` → `StartSession` → `AMDeviceSecureStartService(dev, "com.apple.afc", NULL, &svc)`
+  → `StopSession` → `Disconnect`; then `AFCConnectionOpen(AMDServiceConnectionGetSocket(svc), 0, &conn)`.
+  **Answer to open question 5:** passing the `svc` object itself makes `AFCConnectionOpen` return 0 but every request
+  then fails with AFC error 1. The raw socket works. Confidence: high (machine tests, both variants tried).
+- Media root `/` lists `iTunes_Control`; `/iTunes_Control/iTunes/` holds `MediaLibrary.sqlitedb`.
+- `AFCFileRefOpen` mode 1 = read, mode 3 = write/create/truncate (libimobiledevice constants; the research table's
+  "2 write, 3 rw" was wrong for our use). `AFCDirectoryCreate(conn, path)` works. UTF-8 paths with Vietnamese
+  characters work. 300 KB write/read round trip byte-identical.

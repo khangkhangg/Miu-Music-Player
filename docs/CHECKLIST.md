@@ -19,7 +19,7 @@ Bug found later → first a failing test that reproduces it, then the fix.
 |---|---|---|---|
 | Rust unit/integration | `cargo test` | always | core logic, DB, conversion policy, sync diff, DSP |
 | UI logic | `node --test` (built in, no deps) | always | pure modules in `src/js/` (no DOM); keep DOM code thin |
-| Hardware (iPhone) | `cargo test -- --ignored` | manually, phone plugged in | marked `#[ignore]`; results logged in `AIRTRAFFIC_NOTES.md` |
+| Hardware (iPhone) | `cargo test -- --include-ignored --test-threads=1` | manually, phone plugged in | marked `#[ignore]`; results logged in `AIRTRAFFIC_NOTES.md` |
 | Manual check | checklist in this file | per phase | only for things a test can't see (sound, look, "plays in Music app") |
 
 Rules for tests:
@@ -62,7 +62,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F1.3 Device discovery + hot-plug** — *Test first:* event mapping (connect/disconnect/untrusted) via a fake
   device source; `#[ignore]` test lists the real iPhone.
 - [x] **F1.4 Device info** — *Test first:* parse lockdown values into `DeviceInfo` (model "iPhone6,1" → "iPhone 5s").
-- [ ] **F1.5 AFC list/pull/push** — *Test first:* path validation (stays inside media root); `#[ignore]` real list.
+- [x] **F1.5 AFC list/pull/push** — *Test first:* path validation (stays inside media root); `#[ignore]` real list.
 - [ ] **F1.6 DB backup + restore + db diff**
   *Test first:* backup copies all three files into a timestamped dir and refuses to proceed if any copy fails;
   diff of two synthetic DBs reports added/changed rows per table.

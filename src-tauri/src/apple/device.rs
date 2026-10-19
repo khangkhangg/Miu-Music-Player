@@ -55,6 +55,11 @@ macro_rules! md_sym {
 }
 
 impl MobileDevice {
+    /// The loaded MobileDevice.dll, for other parts of `apple/` that resolve more of its symbols.
+    pub(crate) fn library(&self) -> &Library {
+        &self._lib
+    }
+
     pub fn new(lib: Library) -> Result<Self, DeviceError> {
         Ok(Self {
             AMDeviceNotificationSubscribe: md_sym!(lib, AMDeviceNotificationSubscribe),
@@ -139,7 +144,9 @@ unsafe extern "C" fn on_notification(info: *const NotificationInfo, ctx: *mut c_
 
 /// Start watching for iPhones. Existing devices are reported first, then plug/unplug events.
 /// Runs two background threads for the life of the process.
-pub fn watch(cf: Arc<Cf>, md: Arc<MobileDevice>) -> Result<Receiver<RawEvent>, DeviceError> {
+pub fn watch(cf: Arc<Cf>, md: Arc<MobileDevice>) -> Result<(Receiver<RawEvent>, DeviceHandles), DeviceError> {
+    let handles = DeviceHandles::new(cf.clone());
+    let worker_handles = handles.clone();
     let (note_tx, note_rx) = mpsc::channel::<(NotifyKind, CfRef)>();
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), DeviceError>>();
     let (out_tx, out_rx) = mpsc::channel::<RawEvent>();
@@ -178,9 +185,17 @@ pub fn watch(cf: Arc<Cf>, md: Arc<MobileDevice>) -> Result<Receiver<RawEvent>, D
                         let started = std::time::Instant::now();
                         let (trusted, info) = md.inspect(&cf, device.as_ptr());
                         log::info!("trust check + info for {} took {} ms", short_udid(&udid), started.elapsed().as_millis());
+                        if interface == Interface::Usb {
+                            worker_handles.insert(udid.clone(), device);
+                        }
                         RawEvent::Connected { trusted, udid, interface, info }
                     }
-                    NotifyKind::Disconnected => RawEvent::Disconnected { udid, interface },
+                    NotifyKind::Disconnected => {
+                        if interface == Interface::Usb {
+                            worker_handles.remove(&udid);
+                        }
+                        RawEvent::Disconnected { udid, interface }
+                    }
                     NotifyKind::Unsubscribed => continue,
                 };
                 if out_tx.send(event).is_err() {
@@ -190,7 +205,37 @@ pub fn watch(cf: Arc<Cf>, md: Arc<MobileDevice>) -> Result<Receiver<RawEvent>, D
         })
         .map_err(|_| DeviceError::ThreadGone)?;
 
-    Ok(out_rx)
+    Ok((out_rx, handles))
+}
+
+/// Retained `am_device` handles of USB iPhones currently plugged in, by UDID.
+#[derive(Clone)]
+pub struct DeviceHandles {
+    cf: Arc<Cf>,
+    map: Arc<std::sync::Mutex<std::collections::HashMap<String, CfRef>>>,
+}
+
+impl DeviceHandles {
+    fn new(cf: Arc<Cf>) -> Self {
+        Self { cf, map: Default::default() }
+    }
+
+    fn insert(&self, udid: String, device: CfRef) {
+        if let Ok(mut m) = self.map.lock() {
+            m.insert(udid, device);
+        }
+    }
+
+    fn remove(&self, udid: &str) {
+        if let Ok(mut m) = self.map.lock() {
+            m.remove(udid);
+        }
+    }
+
+    /// An extra retain on the device, so it stays valid even if it is unplugged meanwhile.
+    pub fn get(&self, udid: &str) -> Option<CfRef> {
+        self.map.lock().ok()?.get(udid).map(|d| self.cf.retain(d.as_ptr()))
+    }
 }
 
 // Machine tests: need Apple's DLLs and the iPhone plugged in. Run with `cargo test -- --include-ignored`.
@@ -207,7 +252,7 @@ mod tests {
         let dlls = crate::apple::loader::load_from_system().expect("Apple DLLs");
         let cf = Arc::new(crate::apple::cf::Cf::new(dlls.core_foundation).unwrap());
         let md = Arc::new(MobileDevice::new(dlls.mobile_device).unwrap());
-        let events = watch(cf, md).expect("subscribe");
+        let (events, _handles) = watch(cf, md).expect("subscribe");
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         loop {
             let left = deadline.saturating_duration_since(std::time::Instant::now());

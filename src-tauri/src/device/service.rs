@@ -28,7 +28,7 @@ pub fn start(app: AppHandle, registry: SharedRegistry) {
             Ok(m) => Arc::new(m),
             Err(e) => return log::error!("MobileDevice: {e}"),
         };
-        let events = match watch(cf, md) {
+        let (events, _handles) = match watch(cf, md) {
             Ok(rx) => rx,
             Err(e) => return log::error!("device notifications: {e}"),
         };

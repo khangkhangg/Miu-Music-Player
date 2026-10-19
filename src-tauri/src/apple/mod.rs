@@ -3,6 +3,9 @@
 pub mod cf;
 #[cfg(windows)]
 pub mod device;
+#[cfg(windows)]
+pub mod afc;
+pub mod afc_path;
 pub mod exports;
 #[cfg(windows)]
 pub mod loader;
