@@ -97,7 +97,8 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected. Ticked on tests 2026-10-20: no UI yet (the
   sync engine uses it in Phase 4, the setting appears in F5.5). 88.2/176.4 kHz sources go to 44.1, not 48.
 - [ ] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.
-- [ ] **F3.6 Duplicate detection** — *Test first:* same audio, different names → duplicate; different audio same tags → not.
+- [x] **F3.6 Duplicate detection** — *Test first:* same audio, different names → duplicate; different audio same tags → not.
+  Verified in the app 2026-10-20 (Duplicates chip, path tooltip). Fingerprint = first 30 s at 16-bit + length within 1 s.
 
 ## Phase 4 – Sync engine
 - [ ] **F4.1 Sync plan diff** — *Test first:* local liked set vs device set → add / update metadata / remove.
