@@ -1,0 +1,8 @@
+{
+  "name": "miu-music",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

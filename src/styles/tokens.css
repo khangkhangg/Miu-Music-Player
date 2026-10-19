@@ -1,0 +1,44 @@
+:root {
+  --font: "Segoe UI Variable", "Segoe UI", system-ui, "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Leelawadee UI", sans-serif;
+  --radius: 8px;
+  --radius-card: 12px;
+  --space: 8px;
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --surface-muted: #efeeea;
+  --text: #1c1c1a;
+  --text-muted: #6b6a65;
+  --border: rgba(0, 0, 0, 0.1);
+  --accent: #3b6fd8;
+  --on-accent: #ffffff;
+  --success: #2f7a3a;
+  --danger: #b3362f;
+}
+
+:root[data-theme="dark"] {
+  --bg: #1a1a19;
+  --surface: #242423;
+  --surface-muted: #2e2e2c;
+  --text: #ecebe6;
+  --text-muted: #a3a29c;
+  --border: rgba(255, 255, 255, 0.12);
+  --accent: #6e98ec;
+  --on-accent: #0f1a2e;
+  --success: #74c27f;
+  --danger: #ec8a83;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19;
+    --surface: #242423;
+    --surface-muted: #2e2e2c;
+    --text: #ecebe6;
+    --text-muted: #a3a29c;
+    --border: rgba(255, 255, 255, 0.12);
+    --accent: #6e98ec;
+    --on-accent: #0f1a2e;
+    --success: #74c27f;
+    --danger: #ec8a83;
+  }
+}
