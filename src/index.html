@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Miu Music</title>
+  <title data-i18n="app.name">Miu Music</title>
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/app.css">
   <script type="module" src="js/app.js"></script>
@@ -11,24 +11,24 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand">Miu Music</div>
+      <div class="brand" data-i18n="app.name">Miu Music</div>
       <nav>
-        <a class="nav-item active">Songs</a>
-        <a class="nav-item">Albums</a>
-        <a class="nav-item">Artists</a>
+        <a class="nav-item active" data-i18n="nav.songs">Songs</a>
+        <a class="nav-item" data-i18n="nav.albums">Albums</a>
+        <a class="nav-item" data-i18n="nav.artists">Artists</a>
       </nav>
       <div class="section-label section-row">
-        <span>Watched folders</span>
-        <button class="icon-btn" id="add-folder" type="button" title="Add a folder" aria-label="Add a folder">+</button>
+        <span data-i18n="folders.title">Watched folders</span>
+        <button class="icon-btn" id="add-folder" type="button" title="Add a folder" aria-label="Add a folder" data-i18n-attr="title:folders.add;aria-label:folders.add">+</button>
       </div>
       <ul class="folder-list" id="folder-list"></ul>
       <p class="folder-error" id="folder-error" role="alert" hidden></p>
-      <div class="section-label">Device</div>
+      <div class="section-label" data-i18n="device.title">Device</div>
       <div class="device-card empty" id="device-card" aria-live="polite">
         <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="34" r="2"/></svg>
         <div>
-          <p class="device-name">No device connected</p>
-          <p class="muted device-detail">Plug in your iPhone with a USB cable</p>
+          <p class="device-name" data-i18n="device.none">No device connected</p>
+          <p class="muted device-detail" data-i18n="device.plugIn">Plug in your iPhone with a USB cable</p>
           <div class="storage" hidden>
             <div class="storage-bar"><div class="storage-used"></div></div>
             <p class="muted storage-label"></p>
@@ -43,33 +43,32 @@
         <p class="notice-detail muted"></p>
       </div>
       <div class="empty-state" id="empty-state">
-        <h1>Add your music</h1>
-        <p class="muted">Choose one or more folders to watch, or drop them here. Miu keeps up with new and removed songs.</p>
-        <button class="primary" id="empty-add-folder" type="button">Add folder</button>
+        <h1 data-i18n="empty.title">Add your music</h1>
+        <p class="muted" data-i18n="empty.body">Choose one or more folders to watch, or drop them here. Miu keeps up with new and removed songs.</p>
+        <button class="primary" id="empty-add-folder" type="button" data-i18n="folders.addButton">Add folder</button>
       </div>
       <section class="song-view" id="song-view" hidden>
         <header class="view-header">
-          <h1>Songs</h1>
+          <h1 data-i18n="nav.songs">Songs</h1>
           <span class="muted" id="library-summary-text"></span>
-          <input class="search" id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search" autocomplete="off" spellcheck="false" dir="auto">
+          <input class="search" id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search" autocomplete="off" spellcheck="false" dir="auto"
+            data-i18n-attr="placeholder:search.placeholder;aria-label:search.label">
         </header>
-        <div class="chips" id="filter-chips" role="tablist" aria-label="Filter by rating"></div>
+        <div class="chips" id="filter-chips" role="tablist" aria-label="Filter by rating" data-i18n-attr="aria-label:filters.label"></div>
         <div class="disliked-banner" id="disliked-banner" hidden>
-          <p>Disliked songs never sync to your iPhone. Delete moves them to the Recycle Bin and out of Miu Music.
-            Tap the thumbs-down again to keep a song.</p>
-          <button class="danger-btn" id="delete-all" type="button">Delete all</button>
+          <p data-i18n="disliked.banner">Disliked songs never sync to your iPhone. Delete moves them to the Recycle Bin and out of Miu Music. Tap the thumbs-down again to keep a song.</p>
+          <button class="danger-btn" id="delete-all" type="button" data-i18n="disliked.deleteAll">Delete all</button>
         </div>
-        <p class="duplicates-note muted" id="duplicates-note" hidden>Songs with the same audio, whatever their names or tags.
-          Copies sit next to each other; hover a song to see where its file is.</p>
+        <p class="duplicates-note muted" id="duplicates-note" hidden data-i18n="duplicates.note">Songs with the same audio, whatever their names or tags. Copies sit next to each other; hover a song to see where its file is.</p>
         <p class="delete-result muted" id="delete-result" role="status" hidden></p>
         <div class="song-row song-head" aria-hidden="true">
-          <span>Title</span><span>Artist</span><span>Album</span><span class="quality">Format</span><span class="num">Time</span><span></span>
+          <span data-i18n="columns.title">Title</span><span data-i18n="columns.artist">Artist</span><span data-i18n="columns.album">Album</span><span class="quality" data-i18n="columns.format">Format</span><span class="num" data-i18n="columns.time">Time</span><span></span>
         </div>
         <div class="song-body">
-          <div class="song-scroll" id="song-scroll" role="list" aria-label="Songs">
+          <div class="song-scroll" id="song-scroll" role="list" aria-label="Songs" data-i18n-attr="aria-label:nav.songs">
             <div class="song-spacer" id="song-spacer"></div>
           </div>
-          <nav class="index-bar" id="index-bar" aria-label="Jump to letter"></nav>
+          <nav class="index-bar" id="index-bar" aria-label="Jump to letter" data-i18n-attr="aria-label:index.label"></nav>
         </div>
       </section>
       <div class="now-playing" id="now-playing" hidden>
@@ -78,68 +77,74 @@
           <p class="np-artist muted" id="np-artist" dir="auto"></p>
         </div>
         <div class="np-controls">
-          <button class="icon-btn rate-btn" id="np-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip">
+          <button class="icon-btn rate-btn" id="np-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>
           </button>
-          <button class="icon-btn np-btn" id="np-prev" type="button" aria-label="Previous song">
+          <button class="icon-btn np-btn" id="np-prev" type="button" aria-label="Previous song" data-i18n-attr="aria-label:player.prev">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg>
           </button>
-          <button class="np-play" id="np-play" type="button" aria-label="Pause">
+          <button class="np-play" id="np-play" type="button" aria-label="Pause" data-i18n-attr="aria-label:player.pause">
             <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
             <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg>
           </button>
-          <button class="icon-btn np-btn" id="np-next" type="button" aria-label="Next song">
+          <button class="icon-btn np-btn" id="np-next" type="button" aria-label="Next song" data-i18n-attr="aria-label:player.next">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg>
           </button>
-          <button class="icon-btn rate-btn" id="np-like" type="button" data-act="like" aria-label="Like" title="Like">
+          <button class="icon-btn rate-btn" id="np-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>
           </button>
         </div>
         <div class="np-progress">
           <span class="muted np-time" id="np-elapsed">0:00</span>
-          <div class="np-bar" id="np-bar" role="slider" aria-label="Position" tabindex="0"><div class="np-fill" id="np-fill"></div></div>
+          <div class="np-bar" id="np-bar" role="slider" aria-label="Position" tabindex="0" data-i18n-attr="aria-label:player.position"><div class="np-fill" id="np-fill"></div></div>
           <span class="muted np-time" id="np-duration"></span>
         </div>
         <div class="np-right">
-          <button class="eq-toggle" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path">Output</button>
-          <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel">EQ</button>
-          <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume">
+          <button class="eq-toggle" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path"
+            data-i18n="output.open" data-i18n-attr="title:output.openTitle">Output</button>
+          <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel" data-i18n="eq.open">EQ</button>
+          <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume" data-i18n-attr="aria-label:player.volume">
         </div>
       </div>
-      <section class="eq-panel" id="eq-panel" aria-label="Equalizer" hidden>
+      <section class="eq-panel" id="eq-panel" aria-label="Equalizer" data-i18n-attr="aria-label:eq.title" hidden>
         <div class="eq-head">
-          <strong>Equalizer</strong>
-          <label class="eq-switch"><input type="checkbox" id="eq-enabled"> On</label>
-          <select id="eq-preset" aria-label="Preset"></select>
-          <button class="eq-btn" id="eq-save-open" type="button">Save as…</button>
+          <strong data-i18n="eq.title">Equalizer</strong>
+          <label class="eq-switch"><input type="checkbox" id="eq-enabled"><span data-i18n="eq.on">On</span></label>
+          <select id="eq-preset" aria-label="Preset" data-i18n-attr="aria-label:eq.preset"></select>
+          <button class="eq-btn" id="eq-save-open" type="button" data-i18n="eq.saveAs">Save as…</button>
           <span class="eq-save" id="eq-save-row" hidden>
-            <input id="eq-save-name" type="text" maxlength="40" placeholder="My preset" aria-label="Preset name">
-            <button class="eq-btn" id="eq-save" type="button">Save</button>
+            <input id="eq-save-name" type="text" maxlength="40" placeholder="My preset" aria-label="Preset name" data-i18n-attr="placeholder:eq.presetPlaceholder;aria-label:eq.presetName">
+            <button class="eq-btn" id="eq-save" type="button" data-i18n="eq.save">Save</button>
           </span>
-          <button class="eq-btn" id="eq-delete" type="button" hidden>Delete preset</button>
+          <button class="eq-btn" id="eq-delete" type="button" hidden data-i18n="eq.deletePreset">Delete preset</button>
           <span class="eq-error" id="eq-error" role="alert"></span>
         </div>
         <div class="eq-sliders" id="eq-sliders"></div>
         <p class="eq-clip" id="eq-clip" role="status" hidden></p>
       </section>
-      <section class="eq-panel out-panel" id="out-panel" aria-label="Output" hidden>
+      <section class="eq-panel out-panel" id="out-panel" aria-label="Output" data-i18n-attr="aria-label:output.title" hidden>
         <div class="eq-head">
-          <strong>Output</strong>
-          <select id="out-device" aria-label="Output device"></select>
+          <strong data-i18n="output.title">Output</strong>
+          <select id="out-device" aria-label="Output device" data-i18n-attr="aria-label:output.device"></select>
           <span class="eq-error" id="out-error" role="alert"></span>
         </div>
-        <label class="eq-switch out-exclusive"><input type="checkbox" id="out-exclusive"> Exclusive mode (bit-perfect)</label>
-        <p class="out-note muted" id="out-exclusive-note" hidden>Miu takes the device for itself: other apps are silent while it plays,
-          and the Windows volume no longer applies — set the level with Miu's volume or on your amplifier.</p>
-        <p class="out-note eq-error" id="out-fallback" role="status" hidden>Exclusive mode was refused (another app holds the device, or it takes no
-          matching format), so Miu is playing in shared mode.</p>
+        <label class="eq-switch out-exclusive"><input type="checkbox" id="out-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
+        <p class="out-note muted" id="out-exclusive-note" hidden data-i18n="output.exclusiveNote">Miu takes the device for itself: other apps are silent while it plays, and the Windows volume no longer applies — set the level with Miu's volume or on your amplifier.</p>
+        <p class="out-note eq-error" id="out-fallback" role="status" hidden data-i18n="output.fallback">Exclusive mode was refused (another app holds the device, or it takes no matching format), so Miu is playing in shared mode.</p>
         <dl class="out-info">
-          <dt>Source</dt><dd id="out-source">Nothing playing</dd>
-          <dt>Device</dt><dd id="out-device-info"></dd>
-          <dt>Signal path</dt><dd id="out-path"></dd>
+          <dt data-i18n="output.source">Source</dt><dd id="out-source" data-i18n="player.nothing">Nothing playing</dd>
+          <dt data-i18n="output.deviceLabel">Device</dt><dd id="out-device-info"></dd>
+          <dt data-i18n="output.path">Signal path</dt><dd id="out-path"></dd>
         </dl>
       </section>
-      <footer class="status muted" id="app-version"></footer>
+      <footer class="status muted">
+        <span id="app-version"></span>
+        <select class="language" id="language" aria-label="Language" data-i18n-attr="aria-label:language.label">
+          <option value="auto" data-i18n="language.auto">System language</option>
+          <option value="en" data-i18n="language.en">English</option>
+          <option value="vi" data-i18n="language.vi">Tiếng Việt</option>
+        </select>
+      </footer>
     </main>
   </div>
 </body>

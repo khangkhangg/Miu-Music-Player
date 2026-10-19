@@ -10,6 +10,7 @@ import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
+import { t, startInLanguage } from './i18n.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
@@ -32,6 +33,10 @@ media.addEventListener('change', applyTheme);
 
 const invoke = window.__TAURI__?.core?.invoke;
 if (invoke) {
+  const languageSetting = await startInLanguage(invoke);
+  const picker = document.getElementById('language');
+  picker.value = languageSetting;
+  picker.addEventListener('change', () => invoke('set_ui_language', { language: picker.value }));
   invoke('app_info').then(info => {
     document.getElementById('app-version').textContent = `${info.name} ${info.version}`;
   });
@@ -137,7 +142,7 @@ function renderIndexBar() {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = letter;
-    b.setAttribute('aria-label', `Jump to ${letter}`);
+    b.setAttribute('aria-label', t('index.jump', { letter }));
     b.addEventListener('click', () => { document.getElementById('song-scroll').scrollTop = index * ROW_HEIGHT; });
     return b;
   }));
@@ -148,7 +153,7 @@ async function confirmDelete(list) {
   if (!list.length) return;
   const p = deletePrompt(list);
   const ok = await window.__TAURI__.dialog.ask(p.message, {
-    title: p.title, kind: 'warning', okLabel: 'Move to Recycle Bin', cancelLabel: 'Cancel',
+    title: p.title, kind: 'warning', okLabel: t('delete.confirm'), cancelLabel: t('delete.cancel'),
   });
   if (!ok) return;
   const report = await invoke('delete_songs', { ids: list.map(x => x.id) });
@@ -213,7 +218,7 @@ function showPlayer(event) {
   document.getElementById('np-fill').style.width = `${np.progress * 100}%`;
   const play = document.getElementById('np-play');
   play.classList.toggle('paused', !np.playing);
-  play.setAttribute('aria-label', np.playing ? 'Pause' : 'Play');
+  play.setAttribute('aria-label', t(np.playing ? 'player.pause' : 'player.play'));
   renderOutputInfo();
 }
 
@@ -230,12 +235,12 @@ function rateCell(rating, withDelete) {
     del.type = 'button';
     del.className = 'icon-btn rate-btn delete-btn';
     del.dataset.act = 'delete';
-    del.setAttribute('aria-label', 'Delete (move to Recycle Bin)');
-    del.title = 'Delete (move to Recycle Bin)';
+    del.setAttribute('aria-label', t('song.delete'));
+    del.title = t('song.delete');
     del.innerHTML = TRASH; // constant markup, no user data
     span.append(del);
   }
-  for (const [act, icon, label, on] of [['dislike', THUMB_DOWN, 'Dislike', rating === -1], ['like', THUMB_UP, 'Like', rating === 1]]) {
+  for (const [act, icon, label, on] of [['dislike', THUMB_DOWN, t('song.dislike'), rating === -1], ['like', THUMB_UP, t('song.like'), rating === 1]]) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = on ? 'icon-btn rate-btn on' : 'icon-btn rate-btn';
@@ -284,7 +289,7 @@ function removeFolder(id) {
 
 function showFolderError(message) {
   const el = document.getElementById('folder-error');
-  el.textContent = `Couldn't add that folder: ${message}`;
+  el.textContent = t('folders.addFailed', { message });
   el.hidden = false;
   setTimeout(() => { el.hidden = true; }, 6000);
 }
@@ -305,8 +310,8 @@ function showFolders(folders) {
     remove.className = 'icon-btn folder-remove';
     remove.type = 'button';
     remove.textContent = '×';
-    remove.title = 'Stop watching (songs stay on disk)';
-    remove.setAttribute('aria-label', `Stop watching ${item.name}`);
+    remove.title = t('folders.remove');
+    remove.setAttribute('aria-label', t('folders.removeNamed', { name: item.name }));
     remove.addEventListener('click', () => removeFolder(item.id));
     li.append(name, count, remove);
     return li;
@@ -392,7 +397,7 @@ function slider(index, value, label) {
   input.max = '12';
   input.step = '0.5';
   input.value = String(value);
-  input.setAttribute('aria-label', index < 0 ? 'Preamp' : `${label} Hz`);
+  input.setAttribute('aria-label', index < 0 ? t('eq.preamp') : t('eq.band', { label }));
   input.addEventListener('pointerdown', () => { eqDragging = index; });
   input.addEventListener('change', () => { eqDragging = -2; });
   input.addEventListener('input', () => {
@@ -415,14 +420,14 @@ function renderEq(state) {
   select.replaceChildren(...presetOptions(state).map(o => {
     const opt = document.createElement('option');
     opt.value = o.value;
-    opt.textContent = o.user ? `${o.label} (yours)` : o.label;
+    opt.textContent = o.user ? t('eq.yours', { name: o.label }) : o.label;
     return opt;
   }));
   select.value = state.preset ?? '';
   $('eq-delete').hidden = !state.user.some(p => p.name === state.preset);
   if (eqDragging === -2) {
     $('eq-sliders').replaceChildren(
-      slider(-1, state.settings.preampDb, 'Preamp'),
+      slider(-1, state.settings.preampDb, t('eq.preamp')),
       ...state.bandsHz.map((hz, i) => slider(i, state.settings.gainsDb[i], bandLabel(hz))),
     );
   }
@@ -492,11 +497,11 @@ function renderOutputInfo() {
   const $ = id => document.getElementById(id);
   const ev = playerState;
   const song = songsById.get(ev?.songId);
-  $('out-source').textContent = (ev?.source && sourceLabel(song?.format, ev.source)) || 'Nothing playing';
-  const depth = ev?.exclusive && ev.deviceBits ? ` · ${ev.deviceBits}-bit, exclusive` : '';
+  $('out-source').textContent = (ev?.source && sourceLabel(song?.format, ev.source)) || t('player.nothing');
+  const depth = ev?.exclusive && ev.deviceBits ? ` · ${t('output.depth', { bits: ev.deviceBits })}` : '';
   $('out-device-info').textContent = ev?.deviceName && ev.deviceRate
     ? `${ev.deviceName} · ${rateLabel(ev.deviceRate)}${depth}`
-    : (ev?.deviceName || 'No output device');
+    : (ev?.deviceName || t('output.noDevice'));
   const path = ev?.source && ev.deviceRate
     ? signalPath({
       sourceRate: ev.source.rate, deviceRate: ev.deviceRate, eqActive: eqActive(eq?.settings),
@@ -505,5 +510,5 @@ function renderOutputInfo() {
     : '';
   $('out-fallback').hidden = !(outputState?.exclusive && ev?.deviceRate && !ev.exclusive);
   $('out-path').textContent = path;
-  $('out-path').classList.toggle('bit-perfect', path === 'Bit-perfect');
+  $('out-path').classList.toggle('bit-perfect', path === t('output.bitPerfect'));
 }

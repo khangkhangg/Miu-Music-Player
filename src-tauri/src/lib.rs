@@ -114,6 +114,8 @@ pub fn run() {
             windows::mini_on_top,
             windows::set_mini_on_top,
             windows::set_mini_on_minimize,
+            windows::ui_language,
+            windows::set_ui_language,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");

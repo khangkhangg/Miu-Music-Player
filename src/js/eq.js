@@ -1,11 +1,12 @@
-// Equalizer panel helpers (F7.7). Strings move to src/i18n in F8.6.
+// Equalizer panel helpers (F7.7).
+import { t } from './i18n.js';
 
 export function presetOptions(state) {
   const opts = [
-    ...state.builtIn.map(p => ({ value: p.name, label: p.name, user: false })),
+    ...state.builtIn.map(p => ({ value: p.name, label: t(`eqPreset.${p.name}`), user: false })),
     ...state.user.map(p => ({ value: p.name, label: p.name, user: true })),
   ];
-  return state.preset == null ? [{ value: '', label: 'Custom', user: false }, ...opts] : opts;
+  return state.preset == null ? [{ value: '', label: t('eq.custom'), user: false }, ...opts] : opts;
 }
 
 export function bandLabel(hz) {
@@ -28,5 +29,5 @@ export function clipText(state) {
   if (!state.clipRisk) return null;
   const s = state.settings;
   const over = s.preampDb + Math.max(0, ...s.gainsDb);
-  return `May distort: lower the preamp by ${Math.round(over * 10) / 10} dB`;
+  return t('eq.clip', { db: Math.round(over * 10) / 10 });
 }

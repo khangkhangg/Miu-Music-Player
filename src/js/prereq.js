@@ -1,9 +1,10 @@
-// User-facing message for the Apple driver check (F0.3). Strings move to src/i18n in F8.6.
+// User-facing message for the Apple driver check (F0.3).
+import { t } from './i18n.js';
 export function prereqMessage(report) {
   if (!report || report.ready) return null;
   return {
-    title: 'Apple drivers needed',
-    body: 'Miu Music talks to your iPhone through Apple’s drivers. Install the free Apple Devices app (or iTunes) from the Microsoft Store, then restart Miu Music.',
-    detail: `Missing: ${report.missing.join(', ')}`,
+    title: t('prereq.title'),
+    body: t('prereq.body'),
+    detail: t('prereq.missing', { list: report.missing.join(', ') }),
   };
 }

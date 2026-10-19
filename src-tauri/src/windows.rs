@@ -73,3 +73,20 @@ pub fn set_mini_on_minimize(on: bool, db: State<'_, SharedDb>) -> Result<(), Str
     let d = db.lock().map_err(|e| e.to_string())?;
     crate::settings::set_mini_on_minimize(&d, on).map_err(|e| e.to_string())
 }
+
+/// The interface language setting ("auto", "en" or "vi").
+#[tauri::command]
+pub fn ui_language(db: State<'_, SharedDb>) -> Result<String, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    Ok(crate::settings::ui_language(&d))
+}
+
+/// Save the interface language and tell every window, which reload in it.
+#[tauri::command]
+pub fn set_ui_language(language: String, app: AppHandle, db: State<'_, SharedDb>) -> Result<(), String> {
+    {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        crate::settings::set_ui_language(&d, &language)?;
+    }
+    app.emit("language-changed", &language).map_err(|e| e.to_string())
+}

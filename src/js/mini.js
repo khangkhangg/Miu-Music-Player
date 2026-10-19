@@ -3,6 +3,7 @@ import { resolveTheme } from './theme.js';
 import { nowPlaying, seekTarget, pinButton } from './player.js';
 import { nextRating, applyRated } from './ratings.js';
 import { fromBytes, geometry } from './visualizer.js';
+import { t, startInLanguage } from './i18n.js';
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => { document.documentElement.dataset.theme = resolveTheme('system', media.matches); };
@@ -12,6 +13,7 @@ media.addEventListener('change', applyTheme);
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const $ = id => document.getElementById(id);
+await startInLanguage(invoke);
 
 let songsById = new Map();
 let state = null;
@@ -37,11 +39,11 @@ function loadSongs() {
 function show(event) {
   state = event;
   const np = nowPlaying(event, songsById);
-  $('mini-title').textContent = np ? np.title : 'Nothing playing';
-  $('mini-artist').textContent = np ? np.artist : 'Double-click a song in Miu Music';
+  $('mini-title').textContent = np ? np.title : t('player.nothing');
+  $('mini-artist').textContent = np ? np.artist : t('mini.hint');
   $('mini-fill').style.width = `${(np?.progress ?? 0) * 100}%`;
   $('mini-play').classList.toggle('paused', !np?.playing);
-  $('mini-play').setAttribute('aria-label', np?.playing ? 'Pause' : 'Play');
+  $('mini-play').setAttribute('aria-label', t(np?.playing ? 'player.pause' : 'player.play'));
   const rating = songsById.get(event?.songId)?.rating ?? 0;
   $('mini-like').classList.toggle('on', rating === 1);
   $('mini-dislike').classList.toggle('on', rating === -1);

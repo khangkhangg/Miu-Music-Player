@@ -1,4 +1,5 @@
-// Device card for the sidebar (F1.3, F1.4). Strings move to src/i18n in F8.6.
+// Device card for the sidebar (F1.3, F1.4).
+import { t } from './i18n.js';
 
 export function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -16,25 +17,25 @@ function storage(info) {
   if (!total || free == null) return null;
   return {
     usedPercent: Math.round(((total - free) / total) * 100),
-    label: `${formatBytes(free)} free of ${formatBytes(total)}`,
+    label: t('device.storage', { free: formatBytes(free), total: formatBytes(total) }),
   };
 }
 
 export function deviceCard(devices) {
   const list = devices ?? [];
   if (list.length === 0) {
-    return { state: 'empty', title: 'No device connected', detail: 'Plug in your iPhone with a USB cable', storage: null };
+    return { state: 'empty', title: t('device.none'), detail: t('device.plugIn'), storage: null };
   }
   const [first, ...rest] = list;
   if (!first.trusted) {
-    return { state: 'untrusted', title: 'iPhone connected', detail: 'Unlock your iPhone and tap Trust', storage: null };
+    return { state: 'untrusted', title: t('device.connected'), detail: t('device.trust'), storage: null };
   }
-  const more = rest.length ? ` · ${rest.length} more device${rest.length > 1 ? 's' : ''}` : '';
+  const more = rest.length ? ` · ${t('device.more', { n: rest.length })}` : '';
   const info = first.info;
   return {
     state: 'ready',
-    title: info?.name || 'iPhone connected',
-    detail: (info ? `${info.model} · iOS ${info.iosVersion}` : 'Connected over USB') + more,
+    title: info?.name || t('device.connected'),
+    detail: (info ? t('device.model', { model: info.model, version: info.iosVersion }) : t('device.usb')) + more,
     storage: storage(info),
   };
 }

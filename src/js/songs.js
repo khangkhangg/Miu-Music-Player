@@ -1,10 +1,10 @@
 // Song list helpers (F5.2): row text and virtual-scroll math. DOM code lives in app.js.
-// Strings move to src/i18n in F8.6.
 
 import { rateLabel } from './output.js';
+import { t } from './i18n.js';
 
 const LOSSLESS = new Set(['flac', 'alac', 'wav', 'aiff', 'ape', 'wavpack']);
-const DISPLAY = { vorbis: 'Ogg Vorbis', opus: 'Opus', wavpack: 'WavPack' };
+const DISPLAY = { vorbis: 'Ogg Vorbis', opus: 'Opus', wavpack: 'WavPack' }; // i18n-ignore: format names
 
 export function formatDuration(ms) {
   if (ms == null) return '';
@@ -19,7 +19,7 @@ export function songRow(song) {
   return {
     id: song.id,
     title: song.title,
-    artist: song.artist || 'Unknown artist',
+    artist: song.artist || t('song.unknownArtist'),
     album: song.album || '',
     duration: formatDuration(song.durationMs),
     quality: qualityLabel(song),

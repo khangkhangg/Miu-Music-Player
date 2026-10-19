@@ -117,6 +117,26 @@ pub fn set_conversion_policy(db: &Db, p: &crate::library::convert::Policy) -> Re
     db.set_setting_json(CONVERSION, p)
 }
 
+const UI_LANGUAGE: &str = "ui_language";
+/// "auto" follows the system; the others have a `src/i18n/<code>.json`.
+pub const UI_LANGUAGES: [&str; 3] = ["auto", "en", "vi"];
+
+/// The interface language setting (default and fallback: "auto").
+pub fn ui_language(db: &Db) -> String {
+    db.setting_json::<String>(UI_LANGUAGE)
+        .ok()
+        .flatten()
+        .filter(|s| UI_LANGUAGES.contains(&s.as_str()))
+        .unwrap_or_else(|| "auto".into())
+}
+
+pub fn set_ui_language(db: &Db, code: &str) -> std::result::Result<(), String> {
+    if !UI_LANGUAGES.contains(&code) {
+        return Err(format!("unknown language {code:?}"));
+    }
+    db.set_setting_json(UI_LANGUAGE, &code).map_err(|e| e.to_string())
+}
+
 const MINI_ON_TOP: &str = "mini_on_top";
 
 /// Keep the mini player above other windows (default: yes — the pin in the mini player).
@@ -311,5 +331,26 @@ mod conversion_tests {
         let db = Db::open_in_memory().unwrap();
         db.set_setting("conversion", "{\"hiRes\":\"lasers\"}").unwrap();
         assert_eq!(conversion_policy(&db), Policy::default());
+    }
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::*;
+
+    #[test]
+    fn the_language_follows_the_system_by_default() {
+        assert_eq!(ui_language(&Db::open_in_memory().unwrap()), "auto");
+    }
+
+    #[test]
+    fn a_chosen_language_is_remembered_and_unknown_ones_refused() {
+        let db = Db::open_in_memory().unwrap();
+        set_ui_language(&db, "vi").unwrap();
+        assert_eq!(ui_language(&db), "vi");
+        assert!(set_ui_language(&db, "klingon").is_err());
+        assert_eq!(ui_language(&db), "vi");
+        db.set_setting_json("ui_language", &"klingon").unwrap();
+        assert_eq!(ui_language(&db), "auto", "a bad stored value falls back");
     }
 }

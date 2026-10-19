@@ -1,4 +1,5 @@
-// Watched folders in the sidebar and the library summary (F3.1). Strings move to src/i18n in F8.6.
+// Watched folders in the sidebar and the library summary (F3.1).
+import { t } from './i18n.js';
 
 export function folderItems(folders) {
   return (folders ?? []).map(f => {
@@ -8,10 +9,8 @@ export function folderItems(folders) {
   });
 }
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
 export function librarySummary(folders) {
   if (!folders?.length) return null;
   const songs = folders.reduce((sum, f) => sum + f.songCount, 0);
-  return `${plural(songs, 'song')} in ${plural(folders.length, 'folder')}`;
+  return t('library.summary', { songs: t('count.songs', { n: songs }), folders: t('count.folders', { n: folders.length }) });
 }

@@ -1,5 +1,6 @@
 // Now-playing bar (F7.1). `songsById` holds raw song rows (durationMs, artist may be null).
 import { formatDuration } from './songs.js';
+import { t } from './i18n.js';
 
 export function nowPlaying(event, songsById) {
   const song = event?.songId != null ? songsById.get(event.songId) : null;
@@ -7,7 +8,7 @@ export function nowPlaying(event, songsById) {
   const total = song.durationMs;
   return {
     title: song.title,
-    artist: song.artist || 'Unknown artist',
+    artist: song.artist || t('song.unknownArtist'),
     elapsed: formatDuration(event.positionMs),
     duration: formatDuration(total),
     progress: total ? Math.min(1, Math.max(0, event.positionMs / total)) : 0,
@@ -23,5 +24,5 @@ export function seekTarget(fraction, durationMs) {
 
 /** Mini player pin (F7.5): state and the label for what a click will do. */
 export function pinButton(onTop) {
-  return { pressed: Boolean(onTop), label: onTop ? 'Stop keeping on top' : 'Keep on top of other windows' };
+  return { pressed: Boolean(onTop), label: t(onTop ? 'mini.pinOn' : 'mini.pinOff') };
 }

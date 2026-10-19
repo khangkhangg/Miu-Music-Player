@@ -1,5 +1,7 @@
 // Output panel (F7.8): what the file is, where the sound goes, and what happens on the way.
 
+import { t } from './i18n.js';
+
 const khz = (hz) => String(Math.round(hz / 100) / 10);
 
 export function rateLabel(hz) {
@@ -11,7 +13,7 @@ export function sourceLabel(codec, source) {
   if (!source) return '';
   const depth = source.bits ? `${source.bits}-bit / ` : '';
   const parts = [String(codec || '').toUpperCase(), `${depth}${rateLabel(source.rate)}`];
-  if (source.channels === 1) parts.push('mono');
+  if (source.channels === 1) parts.push(t('output.mono'));
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -29,18 +31,18 @@ export function signalPath({ sourceRate, deviceRate, eqActive: eq, exclusive, vo
   const resampled = sourceRate && deviceRate && sourceRate !== deviceRate;
   const quieter = exclusive && volume < 1;
   const truncated = exclusive && sourceBits && deviceBits && deviceBits < sourceBits;
-  if (exclusive && !eq && !resampled && !quieter && !truncated) return 'Bit-perfect';
-  const parts = [exclusive ? 'Exclusive mode' : 'Shared mode (Windows mixer)'];
-  if (resampled) parts.push(`resampled ${khz(sourceRate)} → ${rateLabel(deviceRate)}`);
-  if (eq) parts.push('EQ on (32-bit float)');
-  if (quieter) parts.push(`volume ${Math.round(volume * 100)}%`);
-  if (truncated) parts.push(`reduced to ${deviceBits}-bit`);
+  if (exclusive && !eq && !resampled && !quieter && !truncated) return t('output.bitPerfect');
+  const parts = [t(exclusive ? 'output.exclusiveMode' : 'output.shared')];
+  if (resampled) parts.push(t('output.resampled', { from: khz(sourceRate), to: rateLabel(deviceRate) }));
+  if (eq) parts.push(t('output.eqOn'));
+  if (quieter) parts.push(t('output.volume', { percent: Math.round(volume * 100) }));
+  if (truncated) parts.push(t('output.reduced', { bits: deviceBits }));
   return parts.join(' · ');
 }
 
 /** Options for the device menu: "System default (…)" first, then every device. */
 export function deviceOptions({ devices, chosen }) {
   const def = devices.find((d) => d.isDefault);
-  const first = { value: '', label: def ? `System default (${def.name})` : 'System default', selected: !chosen };
+  const first = { value: '', label: def ? t('output.systemDefaultNamed', { name: def.name }) : t('output.systemDefault'), selected: !chosen };
   return [first, ...devices.map((d) => ({ value: d.name, label: d.name, selected: d.name === chosen }))];
 }
