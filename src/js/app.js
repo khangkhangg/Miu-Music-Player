@@ -7,6 +7,7 @@ import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
+import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 
@@ -16,6 +17,7 @@ let rawSongs = [];
 let shown = []; // rawSongs after the rating filter, in display order
 let activeFilter = 'all';
 let query = '';
+const SORT_LOCALE = sortLocale(navigator.languages);
 let songsById = new Map();
 let playerState = null;
 
@@ -108,7 +110,7 @@ function addFolder(path) {
 
 function loadSongs() {
   invoke('list_songs').then(list => {
-    rawSongs = list;
+    rawSongs = sortSongs(list, SORT_LOCALE);
     songsById = new Map(list.map(s => [s.id, s]));
     refreshList();
   });
@@ -123,6 +125,22 @@ function refreshList() {
   updateRateButtons();
   document.getElementById('disliked-banner').hidden = !(activeFilter === 'disliked' && shown.length > 0);
   document.getElementById('duplicates-note').hidden = activeFilter !== 'duplicates';
+  renderIndexBar();
+}
+
+/** Letters down the right of the list; each jumps to its first song. Hidden for grouped views. */
+function renderIndexBar() {
+  const bar = document.getElementById('index-bar');
+  const entries = activeFilter === 'duplicates' ? [] : indexEntries(shown, SORT_LOCALE);
+  bar.hidden = entries.length < 2;
+  bar.replaceChildren(...entries.map(({ letter, index }) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = letter;
+    b.setAttribute('aria-label', `Jump to ${letter}`);
+    b.addEventListener('click', () => { document.getElementById('song-scroll').scrollTop = index * ROW_HEIGHT; });
+    return b;
+  }));
 }
 
 /** Ask, then move disliked songs to the Recycle Bin (F7.3). */
