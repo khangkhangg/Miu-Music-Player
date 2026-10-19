@@ -1,3 +1,5 @@
+mod util;
+
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -15,11 +17,18 @@ fn app_info() -> AppInfo {
 }
 
 pub fn run() {
+    let logs = util::paths::logs_dir_in(&util::paths::appdata_root());
+    if let Err(e) = util::log::init(&logs, log::LevelFilter::Info) {
+        eprintln!("logging disabled: {e}");
+    }
+    log::info!("Miu Music {} started", env!("CARGO_PKG_VERSION"));
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![app_info])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

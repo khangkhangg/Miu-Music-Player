@@ -40,7 +40,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   *Test first:* Rust — app builds and a `app_info` command returns name "Miu Music" + version;
   JS — `theme.resolve('system', prefersDark)` picks light/dark; tokens file defines every token for both themes.
   *Done when:* window opens with "No device connected" placeholder in light and dark.
-- [ ] **F0.2 Logging**
+- [x] **F0.2 Logging**
   *Test first:* log dir resolves to `%APPDATA%\MiuMusic\logs`; files rotate at the size limit; old files pruned.
 - [ ] **F0.3 Prerequisite check**
   *Test first:* `find_apple_dlls` with a fake directory tree (temp dir) finds classic, Program Files and
