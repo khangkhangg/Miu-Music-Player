@@ -1,0 +1,81 @@
+//! F2.3 live run: backup → Media sync handshake (HostInfo + SyncRequest only) → backup → diff.
+//! SENDS TO THE PHONE. Refuses to run unless MIU_ALLOW_SYNC_REQUEST=1.
+//! Plan and exact payloads: docs/plans/F2.3-sync-handshake.md.
+
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
+
+use miu_music_lib::apple::afc::Afc;
+use miu_music_lib::apple::airtraffic::{AirTraffic, HandshakeEvent};
+use miu_music_lib::apple::cf::Cf;
+use miu_music_lib::apple::device::{watch, MobileDevice};
+use miu_music_lib::device::registry::{Interface, RawEvent};
+use miu_music_lib::library::db::Db;
+use miu_music_lib::sync::atc_log::CaptureLog;
+use miu_music_lib::sync::backup::{backup, song_count, DB_NAME};
+use miu_music_lib::sync::dbdiff::diff;
+use miu_music_lib::sync::host_info::{host_info, library_id, sync_anchors, sync_dataclasses};
+use miu_music_lib::util::{paths, time::now_unix};
+
+fn main() {
+    if std::env::var("MIU_ALLOW_SYNC_REQUEST").as_deref() != Ok("1") {
+        fail("refusing: this sends HostInfo and a sync request to the phone. Set MIU_ALLOW_SYNC_REQUEST=1.");
+    }
+    let dlls = miu_music_lib::apple::loader::load_from_system().unwrap_or_else(|e| fail(&e.to_string()));
+    let cf = Arc::new(Cf::new(dlls.core_foundation).unwrap_or_else(|e| fail(&e.to_string())));
+    let md = Arc::new(MobileDevice::new(dlls.mobile_device).unwrap_or_else(|e| fail(&e.to_string())));
+    let (events, handles) = watch(cf.clone(), md.clone()).unwrap_or_else(|e| fail(&e.to_string()));
+    println!("waiting for a trusted iPhone…");
+    let udid = loop {
+        match events.recv_timeout(Duration::from_secs(30)) {
+            Ok(RawEvent::Connected { udid, interface: Interface::Usb, trusted: true, .. }) => break udid,
+            Ok(_) => continue,
+            Err(_) => fail("no trusted iPhone over USB within 30 s"),
+        }
+    };
+    let root = paths::backups_dir_in(&paths::appdata_root());
+    let take_backup = |label: &str| {
+        let device = handles.get(&udid).unwrap_or_else(|| fail("iPhone unplugged"));
+        let afc = Afc::open(cf.clone(), md.clone(), &device).unwrap_or_else(|e| fail(&e.to_string()));
+        let b = backup(&afc, &root, &udid, now_unix()).unwrap_or_else(|e| fail(&e.to_string()));
+        let songs = song_count(&b.dir).unwrap_or_else(|e| fail(&e.to_string()));
+        println!("backup {label}: {} ({songs} songs)", b.dir.display());
+        (b, songs)
+    };
+
+    let (before, songs_before) = take_backup("before");
+    std::thread::sleep(Duration::from_secs(1)); // distinct backup folder names
+
+    let db = Db::open(&paths::db_path_in(&paths::appdata_root())).unwrap_or_else(|e| fail(&e.to_string()));
+    let id = library_id(&db).unwrap_or_else(|e| fail(&e.to_string()));
+    let info = host_info(&id);
+    println!("HostInfo: {}", info.to_json());
+
+    let ath = AirTraffic::new(dlls.air_traffic_host).unwrap_or_else(|e| fail(&e.to_string()));
+    let mut log = CaptureLog::create(Path::new("../research/captures"), now_unix()).unwrap_or_else(|e| fail(&e.to_string()));
+    let outcome = ath
+        .handshake(&cf, &udid, &info, &sync_dataclasses(), &sync_anchors(), |e| match e {
+            HandshakeEvent::Received { ms, name, message } => {
+                println!("{ms:>6} ms  <- {}", name.as_deref().unwrap_or("<no name>"));
+                log.record(ms, name.as_deref(), &message).expect("write capture");
+            }
+            HandshakeEvent::Sent { ms, what } => println!("{ms:>6} ms  -> {what}"),
+        })
+        .unwrap_or_else(|e| fail(&e.to_string()));
+    println!("outcome: {outcome:?}  (capture: {})", log.path().display());
+
+    std::thread::sleep(Duration::from_secs(3)); // let the phone settle after the aborted session
+    let (after, songs_after) = take_backup("after");
+    match diff(&before.dir.join(DB_NAME), &after.dir.join(DB_NAME)) {
+        Ok(d) if d.is_empty() => println!("db-diff: no differences"),
+        Ok(d) => d.tables.iter().for_each(|t| println!("db-diff: {}", t.summary())),
+        Err(e) => println!("db-diff failed: {e}"),
+    }
+    println!("songs: {songs_before} -> {songs_after}");
+}
+
+fn fail(msg: &str) -> ! {
+    eprintln!("error: {msg}");
+    std::process::exit(1)
+}

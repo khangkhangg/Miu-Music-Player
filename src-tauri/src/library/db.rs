@@ -31,8 +31,6 @@ pub struct Db {
     conn: Connection,
 }
 
-// Settings accessors get their first non-test caller with the F5.5 settings commands.
-#[cfg_attr(not(test), allow(dead_code))]
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(dir) = path.parent() {

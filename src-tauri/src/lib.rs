@@ -1,6 +1,6 @@
 pub mod apple;
 pub mod device;
-mod library;
+pub mod library;
 pub mod sync;
 pub mod util;
 

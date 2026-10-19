@@ -1,5 +1,5 @@
-//! AirTraffic (ATC) connection (F2.2). For now only **reads** messages: no host info, no sync
-//! request. Prototypes (S1–S4, high confidence) in AIRTRAFFIC_NOTES.md "Published signatures".
+//! AirTraffic (ATC) connection. `listen` (F2.2) only reads; `handshake` (F2.3) also sends HostInfo
+//! and one sync request. Prototypes (S1–S4, high confidence) in AIRTRAFFIC_NOTES.md.
 
 use std::ffi::c_void;
 use std::sync::mpsc;
@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use libloading::os::windows::Library;
 
 use crate::apple::cf::{Cf, CfValue, Ref};
+use crate::sync::handshake::{Action, Handshake, Outcome, Phase};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AtcError {
@@ -28,6 +29,47 @@ struct Fns {
     ATHostConnectionInvalidate: unsafe extern "C" fn(*mut c_void),
     ATHostConnectionRelease: unsafe extern "C" fn(*mut c_void),
     ATCFMessageGetName: unsafe extern "C" fn(Ref) -> Ref,
+    ATHostConnectionSendHostInfo: unsafe extern "C" fn(*mut c_void, Ref),
+    ATHostConnectionSendSyncRequest: unsafe extern "C" fn(*mut c_void, Ref, Ref, Ref),
+}
+
+/// What happened during a handshake, in order, for logging and captures.
+#[derive(Debug, Clone)]
+pub enum HandshakeEvent {
+    Received { ms: u64, name: Option<String>, message: CfValue },
+    Sent { ms: u64, what: &'static str },
+}
+
+type Incoming = (u64, Option<String>, CfValue);
+
+/// An open connection plus its reader thread. Closed (Invalidate, then Release) by `close`.
+struct Session {
+    f: Fns,
+    conn: Conn,
+    rx: mpsc::Receiver<Incoming>,
+    reader: std::thread::JoinHandle<()>,
+    started: Instant,
+}
+
+impl Session {
+    fn ms(&self) -> u64 {
+        self.started.elapsed().as_millis() as u64
+    }
+
+    fn close(self, count: usize) {
+        // SAFETY: Invalidate is meant to unblock a pending read; Release only once the reader is gone.
+        unsafe { (self.f.ATHostConnectionInvalidate)(self.conn.0) };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !self.reader.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if self.reader.is_finished() {
+            unsafe { (self.f.ATHostConnectionRelease)(self.conn.0) };
+            log::info!("ATC connection closed after {count} messages");
+        } else {
+            log::warn!("ATC reader still blocked after Invalidate; leaking the connection");
+        }
+    }
 }
 
 pub struct AirTraffic {
@@ -58,25 +100,17 @@ impl AirTraffic {
                 ATHostConnectionInvalidate: ath_sym!(lib, ATHostConnectionInvalidate),
                 ATHostConnectionRelease: ath_sym!(lib, ATHostConnectionRelease),
                 ATCFMessageGetName: ath_sym!(lib, ATCFMessageGetName),
+                ATHostConnectionSendHostInfo: ath_sym!(lib, ATHostConnectionSendHostInfo),
+                ATHostConnectionSendSyncRequest: ath_sym!(lib, ATHostConnectionSendSyncRequest),
             },
             _lib: lib,
         })
     }
 
-    /// Open an ATC connection to `udid` and hand every message the phone sends to `on_message`
-    /// (ms since start, message name, full message). Stops after `quiet` without a message or
-    /// `max` in total. Returns the number of messages. Sends nothing to the phone.
-    pub fn listen(
-        &self,
-        cf: &Arc<Cf>,
-        udid: &str,
-        quiet: Duration,
-        max: Duration,
-        mut on_message: impl FnMut(u64, Option<String>, CfValue),
-    ) -> Result<usize, AtcError> {
+    fn open(&self, cf: &Arc<Cf>, udid: &str) -> Result<Session, AtcError> {
         let f = self.f;
         let udid_ref = cf.to_cf(&CfValue::String(udid.into())).map_err(|_| AtcError::CreateFailed)?;
-        // SAFETY: udid_ref is a live CFString; the connection is released below.
+        // SAFETY: udid_ref is a live CFString; the connection is released in `Session::close`.
         let conn = Conn(unsafe { (f.ATHostConnectionCreate)(udid_ref.as_ptr()) });
         drop(udid_ref);
         if conn.0.is_null() {
@@ -85,7 +119,7 @@ impl AirTraffic {
         log::info!("ATC connection created");
 
         let started = Instant::now();
-        let (tx, rx) = mpsc::channel::<(u64, Option<String>, CfValue)>();
+        let (tx, rx) = mpsc::channel::<Incoming>();
         let reader_cf = cf.clone();
         let reader = std::thread::Builder::new()
             .name("atc-reader".into())
@@ -108,11 +142,82 @@ impl AirTraffic {
                 }
             })
             .map_err(|_| AtcError::Thread)?;
+        Ok(Session { f, conn, rx, reader, started })
+    }
 
+    /// F2.3: wait for SyncAllowed, send `host_info`, then the sync request, and stop at
+    /// ReadyForSync / SyncFailed / timeout (see `sync::handshake`). Sends nothing else.
+    pub fn handshake(
+        &self,
+        cf: &Arc<Cf>,
+        udid: &str,
+        host_info: &CfValue,
+        dataclasses: &CfValue,
+        anchors: &CfValue,
+        mut on_event: impl FnMut(HandshakeEvent),
+    ) -> Result<Outcome, AtcError> {
+        let to_cf = |v: &CfValue| cf.to_cf(v).map_err(|_| AtcError::CreateFailed);
+        let (info_ref, classes_ref, anchors_ref) = (to_cf(host_info)?, to_cf(dataclasses)?, to_cf(anchors)?);
+        let session = self.open(cf, udid)?;
+        let mut machine = Handshake::new(0);
+        let mut count = 0;
+        let outcome = loop {
+            let action = match session.rx.recv_timeout(Duration::from_millis(200)) {
+                Ok((ms, name, message)) => {
+                    log::info!("ATC message {} at {ms} ms", name.as_deref().unwrap_or("<no name>"));
+                    count += 1;
+                    let action = machine.on_message(name.as_deref().unwrap_or(""), ms);
+                    on_event(HandshakeEvent::Received { ms, name, message });
+                    action
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => machine.on_tick(session.ms()),
+                Err(mpsc::RecvTimeoutError::Disconnected) => break Outcome::Timeout(Phase::WaitingForReadyForSync),
+            };
+            match action {
+                Action::Wait => {}
+                Action::SendHostInfo => {
+                    // SAFETY: connection open; dictionary is a live CF object for the call.
+                    unsafe { (self.f.ATHostConnectionSendHostInfo)(session.conn.0, info_ref.as_ptr()) };
+                    log::info!("ATC sent HostInfo");
+                    on_event(HandshakeEvent::Sent { ms: session.ms(), what: "HostInfo" });
+                }
+                Action::SendSyncRequest => {
+                    // SAFETY: connection open; all three arguments are live CF objects for the call.
+                    unsafe {
+                        (self.f.ATHostConnectionSendSyncRequest)(
+                            session.conn.0,
+                            classes_ref.as_ptr(),
+                            anchors_ref.as_ptr(),
+                            info_ref.as_ptr(),
+                        )
+                    };
+                    log::info!("ATC sent SyncRequest");
+                    on_event(HandshakeEvent::Sent { ms: session.ms(), what: "SyncRequest" });
+                }
+                Action::Stop(outcome) => break outcome,
+            }
+        };
+        log::info!("ATC handshake ended: {outcome:?}");
+        session.close(count);
+        Ok(outcome)
+    }
+
+    /// Open an ATC connection to `udid` and hand every message the phone sends to `on_message`
+    /// (ms since start, message name, full message). Stops after `quiet` without a message or
+    /// `max` in total. Returns the number of messages. Sends nothing to the phone.
+    pub fn listen(
+        &self,
+        cf: &Arc<Cf>,
+        udid: &str,
+        quiet: Duration,
+        max: Duration,
+        mut on_message: impl FnMut(u64, Option<String>, CfValue),
+    ) -> Result<usize, AtcError> {
+        let session = self.open(cf, udid)?;
         let mut count = 0;
         loop {
-            let left = max.saturating_sub(started.elapsed());
-            match rx.recv_timeout(quiet.min(left)) {
+            let left = max.saturating_sub(session.started.elapsed());
+            match session.rx.recv_timeout(quiet.min(left)) {
                 Ok((ms, name, value)) => {
                     log::info!("ATC message {} at {ms} ms", name.as_deref().unwrap_or("<no name>"));
                     on_message(ms, name, value);
@@ -121,19 +226,7 @@ impl AirTraffic {
                 Err(_) => break,
             }
         }
-
-        // SAFETY: Invalidate is meant to unblock a pending read; Release only once the reader is gone.
-        unsafe { (f.ATHostConnectionInvalidate)(conn.0) };
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while !reader.is_finished() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        if reader.is_finished() {
-            unsafe { (f.ATHostConnectionRelease)(conn.0) };
-            log::info!("ATC connection closed after {count} messages");
-        } else {
-            log::warn!("ATC reader still blocked after Invalidate; leaking the connection");
-        }
+        session.close(count);
         Ok(count)
     }
 }
@@ -169,5 +262,40 @@ mod tests {
             .unwrap();
         assert!(n > 0, "the phone sent no AirTraffic messages");
         assert_eq!(n, names.len());
+    }
+}
+
+/// F2.3 live handshake. Doubly gated: `#[ignore]` and `MIU_ALLOW_SYNC_REQUEST=1`, because it sends
+/// HostInfo and a sync request to the phone. Prefer `cargo run --bin atc-handshake` (backs up first).
+#[cfg(test)]
+mod handshake_machine_tests {
+    use super::*;
+    use crate::apple::device::{watch, MobileDevice};
+    use crate::device::registry::{Interface, RawEvent};
+    use crate::sync::host_info::{host_info, sync_anchors, sync_dataclasses};
+
+    #[test]
+    #[ignore]
+    fn media_handshake_reaches_ready_for_sync() {
+        if std::env::var("MIU_ALLOW_SYNC_REQUEST").as_deref() != Ok("1") {
+            println!("skipped: set MIU_ALLOW_SYNC_REQUEST=1 to send a sync request to the phone");
+            return;
+        }
+        let dlls = crate::apple::loader::load_from_system().expect("Apple DLLs");
+        let cf = Arc::new(Cf::new(dlls.core_foundation).unwrap());
+        let md = Arc::new(MobileDevice::new(dlls.mobile_device).unwrap());
+        let (events, _handles) = watch(cf.clone(), md).unwrap();
+        let udid = loop {
+            if let RawEvent::Connected { udid, interface: Interface::Usb, trusted: true, .. } =
+                events.recv_timeout(Duration::from_secs(20)).expect("trusted iPhone")
+            {
+                break udid;
+            }
+        };
+        let ath = AirTraffic::new(dlls.air_traffic_host).unwrap();
+        let outcome = ath
+            .handshake(&cf, &udid, &host_info("0123456789ABCDEF"), &sync_dataclasses(), &sync_anchors(), |e| println!("{e:?}"))
+            .unwrap();
+        assert_eq!(outcome, Outcome::ReadyForSync);
     }
 }
