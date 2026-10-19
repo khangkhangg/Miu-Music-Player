@@ -253,3 +253,12 @@ Conclusions:
   does not apply here (open question 7: probably no; confirm in F2.3).
 - After SyncAllowed the phone goes quiet: it waits for the host (HostInfo, then SyncRequest — F2.3).
 - Captures: `research/captures/*-atc.jsonl` (gitignored).
+
+## Side effect of a read-only ATC connection — 2026-10-20
+
+Backups at 18:09:54Z and 18:21:50Z bracket the F2.2 capture runs. db-diff: only `_MLDatabaseProperties` changed
+(5 rows replaced): `MLUbiquitousBookmarkEntityRevisionAnchor` (390 → 390), `MPUbiquitousBookmarkDomainVersionAnchorToken`
+(0 → 0), `MPUbiquitousBookmarkDomainVersionRemoteToken` (0 → 0), `MPDateToSyncWithUbiquitousStore` (private), and
+**`MPDateLastSynced` 814114539 → 814126261 = 2026-10-19 18:11:01 UTC**, the moment the capture test ran.
+So opening an ATC connection (without HostInfo or SyncRequest) makes iOS record a sync. Songs untouched (69).
+Confidence: high on the change, medium on the cause (timing matches; nothing else touched the phone).
