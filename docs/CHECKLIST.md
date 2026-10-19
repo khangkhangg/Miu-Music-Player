@@ -117,10 +117,12 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [ ] Idle RAM < 60 MB measured and recorded.
 
 ## Phase 5b – Player and mini player
-- [ ] **F7.1 Native audio engine** — *Test first:* decode each fixture format to the expected sample count and rate;
+- [x] **F7.1 Native audio engine** — *Test first:* decode each fixture format to the expected sample count and rate;
   gapless join has no inserted silence; seek lands within one packet.
   Status 2026-10-20: done and verified by listening — decode (symphonia, hi-res kept), sinc resampling to the
-  device rate, gapless queue, seek, volume, WASAPI shared output. **Left:** optional exclusive (bit-perfect) mode.
+  device rate, gapless queue, seek, volume, WASAPI shared output. Exclusive (bit-perfect) mode done and verified
+  2026-10-20: device opened at each file's own rate (Bit-perfect shown on the LG at 44.1/48 kHz); other apps silent
+  while held, released on switching back. Gapless only between files at the same rate in exclusive mode.
 - [x] **F7.2 Ratings + filter chips** — *Test first:* rating transitions and counts; filters return the right songs.
 - [x] **F7.3 Disliked view + delete** — *Test first:* delete moves the file to Recycle Bin (temp-dir stub of the
   trash API), removes it from the library and queues device removal; undo dislike restores "not rated".
