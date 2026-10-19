@@ -35,6 +35,7 @@ trash = "5"
 winreg = "0.55"
 libloading = "0.8"
 windows-sys = { version = "0.60", features = ["Win32_System_LibraryLoader"] }
+wasapi = "0.26.0"
 
 [dev-dependencies]
 

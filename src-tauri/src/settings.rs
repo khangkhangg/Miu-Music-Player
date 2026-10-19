@@ -95,6 +95,17 @@ pub fn set_output_device(db: &Db, name: Option<&str>) -> Result<()> {
     db.set_setting_json(OUTPUT_DEVICE, &name)
 }
 
+const EXCLUSIVE_OUTPUT: &str = "exclusive_output";
+
+/// Take the device in exclusive (bit-perfect) mode (default: no, share it with other apps).
+pub fn exclusive_output(db: &Db) -> bool {
+    db.setting_json::<bool>(EXCLUSIVE_OUTPUT).ok().flatten().unwrap_or(false)
+}
+
+pub fn set_exclusive_output(db: &Db, on: bool) -> Result<()> {
+    db.set_setting_json(EXCLUSIVE_OUTPUT, &on)
+}
+
 const MINI_ON_TOP: &str = "mini_on_top";
 
 /// Keep the mini player above other windows (default: yes — the pin in the mini player).
@@ -244,5 +255,24 @@ mod output_tests {
         assert_eq!(output_device(&db).as_deref(), Some("Speakers (Realtek(R) Audio)"));
         set_output_device(&db, None).unwrap();
         assert_eq!(output_device(&db), None);
+    }
+}
+
+#[cfg(test)]
+mod exclusive_tests {
+    use super::*;
+
+    #[test]
+    fn shared_mode_is_the_default() {
+        assert!(!exclusive_output(&Db::open_in_memory().unwrap()));
+    }
+
+    #[test]
+    fn exclusive_mode_is_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        set_exclusive_output(&db, true).unwrap();
+        assert!(exclusive_output(&db));
+        set_exclusive_output(&db, false).unwrap();
+        assert!(!exclusive_output(&db));
     }
 }

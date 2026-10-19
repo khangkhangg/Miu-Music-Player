@@ -135,11 +135,35 @@ pub struct Feeder {
     out_rate: u32,
     out_channels: usize,
     current: Option<(Decoder, Resampler)>,
+    /// Exclusive mode: ask for each file's own rate instead of resampling to `out_rate`.
+    follow: bool,
+    wants: Option<u32>,
 }
 
 impl Feeder {
     pub fn new(tracks: Vec<PathBuf>, start: usize, out_rate: u32, out_channels: usize) -> Self {
-        Self { tracks, index: start, out_rate, out_channels, current: None }
+        Self { tracks, index: start, out_rate, out_channels, current: None, follow: false, wants: None }
+    }
+
+    /// Like `new`, but when a file's rate differs from the output rate the feeder stops and asks for
+    /// it (`next_block` returns `None` and `wants_rate` says which rate) so the device can be reopened.
+    pub fn following_source(tracks: Vec<PathBuf>, start: usize, out_rate: u32, out_channels: usize) -> Self {
+        Self { follow: true, ..Self::new(tracks, start, out_rate, out_channels) }
+    }
+
+    /// The rate the next file needs, while the feeder waits for `set_out_rate`.
+    pub fn wants_rate(&self) -> Option<u32> {
+        self.wants
+    }
+
+    /// The output now runs at `rate` (the one asked for, or the nearest the device took).
+    pub fn set_out_rate(&mut self, rate: u32) -> Result<(), AudioError> {
+        self.out_rate = rate;
+        self.wants = None;
+        if let Some((dec, res)) = self.current.as_mut() {
+            *res = Resampler::new(dec.sample_rate, rate, self.out_channels)?;
+        }
+        Ok(())
     }
 
     /// Format of the file being decoded now, if one is open.
@@ -166,13 +190,21 @@ impl Feeder {
     fn open_current(&mut self) -> Result<(), AudioError> {
         let path = &self.tracks[self.index];
         let dec = Decoder::open(path)?;
-        let res = Resampler::new(dec.sample_rate, self.out_rate, self.out_channels)?;
+        // Output rate 0 = no device open yet: a placeholder pass-through until `set_out_rate`.
+        let target = if self.out_rate == 0 { dec.sample_rate } else { self.out_rate };
+        let res = Resampler::new(dec.sample_rate, target, self.out_channels)?;
+        if self.follow && dec.sample_rate != self.out_rate {
+            self.wants = Some(dec.sample_rate);
+        }
         self.current = Some((dec, res));
         Ok(())
     }
 
     pub fn next_block(&mut self) -> Result<Option<Block>, AudioError> {
         loop {
+            if self.wants.is_some() {
+                return Ok(None);
+            }
             if self.current.is_none() {
                 if self.index >= self.tracks.len() {
                     return Ok(None);
@@ -181,6 +213,9 @@ impl Feeder {
                     log::warn!("skipping {}: {e}", self.tracks[self.index].display());
                     self.index += 1;
                     continue;
+                }
+                if self.wants.is_some() {
+                    return Ok(None);
                 }
             }
             let (dec, res) = self.current.as_mut().expect("opened above");
@@ -327,5 +362,76 @@ mod seek_tests {
         let block = f.next_block().unwrap().expect("audio after seek");
         assert!((block.samples[0] - ramp(96_240, 0)).abs() < 1e-3, "got {} want {}", block.samples[0], ramp(96_240, 0));
         assert!((ramp(96_240, 0) - ramp(0, 0)).abs() > 0.1, "test would not notice a seek to 0");
+    }
+}
+
+#[cfg(test)]
+mod follow_rate_tests {
+    use super::*;
+    use crate::audio::fixtures::wav;
+
+    fn drain(f: &mut Feeder) -> Vec<f32> {
+        let mut out = Vec::new();
+        while let Some(b) = f.next_block().unwrap() {
+            out.extend(b.samples);
+        }
+        out
+    }
+
+    #[test]
+    fn following_the_source_asks_for_the_first_files_rate_before_any_audio() {
+        let d = tempfile::tempdir().unwrap();
+        let a = wav(d.path(), "a.wav", 96_000, 1, 24, 960);
+        let mut f = Feeder::following_source(vec![a], 0, 48_000, 1);
+        assert!(f.next_block().unwrap().is_none());
+        assert_eq!(f.wants_rate(), Some(96_000));
+        f.set_out_rate(96_000).unwrap();
+        assert_eq!(f.wants_rate(), None);
+        assert_eq!(drain(&mut f).len(), 960, "native length: nothing resampled");
+    }
+
+    #[test]
+    fn a_rate_change_between_files_is_requested_not_resampled() {
+        let d = tempfile::tempdir().unwrap();
+        let a = wav(d.path(), "a.wav", 44_100, 1, 16, 441);
+        let b = wav(d.path(), "b.wav", 96_000, 1, 24, 960);
+        let c = wav(d.path(), "c.wav", 96_000, 1, 24, 96);
+        let mut f = Feeder::following_source(vec![a, b, c], 0, 44_100, 1);
+        assert_eq!(drain(&mut f).len(), 441);
+        assert_eq!(f.wants_rate(), Some(96_000), "stopped before b, asking for its rate");
+        f.set_out_rate(96_000).unwrap();
+        assert_eq!(drain(&mut f).len(), 960 + 96, "b and c play gaplessly at the same rate");
+        assert_eq!(f.wants_rate(), None, "end of queue");
+    }
+
+    #[test]
+    fn a_device_that_refuses_the_rate_gets_resampled_audio() {
+        let d = tempfile::tempdir().unwrap();
+        let a = wav(d.path(), "a.wav", 88_200, 1, 16, 8_820);
+        let mut f = Feeder::following_source(vec![a], 0, 48_000, 1);
+        assert!(f.next_block().unwrap().is_none());
+        f.set_out_rate(44_100).unwrap(); // the device took 44.1 instead
+        let n = drain(&mut f).len() as i64;
+        assert!((n - 4_410).abs() <= 8, "got {n}");
+    }
+
+    #[test]
+    fn the_shared_mode_feeder_never_asks() {
+        let d = tempfile::tempdir().unwrap();
+        let a = wav(d.path(), "a.wav", 96_000, 1, 16, 960);
+        let mut f = Feeder::new(vec![a], 0, 48_000, 1);
+        assert_eq!(drain(&mut f).len(), 480);
+        assert_eq!(f.wants_rate(), None);
+    }
+
+    #[test]
+    fn with_no_device_open_yet_any_rate_is_asked_for() {
+        let d = tempfile::tempdir().unwrap();
+        let a = wav(d.path(), "a.wav", 48_000, 1, 16, 480);
+        let mut f = Feeder::following_source(vec![a], 0, 0, 1);
+        assert!(f.next_block().unwrap().is_none());
+        assert_eq!(f.wants_rate(), Some(48_000));
+        f.set_out_rate(48_000).unwrap();
+        assert_eq!(drain(&mut f).len(), 480);
     }
 }

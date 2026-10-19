@@ -122,6 +122,11 @@
           <select id="out-device" aria-label="Output device"></select>
           <span class="eq-error" id="out-error" role="alert"></span>
         </div>
+        <label class="eq-switch out-exclusive"><input type="checkbox" id="out-exclusive"> Exclusive mode (bit-perfect)</label>
+        <p class="out-note muted" id="out-exclusive-note" hidden>Miu takes the device for itself: other apps are silent while it plays,
+          and the Windows volume no longer applies — set the level with Miu's volume or on your amplifier.</p>
+        <p class="out-note eq-error" id="out-fallback" role="status" hidden>Exclusive mode was refused (another app holds the device, or it takes no
+          matching format), so Miu is playing in shared mode.</p>
         <dl class="out-info">
           <dt>Source</dt><dd id="out-source">Nothing playing</dd>
           <dt>Device</dt><dd id="out-device-info"></dd>

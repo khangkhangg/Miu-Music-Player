@@ -65,7 +65,8 @@ pub fn run() {
 
     let registry = device::service::SharedRegistry::default();
     let saved_output = db.lock().ok().and_then(|d| settings::output_device(&d));
-    let player: audio::service::SharedPlayer = std::sync::Arc::new(audio::service::PlayerHandle::new(saved_output.as_deref()));
+    let saved_exclusive = db.lock().is_ok_and(|d| settings::exclusive_output(&d));
+    let player: audio::service::SharedPlayer = std::sync::Arc::new(audio::service::PlayerHandle::new(saved_output.as_deref(), saved_exclusive));
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(registry.clone())
@@ -100,6 +101,7 @@ pub fn run() {
             audio::service::player_skip,
             audio::service::output_state,
             audio::service::set_output,
+            audio::service::set_exclusive,
             windows::open_main,
             audio::eq_service::eq_state,
             audio::eq_service::set_eq,

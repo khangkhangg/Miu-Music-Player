@@ -428,10 +428,23 @@ function setupOutput() {
       })
       .finally(() => { $('out-device').disabled = false; });
   });
+  $('out-exclusive').addEventListener('change', e => {
+    $('out-exclusive').disabled = true;
+    invoke('set_exclusive', { on: e.target.checked })
+      .then(renderDevices)
+      .catch(message => { $('out-error').textContent = String(message); invoke('output_state').then(renderDevices); })
+      .finally(() => { $('out-exclusive').disabled = false; });
+  });
   invoke('output_state').then(renderDevices);
 }
 
+let outputState = null;
+
 function renderDevices(state) {
+  outputState = state;
+  document.getElementById('out-exclusive').checked = state.exclusive;
+  document.getElementById('out-exclusive-note').hidden = !state.exclusive;
+  renderOutputInfo();
   document.getElementById('out-device').replaceChildren(...deviceOptions(state).map(o => {
     const opt = document.createElement('option');
     opt.value = o.value;
@@ -446,10 +459,17 @@ function renderOutputInfo() {
   const ev = playerState;
   const song = songsById.get(ev?.songId);
   $('out-source').textContent = (ev?.source && sourceLabel(song?.format, ev.source)) || 'Nothing playing';
-  $('out-device-info').textContent = ev?.deviceName ? `${ev.deviceName} · ${rateLabel(ev.deviceRate)}` : 'No output device';
-  const path = ev?.source
-    ? signalPath({ sourceRate: ev.source.rate, deviceRate: ev.deviceRate, eqActive: eqActive(eq?.settings), exclusive: false })
+  const depth = ev?.exclusive && ev.deviceBits ? ` · ${ev.deviceBits}-bit, exclusive` : '';
+  $('out-device-info').textContent = ev?.deviceName && ev.deviceRate
+    ? `${ev.deviceName} · ${rateLabel(ev.deviceRate)}${depth}`
+    : (ev?.deviceName || 'No output device');
+  const path = ev?.source && ev.deviceRate
+    ? signalPath({
+      sourceRate: ev.source.rate, deviceRate: ev.deviceRate, eqActive: eqActive(eq?.settings),
+      exclusive: ev.exclusive, volume: ev.volume, sourceBits: ev.source.bits, deviceBits: ev.deviceBits,
+    })
     : '';
+  $('out-fallback').hidden = !(outputState?.exclusive && ev?.deviceRate && !ev.exclusive);
   $('out-path').textContent = path;
   $('out-path').classList.toggle('bit-perfect', path === 'Bit-perfect');
 }

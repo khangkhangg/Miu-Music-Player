@@ -19,8 +19,9 @@ pub type VisualizerOn = Arc<AtomicBool>;
 
 pub fn start(app: AppHandle, player: SharedPlayer, on: VisualizerOn) {
     std::thread::spawn(move || {
-        let Some(rate) = player.rate() else { return };
-        let mut spectrum = Spectrum::new(rate, BANDS);
+        // The device rate changes with the output device, and per song in exclusive mode.
+        let mut rate = 0;
+        let mut spectrum = Spectrum::new(48_000, BANDS);
         let mut gate = FrameGate::default();
         let started = Instant::now();
         loop {
@@ -28,6 +29,13 @@ pub fn start(app: AppHandle, player: SharedPlayer, on: VisualizerOn) {
             let visible = app.get_webview_window("mini").and_then(|w| w.is_visible().ok()).unwrap_or(false);
             let playing = player.is_playing();
             if gate.tick(started.elapsed().as_millis() as u64, on.load(Ordering::Relaxed), visible, playing) {
+                match player.rate() {
+                    Some(r) if r > 0 && r != rate => {
+                        rate = r;
+                        spectrum = Spectrum::new(r, BANDS);
+                    }
+                    _ => {}
+                }
                 let levels = spectrum.levels(&player.recent_mono());
                 let _ = app.emit_to("mini", "spectrum", to_bytes(&levels));
             }

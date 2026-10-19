@@ -114,7 +114,9 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .eq-btn:hover { background: var(--surface-muted); }
 .eq-error { font-size: 12px; color: var(--danger); }
 .out-panel { width: min(460px, calc(100% - 32px)); }
-.out-panel[hidden] { display: none; }
+.out-panel[hidden], .out-note[hidden] { display: none; }
+.out-exclusive { margin-top: 10px; }
+.out-note { font-size: 12px; margin: 6px 0 0; }
 .out-info { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 10px 0 0; font-size: 12px; }
 .out-info dt { color: var(--text-muted); }
 .out-info dd { margin: 0; overflow-wrap: anywhere; }

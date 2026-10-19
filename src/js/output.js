@@ -21,13 +21,20 @@ export function eqActive(eq) {
   return eq.preampDb !== 0 || eq.gainsDb.some((g) => g !== 0);
 }
 
-/** "Bit-perfect" only with exclusive mode, EQ off and no resampling; otherwise what is done. */
-export function signalPath({ sourceRate, deviceRate, eqActive: eq, exclusive }) {
+/**
+ * "Bit-perfect" only with exclusive mode, EQ off, no resampling, full volume and enough bits;
+ * otherwise what happens to the sound on the way.
+ */
+export function signalPath({ sourceRate, deviceRate, eqActive: eq, exclusive, volume = 1, sourceBits = null, deviceBits = 0 }) {
   const resampled = sourceRate && deviceRate && sourceRate !== deviceRate;
-  if (exclusive && !eq && !resampled) return 'Bit-perfect';
+  const quieter = exclusive && volume < 1;
+  const truncated = exclusive && sourceBits && deviceBits && deviceBits < sourceBits;
+  if (exclusive && !eq && !resampled && !quieter && !truncated) return 'Bit-perfect';
   const parts = [exclusive ? 'Exclusive mode' : 'Shared mode (Windows mixer)'];
   if (resampled) parts.push(`resampled ${khz(sourceRate)} → ${rateLabel(deviceRate)}`);
   if (eq) parts.push('EQ on (32-bit float)');
+  if (quieter) parts.push(`volume ${Math.round(volume * 100)}%`);
+  if (truncated) parts.push(`reduced to ${deviceBits}-bit`);
   return parts.join(' · ');
 }
 

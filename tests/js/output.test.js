@@ -14,7 +14,7 @@ test('source shows codec, bit depth and rate', () => {
 });
 
 test('bit-perfect only with exclusive mode, EQ off and matching rates', () => {
-  assert.equal(signalPath({ sourceRate: 96_000, deviceRate: 96_000, eqActive: false, exclusive: true }), 'Bit-perfect');
+  assert.equal(signalPath({ sourceRate: 96_000, deviceRate: 96_000, eqActive: false, exclusive: true, volume: 1, sourceBits: 24, deviceBits: 32 }), 'Bit-perfect');
   assert.notEqual(signalPath({ sourceRate: 96_000, deviceRate: 96_000, eqActive: true, exclusive: true }), 'Bit-perfect');
   assert.notEqual(signalPath({ sourceRate: 44_100, deviceRate: 96_000, eqActive: false, exclusive: true }), 'Bit-perfect');
   assert.notEqual(signalPath({ sourceRate: 48_000, deviceRate: 48_000, eqActive: false, exclusive: false }), 'Bit-perfect');
@@ -42,4 +42,11 @@ test('device menu starts with the system default', () => {
     { value: 'Speakers (USB Audio and HID)', label: 'Speakers (USB Audio and HID)', selected: false },
   ]);
   assert.equal(deviceOptions({ ...state, chosen: 'LG HDR 4K' })[1].selected, true);
+});
+
+test('exclusive mode below full volume or with too few bits says why it is not bit-perfect', () => {
+  const base = { sourceRate: 44_100, deviceRate: 44_100, eqActive: false, exclusive: true, volume: 1, sourceBits: 24, deviceBits: 24 };
+  assert.equal(signalPath({ ...base, volume: 0.8 }), 'Exclusive mode · volume 80%');
+  assert.equal(signalPath({ ...base, deviceBits: 16 }), 'Exclusive mode · reduced to 16-bit');
+  assert.equal(signalPath({ ...base, sourceBits: null }), 'Bit-perfect', 'lossy files have no bit depth to lose');
 });
