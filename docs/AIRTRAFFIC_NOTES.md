@@ -362,3 +362,28 @@ folder, first on this process's PATH, pre-loaded before AirTrafficHost):
 
 Also fixed: `AMDServiceConnectionReceive` returns a 32-bit `int`; declared as 64-bit, `-1` became 4294967295 and
 the syslog reader thread panicked at shutdown (lines were already saved).
+
+## Incident: `CoreFP\LibraryPath` registry value broke Apple's device service — 2026-10-20 (resolved)
+
+What happened:
+1. ~18:50Z the user added (on my suggestion, option 3 above)
+   `HKLM\SOFTWARE\Apple Inc.\CoreFP` → `LibraryPath` = our private copy
+   `%LOCALAPPDATA%\MiuMusic\apple\AppleInc.iTunes_…\CoreFP.dll`.
+2. Apple's device service (`AppleMobileDeviceProcess`, Store iTunes package, port 27015) stopped. Our tool then got
+   `AMDeviceNotificationSubscribe failed: 0xe8000063` (no service) and exited **before contacting the phone**.
+3. After opening iTunes the service ran again, but **iTunes and our code no longer saw the iPhone**, even after
+   reinstalling iTunes (the value lives in the real HKLM, which a Store reinstall does not touch).
+4. User deleted the value (`reg delete … /v LibraryPath /f`) and restarted → iTunes shows the phone again.
+
+Verified read-only afterwards (19:05Z): registry back to 3uTools' two values only; service listening (pid 18936);
+our discovery sees the trusted iPhone 5s (in 0.4 s); fresh backup `20261019-190509` = 69 songs, db-diff vs
+`20261019-184707`: no differences. Phone data was never at risk (nothing was sent in this attempt).
+
+Lessons:
+- Apple's own Store-packaged device stack **also reads `HKLM\…\CoreFP\LibraryPath`** — pointing it at a copy outside
+  the package breaks device detection for everything on the PC. Option 3 is ruled out.
+- The approved "run 3" never reached the phone; it is still unused.
+- New hard rule in CLAUDE.md: Miu never asks the user to change machine-wide Apple registry keys or services.
+
+Remaining paths for Grappa (decision pending): install standalone x64 iTunes from apple.com (registers CoreFP the
+supported way), investigate `ATHostConnectionCreateWithLibrary`, or Phase 2 gate → fallbacks.

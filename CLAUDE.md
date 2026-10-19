@@ -62,6 +62,9 @@ Schema findings from the real device database: **`docs/MEDIALIBRARY_SCHEMA.md`**
    Run the whole suite (`cargo test` in `src-tauri/` and `node --test` at the root) before every commit.
    Hardware tests are `#[ignore]` and run manually with the iPhone plugged in. No private data in tests.
 9. Tools are written in Rust (no Python on this machine).
+10. **Never change machine-wide Apple configuration** (HKLM `Apple Inc.` registry keys such as `CoreFP`, Apple
+    services, Apple install folders) and never ask the user to. On 2026-10-20 a `CoreFPLibraryPath` value broke
+    device detection for iTunes and Miu until removed. Process-local workarounds only.
 
 ## Test device
 - iPhone 5s, iOS 12.5.8, currently holds 69 MP3s synced by 3uTools (good reference data).
