@@ -95,6 +95,7 @@
           <span class="muted np-time" id="np-duration"></span>
         </div>
         <div class="np-right">
+          <button class="eq-toggle" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path">Output</button>
           <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel">EQ</button>
           <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume">
         </div>
@@ -114,6 +115,18 @@
         </div>
         <div class="eq-sliders" id="eq-sliders"></div>
         <p class="eq-clip" id="eq-clip" role="status" hidden></p>
+      </section>
+      <section class="eq-panel out-panel" id="out-panel" aria-label="Output" hidden>
+        <div class="eq-head">
+          <strong>Output</strong>
+          <select id="out-device" aria-label="Output device"></select>
+          <span class="eq-error" id="out-error" role="alert"></span>
+        </div>
+        <dl class="out-info">
+          <dt>Source</dt><dd id="out-source">Nothing playing</dd>
+          <dt>Device</dt><dd id="out-device-info"></dd>
+          <dt>Signal path</dt><dd id="out-path"></dd>
+        </dl>
       </section>
       <footer class="status muted" id="app-version"></footer>
     </main>

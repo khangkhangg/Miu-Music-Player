@@ -7,6 +7,7 @@ import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
@@ -74,6 +75,7 @@ if (invoke) {
   });
   document.getElementById('delete-all').addEventListener('click', () => confirmDelete(shown.filter(x => x.rating === -1)));
   setupEq();
+  setupOutput();
   document.getElementById('np-volume').addEventListener('input', e =>
     invoke('player_volume', { volume: Number(e.target.value) / 100 }));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
@@ -179,6 +181,7 @@ function showPlayer(event) {
   const play = document.getElementById('np-play');
   play.classList.toggle('paused', !np.playing);
   play.setAttribute('aria-label', np.playing ? 'Pause' : 'Play');
+  renderOutputInfo();
 }
 
 const THUMB_UP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>';
@@ -311,11 +314,7 @@ let eqDragging = -2; // index of the slider being dragged (-1 = preamp), -2 = no
 
 function setupEq() {
   const $ = id => document.getElementById(id);
-  $('eq-open').addEventListener('click', () => {
-    const panel = $('eq-panel');
-    panel.hidden = !panel.hidden;
-    $('eq-open').setAttribute('aria-expanded', String(!panel.hidden));
-  });
+  $('eq-open').addEventListener('click', () => togglePanel('eq'));
   $('eq-enabled').addEventListener('change', e => sendEq({ ...eq.settings, enabled: e.target.checked }, true));
   $('eq-preset').addEventListener('change', e => {
     if (e.target.value) invoke('apply_eq_preset', { name: e.target.value }).then(renderEq).catch(showEqError);
@@ -397,4 +396,60 @@ function renderEq(state) {
   const clip = clipText(state);
   $('eq-clip').hidden = !clip;
   $('eq-clip').textContent = clip ?? '';
+  renderOutputInfo();
+}
+
+// ---- Output panel (F7.8) ----
+
+/** Show one floating panel ('eq' or 'out') at a time; clicking its button again closes it. */
+function togglePanel(name) {
+  for (const p of ['eq', 'out']) {
+    const panel = document.getElementById(`${p}-panel`);
+    panel.hidden = p === name ? !panel.hidden : true;
+    document.getElementById(`${p}-open`).setAttribute('aria-expanded', String(!panel.hidden));
+  }
+}
+
+function setupOutput() {
+  const $ = id => document.getElementById(id);
+  $('out-open').addEventListener('click', () => {
+    togglePanel('out');
+    if (!$('out-panel').hidden) invoke('output_state').then(renderDevices); // devices may have changed
+  });
+  $('out-device').addEventListener('change', e => {
+    $('out-device').disabled = true;
+    invoke('set_output', { device: e.target.value || null })
+      .then(renderDevices)
+      .catch(message => {
+        const el = $('out-error');
+        el.textContent = String(message);
+        setTimeout(() => { el.textContent = ''; }, 5000);
+        invoke('output_state').then(renderDevices);
+      })
+      .finally(() => { $('out-device').disabled = false; });
+  });
+  invoke('output_state').then(renderDevices);
+}
+
+function renderDevices(state) {
+  document.getElementById('out-device').replaceChildren(...deviceOptions(state).map(o => {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    opt.selected = o.selected;
+    return opt;
+  }));
+}
+
+function renderOutputInfo() {
+  const $ = id => document.getElementById(id);
+  const ev = playerState;
+  const song = songsById.get(ev?.songId);
+  $('out-source').textContent = (ev?.source && sourceLabel(song?.format, ev.source)) || 'Nothing playing';
+  $('out-device-info').textContent = ev?.deviceName ? `${ev.deviceName} · ${rateLabel(ev.deviceRate)}` : 'No output device';
+  const path = ev?.source
+    ? signalPath({ sourceRate: ev.source.rate, deviceRate: ev.deviceRate, eqActive: eqActive(eq?.settings), exclusive: false })
+    : '';
+  $('out-path').textContent = path;
+  $('out-path').classList.toggle('bit-perfect', path === 'Bit-perfect');
 }

@@ -36,6 +36,15 @@ impl Decoded {
     }
 }
 
+/// What the file itself is (before any resampling): shown in the output panel (F7.8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceFormat {
+    pub rate: u32,
+    pub bits: Option<u32>,
+    pub channels: usize,
+}
+
 /// Streaming decoder: `next_chunk` yields interleaved samples until the end of the file.
 pub struct Decoder {
     format: Box<dyn FormatReader>,
@@ -43,6 +52,7 @@ pub struct Decoder {
     track_id: u32,
     pub sample_rate: u32,
     pub channels: usize,
+    pub bits: Option<u32>,
     /// Frames still to drop after an accurate seek landed before the target.
     skip_frames: u64,
 }
@@ -69,10 +79,15 @@ impl Decoder {
             track_id: track.id,
             sample_rate: params.sample_rate.ok_or_else(|| AudioError("unknown sample rate".into()))?,
             channels: params.channels.map(|c| c.count()).ok_or_else(|| AudioError("unknown channel layout".into()))?,
+            bits: params.bits_per_sample,
             format,
             codec,
             skip_frames: 0,
         })
+    }
+
+    pub fn format(&self) -> SourceFormat {
+        SourceFormat { rate: self.sample_rate, bits: self.bits, channels: self.channels }
     }
 
     /// Next block of interleaved samples, or `None` at the end of the file.

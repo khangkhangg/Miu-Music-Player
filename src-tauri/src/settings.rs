@@ -84,6 +84,17 @@ pub fn delete_user_preset(db: &Db, name: &str) -> Result<()> {
     db.set_setting_json(EQ_USER_PRESETS, &list)
 }
 
+const OUTPUT_DEVICE: &str = "output_device";
+
+/// Name of the chosen output device; `None` = follow the Windows default.
+pub fn output_device(db: &Db) -> Option<String> {
+    db.setting_json::<Option<String>>(OUTPUT_DEVICE).ok().flatten().flatten()
+}
+
+pub fn set_output_device(db: &Db, name: Option<&str>) -> Result<()> {
+    db.set_setting_json(OUTPUT_DEVICE, &name)
+}
+
 const MINI_ON_TOP: &str = "mini_on_top";
 
 /// Keep the mini player above other windows (default: yes — the pin in the mini player).
@@ -214,5 +225,24 @@ mod eq_tests {
         let db = Db::open_in_memory().unwrap();
         assert!(save_user_preset(&db, "  ", &custom()).is_err());
         assert!(save_user_preset(&db, "bass boost", &custom()).is_err(), "built-in name");
+    }
+}
+
+#[cfg(test)]
+mod output_tests {
+    use super::*;
+
+    #[test]
+    fn output_follows_the_system_default_until_a_device_is_chosen() {
+        assert_eq!(output_device(&Db::open_in_memory().unwrap()), None);
+    }
+
+    #[test]
+    fn a_chosen_device_is_remembered_and_can_be_cleared() {
+        let db = Db::open_in_memory().unwrap();
+        set_output_device(&db, Some("Speakers (Realtek(R) Audio)")).unwrap();
+        assert_eq!(output_device(&db).as_deref(), Some("Speakers (Realtek(R) Audio)"));
+        set_output_device(&db, None).unwrap();
+        assert_eq!(output_device(&db), None);
     }
 }

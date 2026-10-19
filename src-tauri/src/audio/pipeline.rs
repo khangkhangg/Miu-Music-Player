@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use rubato::{Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 
-use crate::audio::decode::{AudioError, Decoder};
+use crate::audio::decode::{AudioError, Decoder, SourceFormat};
 
 /// Convert interleaved `samples` from `from` channels to `to` channels.
 pub fn remix(samples: &[f32], from: usize, to: usize) -> Vec<f32> {
@@ -140,6 +140,11 @@ pub struct Feeder {
 impl Feeder {
     pub fn new(tracks: Vec<PathBuf>, start: usize, out_rate: u32, out_channels: usize) -> Self {
         Self { tracks, index: start, out_rate, out_channels, current: None }
+    }
+
+    /// Format of the file being decoded now, if one is open.
+    pub fn current_format(&self) -> Option<SourceFormat> {
+        self.current.as_ref().map(|(d, _)| d.format())
     }
 
     pub fn current_track(&self) -> usize {

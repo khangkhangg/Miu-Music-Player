@@ -11,7 +11,7 @@ use std::time::Duration;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
-use crate::audio::decode::AudioError;
+use crate::audio::decode::{AudioError, SourceFormat};
 use crate::audio::eq::{EqSettings, Equalizer};
 use crate::audio::pipeline::Feeder;
 use crate::audio::timeline::Timeline;
@@ -24,6 +24,30 @@ pub struct Status {
     pub track: Option<usize>,
     pub position_ms: u64,
     pub volume: f32,
+    /// Format of the file being heard.
+    pub source: Option<SourceFormat>,
+    pub device_name: String,
+    pub device_rate: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputDevice {
+    pub name: String,
+    pub is_default: bool,
+}
+
+/// Output devices Windows offers, the default one marked.
+pub fn output_devices() -> Vec<OutputDevice> {
+    let host = cpal::default_host();
+    let default = host.default_output_device().and_then(|d| d.name().ok());
+    host.output_devices()
+        .map(|it| {
+            it.filter_map(|d| d.name().ok())
+                .map(|name| OutputDevice { is_default: Some(&name) == default.as_ref(), name })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 enum Cmd {
@@ -58,6 +82,12 @@ pub struct Player {
 impl Player {
     /// Opens the default output device on its own thread.
     pub fn start() -> Result<Self, AudioError> {
+        Self::start_on(None)
+    }
+
+    /// Opens the named output device (or the default if it is gone) on its own thread.
+    pub fn start_on(device: Option<&str>) -> Result<Self, AudioError> {
+        let device = device.map(str::to_string);
         let (tx, rx) = mpsc::channel();
         let status = Arc::new(Mutex::new(Status { volume: 1.0, ..Default::default() }));
         let (ready_tx, ready_rx) = mpsc::channel();
@@ -68,7 +98,7 @@ impl Player {
         let engine_eq = eq.clone();
         std::thread::Builder::new()
             .name("audio-engine".into())
-            .spawn(move || engine(rx, engine_status, engine_tap, engine_eq, ready_tx))
+            .spawn(move || engine(rx, engine_status, engine_tap, engine_eq, device, ready_tx))
             .map_err(|e| AudioError(e.to_string()))?;
         let rate = ready_rx.recv().map_err(|_| AudioError("audio engine stopped".into()))??;
         Ok(Self { tx, status, tap, rate, eq })
@@ -117,11 +147,19 @@ fn engine(
     status: Arc<Mutex<Status>>,
     tap: Tap,
     eq_update: Arc<Mutex<Option<EqSettings>>>,
+    wanted: Option<String>,
     ready: Sender<Result<u32, AudioError>>,
 ) {
     let fail = |e: String| AudioError(e);
     let host = cpal::default_host();
-    let Some(device) = host.default_output_device() else {
+    let named = wanted.as_deref().and_then(|w| {
+        let found = host.output_devices().ok()?.find(|d| d.name().ok().as_deref() == Some(w));
+        if found.is_none() {
+            log::warn!("output device {w:?} not found; using the default");
+        }
+        found
+    });
+    let Some(device) = named.or_else(|| host.default_output_device()) else {
         let _ = ready.send(Err(fail("no audio output device".into())));
         return;
     };
@@ -134,6 +172,8 @@ fn engine(
     };
     let rate = config.sample_rate().0;
     let channels = config.channels() as usize;
+    let device_name = device.name().unwrap_or_default();
+    let mut formats: std::collections::HashMap<usize, SourceFormat> = std::collections::HashMap::new();
     let (mut producer, mut consumer) = rtrb::RingBuffer::<f32>::new(rate as usize * channels / 2); // ~0.5 s
     let shared = Arc::new(Shared {
         paused: AtomicBool::new(true),
@@ -225,6 +265,7 @@ fn engine(
             match cmd {
                 Cmd::Play { tracks: t, start } => {
                     tracks = t;
+                    formats.clear();
                     restart(&mut feeder, &mut timeline, &tracks, start);
                     pending.clear();
                     finished = false;
@@ -272,6 +313,9 @@ fn engine(
             if pending_at >= pending.len() {
                 match f.next_block() {
                     Ok(Some(block)) => {
+                        if let (false, Some(fmt)) = (formats.contains_key(&block.track), f.current_format()) {
+                            formats.insert(block.track, fmt);
+                        }
                         timeline.add(block.track, (block.samples.len() / channels) as u64);
                         pending = block.samples;
                         pending_at = 0;
@@ -306,6 +350,11 @@ fn engine(
             s.position_ms = here.map_or(0, |(_, f)| f * 1000 / rate as u64);
             s.playing = !shared.paused.load(Ordering::Acquire) && here.is_some() && !drained;
             s.volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
+            s.source = here.and_then(|(t, _)| formats.get(&t).copied());
+            s.device_rate = rate;
+            if s.device_name != device_name {
+                s.device_name = device_name.clone();
+            }
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -353,5 +402,36 @@ mod tests {
         std::thread::sleep(Duration::from_millis(300));
         let s = player.status();
         assert!(s.position_ms >= 2_000, "after seek: {}", s.position_ms);
+    }
+}
+
+#[cfg(test)]
+mod output_tests {
+    use super::*;
+    use crate::audio::fixtures::wav;
+
+    #[test]
+    #[ignore]
+    fn lists_output_devices_with_one_default() {
+        let devices = output_devices();
+        println!("{devices:?}");
+        assert!(!devices.is_empty());
+        assert_eq!(devices.iter().filter(|d| d.is_default).count(), 1);
+    }
+
+    #[test]
+    #[ignore]
+    fn an_unknown_device_falls_back_to_the_default_and_reports_the_source_format() {
+        let d = tempfile::tempdir().unwrap();
+        let p = wav(d.path(), "t.wav", 44_100, 1, 16, 44_100);
+        let player = Player::start_on(Some("No such device")).expect("falls back to default");
+        player.set_volume(0.05);
+        player.play(vec![p], 0);
+        std::thread::sleep(Duration::from_millis(500));
+        let s = player.status();
+        println!("{s:?}");
+        assert_eq!(s.source, Some(SourceFormat { rate: 44_100, bits: Some(16), channels: 1 }));
+        assert!(s.device_rate > 0);
+        assert!(!s.device_name.is_empty());
     }
 }
