@@ -93,8 +93,9 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   Done with file signatures in Rust (no ffprobe): MP3, AAC (ADTS + M4A), ALAC, FLAC, WAV, AIFF, Opus, Vorbis, WMA, APE, WavPack; non-audio content is skipped.
 - [x] **F3.3 Tags + artwork** — *Test first:* fixtures with Vietnamese, CJK and RTL tags read exactly; artwork extracted.
   Done with `lofty`; tags stored on scan (migration 4), read only for new/changed files. Benchmark: 500 tagged files in 81 ms (release), unchanged rescan 29 ms.
-- [ ] **F3.4 Conversion policy + Hi-res for iPhone** — *Test first:* table test format/bit depth/rate → action
-  (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected.
+- [x] **F3.4 Conversion policy + Hi-res for iPhone** — *Test first:* table test format/bit depth/rate → action
+  (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected. Ticked on tests 2026-10-20: no UI yet (the
+  sync engine uses it in Phase 4, the setting appears in F5.5). 88.2/176.4 kHz sources go to 44.1, not 48.
 - [ ] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.
 - [ ] **F3.6 Duplicate detection** — *Test first:* same audio, different names → duplicate; different audio same tags → not.
 
