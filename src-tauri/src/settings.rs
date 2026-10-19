@@ -106,6 +106,17 @@ pub fn set_exclusive_output(db: &Db, on: bool) -> Result<()> {
     db.set_setting_json(EXCLUSIVE_OUTPUT, &on)
 }
 
+const CONVERSION: &str = "conversion";
+
+/// How songs are converted for the iPhone (default: ALAC, hi-res as ALAC 24/48).
+pub fn conversion_policy(db: &Db) -> crate::library::convert::Policy {
+    db.setting_json(CONVERSION).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_conversion_policy(db: &Db, p: &crate::library::convert::Policy) -> Result<()> {
+    db.set_setting_json(CONVERSION, p)
+}
+
 const MINI_ON_TOP: &str = "mini_on_top";
 
 /// Keep the mini player above other windows (default: yes — the pin in the mini player).
@@ -274,5 +285,31 @@ mod exclusive_tests {
         assert!(exclusive_output(&db));
         set_exclusive_output(&db, false).unwrap();
         assert!(!exclusive_output(&db));
+    }
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use super::*;
+    use crate::library::convert::{HiRes, Lossless, Policy};
+
+    #[test]
+    fn conversion_defaults_to_alac_and_24_48_for_hi_res() {
+        assert_eq!(conversion_policy(&Db::open_in_memory().unwrap()), Policy { hi_res: HiRes::Alac24_48, lossless: Lossless::Alac });
+    }
+
+    #[test]
+    fn the_conversion_choice_is_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        let p = Policy { hi_res: HiRes::Alac16_44, lossless: Lossless::Aac256 };
+        set_conversion_policy(&db, &p).unwrap();
+        assert_eq!(conversion_policy(&db), p);
+    }
+
+    #[test]
+    fn a_garbled_conversion_setting_falls_back_to_the_default() {
+        let db = Db::open_in_memory().unwrap();
+        db.set_setting("conversion", "{\"hiRes\":\"lasers\"}").unwrap();
+        assert_eq!(conversion_policy(&db), Policy::default());
     }
 }

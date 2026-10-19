@@ -1,3 +1,4 @@
+pub mod convert;
 pub mod db;
 pub mod delete;
 pub mod folders;
