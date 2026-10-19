@@ -34,7 +34,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 ---
 
 ## Phase 0 – Setup and safety
-- [ ] **Toolchain** — Rust (rustup, MSVC target), VS Build Tools C++ workload, Tauri CLI, Python not required.
+- [x] **Toolchain** — Rust (rustup, MSVC target), VS Build Tools C++ workload, Tauri CLI, Python not required.
   *Done when:* `cargo --version`, `cargo tauri --version` work.
 - [ ] **F0.1 Skeleton + theme tokens**
   *Test first:* Rust — app builds and a `app_info` command returns name "Miu Music" + version;

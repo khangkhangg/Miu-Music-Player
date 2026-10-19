@@ -1,0 +1,17 @@
+[package]
+name = "miu-music"
+version = "0.1.0"
+description = "Miu Music - light music player that syncs liked songs to iPhone"
+edition = "2021"
+
+[lib]
+name = "miu_music_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

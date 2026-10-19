@@ -3,3 +3,6 @@ research/
 target/
 node_modules/
 src-tauri/target/
+
+# generated
+src-tauri/gen/

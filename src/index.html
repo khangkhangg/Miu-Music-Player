@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Miu Music</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">Miu Music</div>
+      <nav>
+        <a class="nav-item active">Songs</a>
+        <a class="nav-item">Albums</a>
+        <a class="nav-item">Artists</a>
+      </nav>
+      <div class="section-label">Device</div>
+      <div class="device-card empty">
+        <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="34" r="2"/></svg>
+        <div>
+          <p class="device-name">No device connected</p>
+          <p class="muted">Plug in your iPhone with a USB cable</p>
+        </div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="empty-state">
+        <h1>Add your music</h1>
+        <p class="muted">Choose one or more folders to watch. Songs you like will sync to your iPhone.</p>
+        <button class="primary" type="button">Add folder</button>
+      </div>
+      <footer class="status muted" id="app-version"></footer>
+    </main>
+  </div>
+</body>
+</html>
