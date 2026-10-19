@@ -141,7 +141,8 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [ ] **F8.1 Tag encoding detection** — *Test first:* CP1258, GBK, Shift-JIS, CP1251 fixtures decode correctly; folder override wins.
 - [ ] **F8.2 Unicode-safe paths** — *Test first:* scan, convert and play a file in `Nhạc Trịnh/日本語/`.
 - [ ] **F8.3 Font fallback + RTL** — *Manual:* Arabic/Hebrew titles render right-to-left; CJK has no tofu boxes.
-- [ ] **F8.4 Search** — *Test first:* "mua thu" finds "Mùa thu"; "DIEM XUA" finds "Diễm xưa"; CJK substring.
+- [x] **F8.4 Search** — *Test first:* "mua thu" finds "Mùa thu"; "DIEM XUA" finds "Diễm xưa"; CJK substring.
+  Verified in the app 2026-10-20 (title/artist/album, every word must match, Ctrl+F / Esc).
 - [ ] **F8.5 Sorting** — *Test first:* Vietnamese order (A Ă Â … D Đ E Ê …), index-bar letters per locale.
 - [ ] **F8.6 UI translation** — *Test first (JS):* every key in `en.json` exists in `vi.json`; no hard-coded UI strings (lint test).
 - [ ] **F9.1 Single-song editor** — *Test first:* edit → tags written → re-read equals edit, for MP3, M4A, FLAC.
