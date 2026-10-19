@@ -145,7 +145,8 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   Verified in the app 2026-10-20 (title/artist/album, every word must match, Ctrl+F / Esc).
 - [x] **F8.5 Sorting** — *Test first:* Vietnamese order (A Ă Â … D Đ E Ê …), index-bar letters per locale.
   Verified in the app 2026-10-20 (ICU collation in the WebView; English/Vietnamese systems use vi rules).
-- [ ] **F8.6 UI translation** — *Test first (JS):* every key in `en.json` exists in `vi.json`; no hard-coded UI strings (lint test).
+- [x] **F8.6 UI translation** — *Test first (JS):* every key in `en.json` exists in `vi.json`; no hard-coded UI strings (lint test).
+  Verified in the app 2026-10-20 (language picker; both windows reload). Left: error messages from the Rust side are English only.
 - [ ] **F9.1 Single-song editor** — *Test first:* edit → tags written → re-read equals edit, for MP3, M4A, FLAC.
 - [ ] **F9.2 Bulk editor** — *Test first:* "Mixed" fields untouched; edited fields applied to all.
 - [ ] **F9.3 Bulk tools** — *Test first:* filename pattern parse, auto-number, find/replace, case change.
