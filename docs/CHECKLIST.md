@@ -124,7 +124,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F7.2 Ratings + filter chips** — *Test first:* rating transitions and counts; filters return the right songs.
 - [x] **F7.3 Disliked view + delete** — *Test first:* delete moves the file to Recycle Bin (temp-dir stub of the
   trash API), removes it from the library and queues device removal; undo dislike restores "not rated".
-- [ ] **F7.4 Mini player window** — *Test first:* open-on-minimize setting decides mini vs taskbar.
+- [x] **F7.4 Mini player window** — *Test first:* open-on-minimize setting decides mini vs taskbar.
 - [ ] **F7.5 Always on top** — *Test first:* pin toggle and setting stay in sync and persist.
 - [ ] **F7.6 Visualizer** — *Test first:* FFT of a 1 kHz sine peaks in the 1 kHz band; no frames emitted while paused/hidden/off.
 - [ ] **F7.7 Equalizer + presets** — *Test first:* Flat = bit-identical output; +6 dB at 1 kHz raises a 1 kHz sine by
