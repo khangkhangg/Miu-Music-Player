@@ -238,7 +238,7 @@ function renderSongs() {
     row.dataset.index = i;
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
-    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'), rateCell(shown[i].rating, activeFilter === 'disliked'));
+    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.quality, 'muted quality'), cell(s.duration, 'num muted'), rateCell(shown[i].rating, activeFilter === 'disliked'));
     rows.push(row);
   }
   spacer.replaceChildren(...rows);

@@ -134,11 +134,12 @@ pub fn reconcile_with(
 fn store_tags(tx: &rusqlite::Transaction<'_>, id: i64, t: &TrackTags) -> rusqlite::Result<()> {
     tx.execute(
         "UPDATE songs SET title = ?1, artist = ?2, album = ?3, album_artist = ?4, genre = ?5, year = ?6,
-             track_no = ?7, track_total = ?8, disc_no = ?9, duration_ms = ?10, has_artwork = ?11, tags_read = 1
-         WHERE id = ?12",
+             track_no = ?7, track_total = ?8, disc_no = ?9, duration_ms = ?10, has_artwork = ?11,
+             sample_rate = ?12, bit_depth = ?13, bitrate_kbps = ?14, tags_read = 1
+         WHERE id = ?15",
         rusqlite::params![
             t.title, t.artist, t.album, t.album_artist, t.genre, t.year, t.track, t.track_total, t.disc,
-            t.duration_ms.map(|d| d as i64), t.has_artwork, id
+            t.duration_ms.map(|d| d as i64), t.has_artwork, t.sample_rate, t.bit_depth, t.bitrate_kbps, id
         ],
     )?;
     Ok(())
@@ -392,5 +393,28 @@ mod bench {
         println!("first scan of {} files: {first:?}; unchanged rescan: {:?}", diff.added, t.elapsed());
         assert_eq!(diff.added, 500);
         assert!(first.as_secs_f64() < 10.0);
+    }
+}
+
+#[cfg(test)]
+mod quality_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+    use crate::library::songs::list_songs;
+    use crate::library::tags::fixtures::{silent_flac, silent_mp3};
+
+    #[test]
+    fn songs_carry_sample_rate_bit_depth_and_bitrate() {
+        let d = tempfile::tempdir().unwrap();
+        silent_mp3(d.path(), "a.mp3");
+        silent_flac(d.path(), "b.flac");
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        let songs = list_songs(&db).unwrap();
+        let mp3 = songs.iter().find(|s| s.format == "mp3").unwrap();
+        let flac = songs.iter().find(|s| s.format == "flac").unwrap();
+        assert_eq!((mp3.sample_rate, mp3.bit_depth, mp3.bitrate_kbps), (Some(44_100), None, Some(128)));
+        assert_eq!((flac.sample_rate, flac.bit_depth), (Some(44_100), Some(16)));
     }
 }

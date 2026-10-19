@@ -19,12 +19,16 @@ pub struct SongRow {
     pub duration_ms: Option<i64>,
     pub format: String,
     pub rating: i64,
+    pub sample_rate: Option<u32>,
+    /// Lossless files only.
+    pub bit_depth: Option<u32>,
+    pub bitrate_kbps: Option<u32>,
 }
 
 pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
     let mut stmt = db
         .conn()
-        .prepare("SELECT id, path, title, artist, album, duration_ms, format, rating FROM songs")?;
+        .prepare("SELECT id, path, title, artist, album, duration_ms, format, rating, sample_rate, bit_depth, bitrate_kbps FROM songs")?;
     let mut rows: Vec<SongRow> = stmt
         .query_map([], |r| {
             let path: String = r.get(1)?;
@@ -40,6 +44,9 @@ pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
                 duration_ms: r.get(5)?,
                 format: r.get(6)?,
                 rating: r.get(7)?,
+                sample_rate: r.get(8)?,
+                bit_depth: r.get(9)?,
+                bitrate_kbps: r.get(10)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;

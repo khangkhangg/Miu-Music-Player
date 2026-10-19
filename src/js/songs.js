@@ -1,6 +1,11 @@
 // Song list helpers (F5.2): row text and virtual-scroll math. DOM code lives in app.js.
 // Strings move to src/i18n in F8.6.
 
+import { rateLabel } from './output.js';
+
+const LOSSLESS = new Set(['flac', 'alac', 'wav', 'aiff', 'ape', 'wavpack']);
+const DISPLAY = { vorbis: 'Ogg Vorbis', opus: 'Opus', wavpack: 'WavPack' };
+
 export function formatDuration(ms) {
   if (ms == null) return '';
   const total = Math.floor(ms / 1000);
@@ -17,7 +22,22 @@ export function songRow(song) {
     artist: song.artist || 'Unknown artist',
     album: song.album || '',
     duration: formatDuration(song.durationMs),
+    quality: qualityLabel(song),
   };
+}
+
+/** "FLAC · 24-bit / 96 kHz" for lossless files, "MP3 · 320 kbps" for lossy ones; '' when unknown. */
+export function qualityLabel({ format, sampleRate, bitDepth, bitrateKbps }) {
+  if (!format || format === 'unknown') return '';
+  const name = DISPLAY[format] ?? format.toUpperCase();
+  let detail = '';
+  if (LOSSLESS.has(format)) {
+    const rate = sampleRate ? rateLabel(sampleRate) : '';
+    detail = bitDepth && rate ? `${bitDepth}-bit / ${rate}` : rate;
+  } else if (bitrateKbps) {
+    detail = `${bitrateKbps} kbps`;
+  }
+  return detail ? `${name} · ${detail}` : name;
 }
 
 /** Rows to render for a fixed-height list: the visible ones plus `overscan` on each side. */

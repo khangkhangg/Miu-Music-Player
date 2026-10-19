@@ -22,6 +22,11 @@ pub struct TrackTags {
     pub disc: Option<u32>,
     pub duration_ms: Option<u64>,
     pub has_artwork: bool,
+    /// From the audio stream, not the tag: shown as "FLAC · 24-bit / 96 kHz" or "MP3 · 320 kbps".
+    pub sample_rate: Option<u32>,
+    /// Lossless files only.
+    pub bit_depth: Option<u32>,
+    pub bitrate_kbps: Option<u32>,
 }
 
 impl TrackTags {
@@ -54,8 +59,15 @@ fn year_of(tag: &Tag) -> Option<u32> {
 
 pub fn read_tags(path: &Path) -> Result<TrackTags, String> {
     let file = lofty::read_from_path(path).map_err(|e| e.to_string())?;
-    let duration = file.properties().duration().as_millis() as u64;
-    let mut t = TrackTags { duration_ms: (duration > 0).then_some(duration), ..Default::default() };
+    let props = file.properties();
+    let duration = props.duration().as_millis() as u64;
+    let mut t = TrackTags {
+        duration_ms: (duration > 0).then_some(duration),
+        sample_rate: props.sample_rate().filter(|&r| r > 0),
+        bit_depth: props.bit_depth().map(u32::from).filter(|&b| b > 0),
+        bitrate_kbps: props.audio_bitrate().filter(|&b| b > 0),
+        ..Default::default()
+    };
     if let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) {
         t.title = text(tag.title());
         t.artist = text(tag.artist());
@@ -264,3 +276,28 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod quality_tests {
+    use super::fixtures::*;
+    use super::read_tags;
+
+    #[test]
+    fn lossless_files_report_sample_rate_and_bit_depth() {
+        let d = tempfile::tempdir().unwrap();
+        let t = read_tags(&silent_flac(d.path(), "a.flac")).unwrap();
+        assert_eq!((t.sample_rate, t.bit_depth), (Some(44_100), Some(16)));
+        let hr = crate::audio::fixtures::wav(d.path(), "hr.wav", 96_000, 2, 24, 9_600);
+        let t = read_tags(&hr).unwrap();
+        assert_eq!((t.sample_rate, t.bit_depth), (Some(96_000), Some(24)));
+    }
+
+    #[test]
+    fn lossy_files_report_their_bitrate_and_no_bit_depth() {
+        let d = tempfile::tempdir().unwrap();
+        let t = read_tags(&silent_mp3(d.path(), "a.mp3")).unwrap();
+        assert_eq!(t.bitrate_kbps, Some(128));
+        assert_eq!(t.sample_rate, Some(44_100));
+        assert_eq!(t.bit_depth, None);
+    }
+}

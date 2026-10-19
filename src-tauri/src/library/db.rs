@@ -41,6 +41,11 @@ pub const MIGRATIONS: &[&str] = &[
      ALTER TABLE songs ADD COLUMN duration_ms INTEGER;
      ALTER TABLE songs ADD COLUMN has_artwork INTEGER NOT NULL DEFAULT 0;
      ALTER TABLE songs ADD COLUMN tags_read INTEGER NOT NULL DEFAULT 0;",
+    // 5: audio quality for the song list; existing songs are read again on the next rescan
+    "ALTER TABLE songs ADD COLUMN sample_rate INTEGER;
+     ALTER TABLE songs ADD COLUMN bit_depth INTEGER;
+     ALTER TABLE songs ADD COLUMN bitrate_kbps INTEGER;
+     UPDATE songs SET tags_read = 0;",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -226,5 +231,25 @@ mod tests {
         assert_eq!(db.setting_json::<bool>("always_on_top").unwrap(), Some(true));
         assert_eq!(db.setting_json::<Vec<i32>>("eq_gains").unwrap(), Some(vec![-4, 6, 5]));
         assert_eq!(db.setting_json::<bool>("missing").unwrap(), None);
+    }
+}
+
+#[cfg(test)]
+mod quality_migration_tests {
+    use super::*;
+
+    #[test]
+    fn upgrading_adds_audio_quality_and_marks_songs_for_a_tag_reread() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn, &MIGRATIONS[..4]).unwrap();
+        conn.execute_batch(
+            "INSERT INTO watched_folders (path, added_at) VALUES ('C:/M', 1);
+             INSERT INTO songs (folder_id, path, size, mtime, added_at, tags_read) VALUES (1, 'C:/M/a.flac', 1, 1, 1, 1);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS).unwrap();
+        let (read, rate): (i64, Option<i64>) =
+            conn.query_row("SELECT tags_read, sample_rate FROM songs", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((read, rate), (0, None));
     }
 }
