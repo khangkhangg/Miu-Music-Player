@@ -225,3 +225,31 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
 - Baseline: `%APPDATA%\MiuMusic\backups\e51e30a5\20261019-180954\` and a copy in `research/db-baseline/` (gitignored).
 - Tools: `device-backup` (read-only), `db-diff A B`, `device-restore <dir> --yes-write-to-phone` (backs up the
   phone first; **never run yet** — needs the user's go-ahead each time).
+
+## ATC message logger (F2.2) — 2026-10-20, read-only (nothing sent)
+
+Call sequence used (Rust, `apple/airtraffic.rs`, tool `cargo run --bin atc-log`):
+1. MobileDevice notifications running (`apple::device::watch`, CF run loop on its own thread), phone trusted.
+2. `ATHostConnectionCreate(CFString udid)` → non-null connection. CFString released right after. Confidence: high.
+3. Reader thread loops `ATHostConnectionReadMessage(conn)` (blocking, +1 dict, released by us) and
+   `ATCFMessageGetName(msg)` (borrowed). Confidence: high.
+4. Stop: `ATHostConnectionInvalidate(conn)` unblocks the pending read; then `ATHostConnectionRelease(conn)`.
+   Test run finished cleanly. Confidence: medium (works; whether Invalidate *always* unblocks is unproven).
+
+Messages the phone sends on connect, **without any host info or sync request** (2 runs, ~230-250 ms after Create):
+
+| # | Command | Params (shape) |
+|---|---|---|
+| 1 | `InstalledAssets` | `Application._Deleted`: [] |
+| 2 | `AssetMetrics` | per dataclass `_Count`, `_PhysicalSize` (+`_PurgeableSize`): Application, Book, Logs, **Media.Music** (69 items, 851,976,192 B), Photo.CameraRoll, Photo.Photo, Proofing, Ringtone, UserData, VoiceMemo; totals `_FreeSize`, `_PhysicalSize`, `_PurgeableSize` |
+| 3 | `SyncAllowed` | AppInstallationAllowed, AppRemovalAllowed, **AutoSync false**, DataProtected false, **DisabledAssetTypes [Movie, TVEpisode, HomeVideo, Photo]**, EducationModeEnabled, **ManualSync true**, PurgeAllowed true |
+
+Every message also has `Command`, `Id` (748, 749, 750 — a phone-side counter that persists across sessions, so
+earlier syncs used this channel), `Session` = 1, `Type` = 0.
+
+Conclusions:
+- Music sync is allowed (Music not in DisabledAssetTypes); the phone is in manual-management mode.
+- **No `GrappaSupportInfo`** in SyncAllowed on iOS 12.5.8 → the Grappa requirement seen on iOS 27 (S6) very likely
+  does not apply here (open question 7: probably no; confirm in F2.3).
+- After SyncAllowed the phone goes quiet: it waits for the host (HostInfo, then SyncRequest — F2.3).
+- Captures: `research/captures/*-atc.jsonl` (gitignored).

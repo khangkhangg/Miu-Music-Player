@@ -6,6 +6,8 @@ pub mod device;
 #[cfg(windows)]
 pub mod afc;
 pub mod afc_path;
+#[cfg(windows)]
+pub mod airtraffic;
 pub mod exports;
 #[cfg(windows)]
 pub mod loader;
