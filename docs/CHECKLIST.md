@@ -49,7 +49,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   *Test first:* migrations create schema from empty; re-running is a no-op; settings round-trip.
   Scope: migration runner + settings table. Songs (F3) and sync history (F4) are added as new migrations.
 - [ ] Research files copied into `research/db-baseline/` (gitignored, never in tests).
-- [ ] CI: GitHub Actions on `windows-latest` running `cargo test` + `node --test`.
+- [x] CI: GitHub Actions on `windows-latest` running `cargo test` + `node --test`.
 
 ## Phase 1 – DLL spike (gate)
 - [ ] **F2.1 DLL export map** — tool written in Rust (`tools/dll-exports`, `object` crate) instead of Python.
