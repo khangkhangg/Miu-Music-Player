@@ -12,16 +12,7 @@ const UTF8: u32 = 0x0800_0100; // kCFStringEncodingUTF8
 const SINT64: isize = 4; // kCFNumberSInt64Type
 const FLOAT64: isize = 6; // kCFNumberFloat64Type
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum CfValue {
-    String(String),
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    Data(Vec<u8>),
-    Array(Vec<CfValue>),
-    Dict(BTreeMap<String, CfValue>),
-}
+pub use crate::apple::value::CfValue;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CfError {

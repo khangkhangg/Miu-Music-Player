@@ -28,3 +28,9 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .device-card.ready .phone { stroke: var(--success); }
 .device-card.ready .device-detail { color: var(--success); }
 .device-card.untrusted .phone { stroke: var(--accent); }
+.device-card > div { min-width: 0; flex: 1; }
+.storage { margin-top: 8px; }
+.storage[hidden] { display: none; }
+.storage-bar { height: 6px; border-radius: 3px; background: var(--surface-muted); overflow: hidden; }
+.storage-used { height: 100%; width: 0; background: var(--accent); }
+.storage-label { font-size: 11px !important; margin-top: 4px !important; }

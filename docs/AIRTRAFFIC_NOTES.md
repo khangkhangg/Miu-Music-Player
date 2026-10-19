@@ -194,3 +194,13 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
 - Unplug / re-plug verified 2026-10-20 (17:51-17:52Z): Disconnected (msg 2) arrives within the same millisecond
   as the unplug is processed; re-plug Connected arrives a few seconds after plugging in; trust check 148 ms.
   An earlier "verification" coincided with dev-mode app restarts, which reset the card the same way — check logs.
+
+## Device info (F1.4) — 2026-10-20
+
+- Sequence that works: `AMDeviceConnect` → `IsPaired` / `ValidatePairing` → `AMDeviceStartSession` →
+  `AMDeviceCopyValue(dev, NULL, NULL)` (whole default domain as a dict) and
+  `AMDeviceCopyValue(dev, "com.apple.disk_usage", NULL)` → `StopSession` → `Disconnect`. Whole step: ~250 ms.
+  Confidence: high (machine test against the iPhone 5s).
+- Keys used: `DeviceName` ("khang’s iPhone", note U+2019), `ProductType` (iPhone6,1), `ProductVersion` (12.5.8);
+  disk: `TotalDataCapacity` 27,687,563,264, `TotalDataAvailable` 25,046,335,488 (fallback `AmountDataAvailable`).
+- Song count on the phone needs the media DB → comes with F1.6.

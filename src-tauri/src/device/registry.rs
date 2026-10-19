@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::device::info::DeviceInfo;
+
 /// `am_device_notification_callback_info.msg`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotifyKind {
@@ -43,7 +45,7 @@ impl Interface {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RawEvent {
-    Connected { udid: String, interface: Interface, trusted: bool },
+    Connected { udid: String, interface: Interface, trusted: bool, info: Option<DeviceInfo> },
     Disconnected { udid: String, interface: Interface },
 }
 
@@ -51,6 +53,7 @@ pub enum RawEvent {
 pub struct Device {
     pub udid: String,
     pub trusted: bool,
+    pub info: Option<DeviceInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,8 +73,8 @@ pub struct Registry {
 impl Registry {
     pub fn apply(&mut self, event: RawEvent) -> Option<Change> {
         match event {
-            RawEvent::Connected { udid, interface: Interface::Usb, trusted } => {
-                let device = Device { udid: udid.clone(), trusted };
+            RawEvent::Connected { udid, interface: Interface::Usb, trusted, info } => {
+                let device = Device { udid: udid.clone(), trusted, info };
                 match self.devices.insert(udid, device.clone()) {
                     None => Some(Change::Added(device)),
                     Some(old) if old != device => Some(Change::Updated(device)),
@@ -103,7 +106,7 @@ mod tests {
     use super::*;
 
     fn connected(udid: &str, interface: Interface, trusted: bool) -> RawEvent {
-        RawEvent::Connected { udid: udid.into(), interface, trusted }
+        RawEvent::Connected { udid: udid.into(), interface, trusted, info: None }
     }
 
     #[test]
@@ -125,7 +128,7 @@ mod tests {
     fn a_usb_connect_adds_the_device() {
         let mut r = Registry::default();
         let change = r.apply(connected("abc", Interface::Usb, false));
-        assert_eq!(change, Some(Change::Added(Device { udid: "abc".into(), trusted: false })));
+        assert_eq!(change, Some(Change::Added(Device { udid: "abc".into(), trusted: false, info: None })));
         assert_eq!(r.devices().len(), 1);
     }
 
@@ -148,7 +151,7 @@ mod tests {
         let mut r = Registry::default();
         r.apply(connected("abc", Interface::Usb, false));
         let change = r.apply(connected("abc", Interface::Usb, true));
-        assert_eq!(change, Some(Change::Updated(Device { udid: "abc".into(), trusted: true })));
+        assert_eq!(change, Some(Change::Updated(Device { udid: "abc".into(), trusted: true, info: None })));
     }
 
     #[test]
@@ -181,5 +184,37 @@ mod tests {
     fn udids_are_shortened_for_logs() {
         assert_eq!(short_udid("00008030001A2B3C4D5E6F70"), "00008030…");
         assert_eq!(short_udid("abc"), "abc");
+    }
+}
+
+#[cfg(test)]
+mod info_tests {
+    use super::*;
+    use crate::device::info::DeviceInfo;
+
+    fn info() -> DeviceInfo {
+        DeviceInfo {
+            name: "Khang's iPhone".into(),
+            model_id: "iPhone6,1".into(),
+            model: "iPhone 5s".into(),
+            ios_version: "12.5.8".into(),
+            capacity_bytes: Some(12_000_000_000),
+            free_bytes: Some(5_100_000_000),
+        }
+    }
+
+    #[test]
+    fn device_info_travels_with_the_device() {
+        let mut r = Registry::default();
+        let change = r.apply(RawEvent::Connected { udid: "abc".into(), interface: Interface::Usb, trusted: true, info: Some(info()) });
+        assert_eq!(change, Some(Change::Added(Device { udid: "abc".into(), trusted: true, info: Some(info()) })));
+    }
+
+    #[test]
+    fn info_read_after_trusting_updates_the_device() {
+        let mut r = Registry::default();
+        r.apply(RawEvent::Connected { udid: "abc".into(), interface: Interface::Usb, trusted: false, info: None });
+        let change = r.apply(RawEvent::Connected { udid: "abc".into(), interface: Interface::Usb, trusted: true, info: Some(info()) });
+        assert!(matches!(change, Some(Change::Updated(Device { info: Some(_), .. }))));
     }
 }

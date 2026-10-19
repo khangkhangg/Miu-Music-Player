@@ -10,6 +10,7 @@ use std::sync::Arc;
 use libloading::os::windows::Library;
 
 use crate::apple::cf::{Cf, CfRef, CfValue, Ref};
+use crate::device::info::DeviceInfo;
 use crate::device::registry::{short_udid, Interface, NotifyKind, RawEvent};
 
 #[derive(Debug, thiserror::Error)]
@@ -40,6 +41,9 @@ pub struct MobileDevice {
     AMDeviceDisconnect: unsafe extern "C" fn(Ref) -> i32,
     AMDeviceIsPaired: unsafe extern "C" fn(Ref) -> i32,
     AMDeviceValidatePairing: unsafe extern "C" fn(Ref) -> i32,
+    AMDeviceStartSession: unsafe extern "C" fn(Ref) -> i32,
+    AMDeviceStopSession: unsafe extern "C" fn(Ref) -> i32,
+    AMDeviceCopyValue: unsafe extern "C" fn(Ref, Ref, Ref) -> Ref,
     _lib: Library,
 }
 
@@ -60,6 +64,9 @@ impl MobileDevice {
             AMDeviceDisconnect: md_sym!(lib, AMDeviceDisconnect),
             AMDeviceIsPaired: md_sym!(lib, AMDeviceIsPaired),
             AMDeviceValidatePairing: md_sym!(lib, AMDeviceValidatePairing),
+            AMDeviceStartSession: md_sym!(lib, AMDeviceStartSession),
+            AMDeviceStopSession: md_sym!(lib, AMDeviceStopSession),
+            AMDeviceCopyValue: md_sym!(lib, AMDeviceCopyValue),
             _lib: lib,
         })
     }
@@ -78,17 +85,33 @@ impl MobileDevice {
         Interface::from_raw(unsafe { (self.AMDeviceGetInterfaceType)(device) })
     }
 
-    /// "Trust this computer" accepted: paired and the pairing validates.
-    fn is_trusted(&self, device: Ref) -> bool {
-        // SAFETY: `device` is a retained am_device; every successful connect is matched by disconnect.
+    /// Trust check, and for a trusted phone its lockdown info (name, model, iOS, storage).
+    fn inspect(&self, cf: &Cf, device: Ref) -> (bool, Option<DeviceInfo>) {
+        // SAFETY: `device` is a retained am_device; connect/session calls are paired with
+        // stop/disconnect, and values returned by AMDeviceCopyValue (+1) are adopted.
         unsafe {
             if (self.AMDeviceConnect)(device) != 0 {
-                return false;
+                return (false, None);
             }
             let trusted = (self.AMDeviceIsPaired)(device) != 0 && (self.AMDeviceValidatePairing)(device) == 0;
+            let mut info = None;
+            if trusted && (self.AMDeviceStartSession)(device) == 0 {
+                let general = self.copy_domain(cf, device, None);
+                let disk = self.copy_domain(cf, device, Some("com.apple.disk_usage"));
+                (self.AMDeviceStopSession)(device);
+                info = Some(DeviceInfo::from_lockdown(&general, &disk));
+            }
             (self.AMDeviceDisconnect)(device);
-            trusted
+            (trusted, info)
         }
+    }
+
+    /// All values of a lockdown domain (`None` = default domain) as a dictionary.
+    unsafe fn copy_domain(&self, cf: &Cf, device: Ref, domain: Option<&str>) -> CfValue {
+        let domain_ref = domain.and_then(|d| cf.to_cf(&CfValue::String(d.into())).ok());
+        let domain_ptr = domain_ref.as_ref().map_or(std::ptr::null(), CfRef::as_ptr);
+        let value = cf.adopt((self.AMDeviceCopyValue)(device, domain_ptr, std::ptr::null()));
+        value.ok().and_then(|v| cf.from_cf(v.as_ptr()).ok()).unwrap_or(CfValue::Dict(Default::default()))
     }
 }
 
@@ -153,9 +176,9 @@ pub fn watch(cf: Arc<Cf>, md: Arc<MobileDevice>) -> Result<Receiver<RawEvent>, D
                 let event = match kind {
                     NotifyKind::Connected => {
                         let started = std::time::Instant::now();
-                        let trusted = md.is_trusted(device.as_ptr());
-                        log::info!("trust check for {} took {} ms", short_udid(&udid), started.elapsed().as_millis());
-                        RawEvent::Connected { trusted, udid, interface }
+                        let (trusted, info) = md.inspect(&cf, device.as_ptr());
+                        log::info!("trust check + info for {} took {} ms", short_udid(&udid), started.elapsed().as_millis());
+                        RawEvent::Connected { trusted, udid, interface, info }
                     }
                     NotifyKind::Disconnected => RawEvent::Disconnected { udid, interface },
                     NotifyKind::Unsubscribed => continue,
@@ -189,9 +212,16 @@ mod tests {
         loop {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
             match events.recv_timeout(left) {
-                Ok(RawEvent::Connected { udid, interface: Interface::Usb, trusted }) => {
+                Ok(RawEvent::Connected { udid, interface: Interface::Usb, trusted, info }) => {
                     println!("iPhone {} over USB, trusted = {trusted}", crate::device::registry::short_udid(&udid));
                     assert!(udid.len() >= 24, "udid looks wrong: {udid:?}");
+                    // The test phone (iPhone 5s, iOS 12.5.8) trusts this PC, so its info must be readable.
+                    let info = info.expect("device info for a trusted iPhone");
+                    println!("{} · {} ({}) · iOS {} · {:?} free of {:?}", info.name, info.model, info.model_id,
+                        info.ios_version, info.free_bytes, info.capacity_bytes);
+                    assert_eq!(info.model, "iPhone 5s");
+                    assert_eq!(info.ios_version, "12.5.8");
+                    assert!(info.free_bytes.unwrap() < info.capacity_bytes.unwrap());
                     break;
                 }
                 Ok(other) => println!("other event: {other:?}"),

@@ -61,7 +61,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   i64, f64, bool, Vec, HashMap, bytes through CF types; no leaks (retain counts back to 1).
 - [x] **F1.3 Device discovery + hot-plug** — *Test first:* event mapping (connect/disconnect/untrusted) via a fake
   device source; `#[ignore]` test lists the real iPhone.
-- [ ] **F1.4 Device info** — *Test first:* parse lockdown values into `DeviceInfo` (model "iPhone6,1" → "iPhone 5s").
+- [x] **F1.4 Device info** — *Test first:* parse lockdown values into `DeviceInfo` (model "iPhone6,1" → "iPhone 5s").
 - [ ] **F1.5 AFC list/pull/push** — *Test first:* path validation (stays inside media root); `#[ignore]` real list.
 - [ ] **F1.6 DB backup + restore + db diff**
   *Test first:* backup copies all three files into a timestamped dir and refuses to proceed if any copy fails;

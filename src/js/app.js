@@ -27,6 +27,12 @@ function showDevices(devices) {
   el.className = `device-card ${card.state}`;
   el.querySelector('.device-name').textContent = card.title;
   el.querySelector('.device-detail').textContent = card.detail;
+  const storage = el.querySelector('.storage');
+  storage.hidden = !card.storage;
+  if (card.storage) {
+    storage.querySelector('.storage-used').style.width = `${card.storage.usedPercent}%`;
+    storage.querySelector('.storage-label').textContent = card.storage.label;
+  }
 }
 
 function showPrereqNotice(report) {

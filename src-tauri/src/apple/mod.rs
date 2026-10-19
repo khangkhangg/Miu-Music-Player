@@ -8,3 +8,4 @@ pub mod exports;
 pub mod loader;
 pub mod locate;
 pub mod stage;
+pub mod value;
