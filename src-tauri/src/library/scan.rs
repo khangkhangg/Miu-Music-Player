@@ -427,3 +427,33 @@ mod quality_tests {
         assert_eq!((flac.sample_rate, flac.bit_depth), (Some(44_100), Some(16)));
     }
 }
+
+#[cfg(test)]
+mod unicode_path_tests {
+    use super::*;
+    use crate::audio::decode::decode_all;
+    use crate::audio::fixtures::wav;
+    use crate::library::fingerprint::audio_hash;
+    use crate::library::folders::add_folder;
+    use crate::library::songs::{list_songs, paths_for};
+
+    /// F8.2: Vietnamese and Japanese folder names, a Korean file name, an emoji — end to end.
+    #[test]
+    fn a_song_in_nhac_trinh_nihongo_is_scanned_tagged_played_and_fingerprinted() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().join("Nhạc Trịnh").join("日本語");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = wav(&dir, "사랑해 🎵.wav", 8_000, 1, 16, 8_000);
+        let db = Db::open_in_memory().unwrap();
+        let root = d.path().join("Nhạc Trịnh");
+        let f = add_folder(&db, &root.to_string_lossy(), 1).unwrap();
+        assert_eq!(rescan_folder(&db, f.id, &f.path, 1).unwrap().added, 1);
+        let song = list_songs(&db).unwrap().remove(0);
+        assert_eq!(song.title, "사랑해 🎵", "title falls back to the Unicode file name");
+        assert_eq!(song.duration_ms, Some(1_000));
+        let found = paths_for(&db, &[song.id]).unwrap();
+        assert_eq!(found[0].1, p, "stored path round-trips exactly");
+        assert_eq!(decode_all(&found[0].1).unwrap().frames(), 8_000, "plays");
+        assert!(audio_hash(&found[0].1).is_ok(), "fingerprints");
+    }
+}
