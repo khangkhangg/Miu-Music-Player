@@ -87,7 +87,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [ ] **Gate decision:** proceed with A / run FB.1 / ship FB.2.
 
 ## Phase 3 – Library and conversion
-- [ ] **F3.1 Watched folders + drag-and-drop** — *Test first:* add/remove folders; watcher events
+- [x] **F3.1 Watched folders + drag-and-drop** — *Test first:* add/remove folders; watcher events
   (create/rename/delete in a temp dir) update the library; nested/duplicate folders rejected.
 - [ ] **F3.2 Content-based format detection** — *Test first:* a FLAC renamed `.mp3` is detected as FLAC.
 - [ ] **F3.3 Tags + artwork** — *Test first:* fixtures with Vietnamese, CJK and RTL tags read exactly; artwork extracted.
