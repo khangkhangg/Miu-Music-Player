@@ -47,6 +47,36 @@ pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
     Ok(rows)
 }
 
+/// Liked songs sync to the iPhone; disliked ones never do (F7.2, product decisions in CLAUDE.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rating {
+    Disliked = -1,
+    NotRated = 0,
+    Liked = 1,
+}
+
+impl Rating {
+    pub fn from_value(v: i64) -> Option<Self> {
+        match v {
+            -1 => Some(Self::Disliked),
+            0 => Some(Self::NotRated),
+            1 => Some(Self::Liked),
+            _ => None,
+        }
+    }
+}
+
+pub fn set_rating(db: &Db, id: i64, rating: Rating) -> Result<(), String> {
+    let changed = db
+        .conn()
+        .execute("UPDATE songs SET rating = ?1 WHERE id = ?2", rusqlite::params![rating as i64, id])
+        .map_err(|e| e.to_string())?;
+    if changed == 0 {
+        return Err(format!("song {id} is not in the library"));
+    }
+    Ok(())
+}
+
 /// File paths for `ids`, in the same order; ids no longer in the library are skipped.
 pub fn paths_for(db: &Db, ids: &[i64]) -> rusqlite::Result<Vec<(i64, std::path::PathBuf)>> {
     let mut stmt = db.conn().prepare_cached("SELECT path FROM songs WHERE id = ?1")?;
@@ -124,5 +154,57 @@ mod path_tests {
         let ids: Vec<i64> = got.iter().map(|(id, _)| *id).collect();
         assert_eq!(ids, vec![3, 1, 2]);
         assert_eq!(got[2].1, std::path::PathBuf::from(r"E:\Nhạc\Diễm xưa.flac"));
+    }
+}
+
+#[cfg(test)]
+mod rating_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+    use crate::library::scan::rescan_folder;
+
+    fn one_song(db: &Db) -> i64 {
+        let f = add_folder(db, r"D:\M", 1).unwrap();
+        db.conn().execute(r"INSERT INTO songs (folder_id, path, size, mtime, added_at) VALUES (?1, 'D:\M\a.mp3', 1, 1, 1)", [f.id]).unwrap();
+        db.conn().last_insert_rowid()
+    }
+
+    #[test]
+    fn ratings_are_saved_and_listed() {
+        let db = Db::open_in_memory().unwrap();
+        let id = one_song(&db);
+        set_rating(&db, id, Rating::Liked).unwrap();
+        assert_eq!(list_songs(&db).unwrap()[0].rating, 1);
+        set_rating(&db, id, Rating::Disliked).unwrap();
+        assert_eq!(list_songs(&db).unwrap()[0].rating, -1);
+        set_rating(&db, id, Rating::NotRated).unwrap();
+        assert_eq!(list_songs(&db).unwrap()[0].rating, 0);
+    }
+
+    #[test]
+    fn rating_values_map_both_ways() {
+        assert_eq!(Rating::from_value(1), Some(Rating::Liked));
+        assert_eq!(Rating::from_value(0), Some(Rating::NotRated));
+        assert_eq!(Rating::from_value(-1), Some(Rating::Disliked));
+        assert_eq!(Rating::from_value(5), None);
+    }
+
+    #[test]
+    fn rating_an_unknown_song_is_an_error() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(set_rating(&db, 42, Rating::Liked).is_err());
+    }
+
+    #[test]
+    fn ratings_survive_a_rescan_of_the_folder() {
+        let d = tempfile::tempdir().unwrap();
+        crate::library::tags::fixtures::silent_mp3(d.path(), "a.mp3");
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        let id = list_songs(&db).unwrap()[0].id;
+        set_rating(&db, id, Rating::Liked).unwrap();
+        rescan_folder(&db, f.id, &f.path, 2).unwrap();
+        assert_eq!(list_songs(&db).unwrap()[0].rating, 1);
     }
 }

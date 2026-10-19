@@ -80,3 +80,15 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .np-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .np-fill { height: 100%; width: 0; border-radius: 2px; background: var(--text-muted); }
 .np-volume { width: 100%; accent-color: var(--accent); }
+.song-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px 56px; }
+.rate-cell { display: flex; gap: 2px; justify-content: flex-end; }
+.rate-btn svg { width: 14px; height: 14px; fill: currentColor; }
+.song-spacer .rate-btn { visibility: hidden; }
+.song-spacer .song-row:hover .rate-btn, .song-spacer .rate-btn.on, .song-spacer .rate-btn:focus-visible { visibility: visible; }
+.rate-btn[data-act="like"].on { color: var(--success); }
+.rate-btn[data-act="dislike"].on { color: var(--danger); }
+.chips { display: flex; gap: 6px; padding: 0 20px 10px; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 12px; border: 1px solid var(--border); background: none; color: var(--text); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.chip:hover { background: var(--surface-muted); }
+.chip.active { background: var(--text); color: var(--surface); border-color: transparent; }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

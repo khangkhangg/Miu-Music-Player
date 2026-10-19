@@ -4,10 +4,13 @@ import { deviceCard } from './device.js';
 import { folderItems, librarySummary } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
 import { nowPlaying, seekTarget } from './player.js';
+import { nextRating, filterSongs, filterChips } from './ratings.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
 let rawSongs = [];
+let shown = []; // rawSongs after the rating filter, in display order
+let activeFilter = 'all';
 let songsById = new Map();
 let playerState = null;
 
@@ -41,8 +44,17 @@ if (invoke) {
 
   scroller.addEventListener('dblclick', e => {
     const row = e.target.closest('.song-row');
-    if (row) invoke('play_songs', { ids: rawSongs.map(s => s.id), start: Number(row.dataset.index) });
+    if (row && !e.target.closest('button')) invoke('play_songs', { ids: shown.map(s => s.id), start: Number(row.dataset.index) });
   });
+  scroller.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (btn) rate(shown[Number(btn.closest('.song-row').dataset.index)].id, btn.dataset.act);
+  });
+  for (const id of ['np-like', 'np-dislike']) {
+    document.getElementById(id).addEventListener('click', e => {
+      if (playerState?.songId != null) rate(playerState.songId, e.currentTarget.dataset.act, true);
+    });
+  }
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
   document.getElementById('np-play').addEventListener('click', () =>
     invoke(playerState?.playing ? 'player_pause' : 'player_resume'));
@@ -74,10 +86,53 @@ function loadSongs() {
   invoke('list_songs').then(list => {
     rawSongs = list;
     songsById = new Map(list.map(s => [s.id, s]));
-    songs = list.map(songRow);
-    document.getElementById('song-spacer').style.height = `${songs.length * ROW_HEIGHT}px`;
-    renderSongs();
+    refreshList();
   });
+}
+
+function refreshList() {
+  shown = filterSongs(rawSongs, activeFilter);
+  songs = shown.map(songRow);
+  document.getElementById('song-spacer').style.height = `${songs.length * ROW_HEIGHT}px`;
+  renderChips();
+  renderSongs();
+  updateRateButtons();
+}
+
+function renderChips() {
+  const box = document.getElementById('filter-chips');
+  box.replaceChildren(...filterChips(rawSongs, activeFilter).map(c => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = c.active ? 'chip active' : 'chip';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(c.active));
+    b.textContent = c.label;
+    b.addEventListener('click', () => {
+      activeFilter = c.id;
+      document.getElementById('song-scroll').scrollTop = 0;
+      refreshList();
+    });
+    return b;
+  }));
+}
+
+/** Like/dislike a song; from the player bar, a dislike also skips to the next song. */
+function rate(id, act, fromPlayer = false) {
+  const song = songsById.get(id);
+  if (!song) return;
+  const rating = nextRating(song.rating, act);
+  invoke('rate_song', { id, rating }).then(() => {
+    song.rating = rating;
+    refreshList();
+    if (fromPlayer && rating === -1) invoke('player_skip', { by: 1 });
+  });
+}
+
+function updateRateButtons() {
+  const rating = songsById.get(playerState?.songId)?.rating ?? 0;
+  document.getElementById('np-like').classList.toggle('on', rating === 1);
+  document.getElementById('np-dislike').classList.toggle('on', rating === -1);
 }
 
 function showPlayer(event) {
@@ -86,7 +141,10 @@ function showPlayer(event) {
   const np = nowPlaying(event, songsById);
   const bar = document.getElementById('now-playing');
   bar.hidden = !np;
-  if (songChanged) renderSongs();
+  if (songChanged) {
+    renderSongs();
+    updateRateButtons();
+  }
   if (!np) return;
   document.getElementById('np-title').textContent = np.title;
   document.getElementById('np-artist').textContent = np.artist;
@@ -96,6 +154,25 @@ function showPlayer(event) {
   const play = document.getElementById('np-play');
   play.classList.toggle('paused', !np.playing);
   play.setAttribute('aria-label', np.playing ? 'Pause' : 'Play');
+}
+
+const THUMB_UP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>';
+const THUMB_DOWN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>';
+
+function rateCell(rating) {
+  const span = document.createElement('span');
+  span.className = 'rate-cell';
+  for (const [act, icon, label, on] of [['dislike', THUMB_DOWN, 'Dislike', rating === -1], ['like', THUMB_UP, 'Like', rating === 1]]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = on ? 'icon-btn rate-btn on' : 'icon-btn rate-btn';
+    b.dataset.act = act;
+    b.setAttribute('aria-label', label);
+    b.setAttribute('aria-pressed', String(on));
+    b.innerHTML = icon; // constant markup, no user data
+    span.append(b);
+  }
+  return span;
 }
 
 function cell(text, cls) {
@@ -121,7 +198,7 @@ function renderSongs() {
     row.dataset.index = i;
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
-    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'));
+    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'), rateCell(shown[i].rating));
     rows.push(row);
   }
   spacer.replaceChildren(...rows);

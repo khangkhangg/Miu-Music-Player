@@ -52,8 +52,9 @@
           <h1>Songs</h1>
           <span class="muted" id="library-summary-text"></span>
         </header>
+        <div class="chips" id="filter-chips" role="tablist" aria-label="Filter by rating"></div>
         <div class="song-row song-head" aria-hidden="true">
-          <span>Title</span><span>Artist</span><span>Album</span><span class="num">Time</span>
+          <span>Title</span><span>Artist</span><span>Album</span><span class="num">Time</span><span></span>
         </div>
         <div class="song-scroll" id="song-scroll" role="list" aria-label="Songs">
           <div class="song-spacer" id="song-spacer"></div>
@@ -65,6 +66,9 @@
           <p class="np-artist muted" id="np-artist" dir="auto"></p>
         </div>
         <div class="np-controls">
+          <button class="icon-btn rate-btn" id="np-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>
+          </button>
           <button class="icon-btn np-btn" id="np-prev" type="button" aria-label="Previous song">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg>
           </button>
@@ -74,6 +78,9 @@
           </button>
           <button class="icon-btn np-btn" id="np-next" type="button" aria-label="Next song">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg>
+          </button>
+          <button class="icon-btn rate-btn" id="np-like" type="button" data-act="like" aria-label="Like" title="Like">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>
           </button>
         </div>
         <div class="np-progress">

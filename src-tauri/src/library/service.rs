@@ -63,6 +63,14 @@ pub fn list_songs(db: State<'_, SharedDb>) -> Result<Vec<crate::library::songs::
     crate::library::songs::list_songs(&d).map_err(|e| e.to_string())
 }
 
+/// `rating`: 1 liked, 0 not rated, -1 disliked.
+#[tauri::command]
+pub fn rate_song(id: i64, rating: i64, db: State<'_, SharedDb>) -> Result<(), String> {
+    let rating = crate::library::songs::Rating::from_value(rating).ok_or("rating must be -1, 0 or 1")?;
+    let d = db.lock().map_err(|e| e.to_string())?;
+    crate::library::songs::set_rating(&d, id, rating)
+}
+
 #[tauri::command]
 pub fn list_folders(db: State<'_, SharedDb>) -> Vec<WatchedFolder> {
     folder_list(&db)
