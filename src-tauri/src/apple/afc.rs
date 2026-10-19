@@ -298,11 +298,6 @@ pub mod tests_support {
 mod tests {
     use super::*;
     use crate::apple::afc_path::PathError;
-    use crate::apple::cf::Cf;
-    use crate::apple::device::{watch, MobileDevice};
-    use crate::device::registry::{Interface, RawEvent};
-    use std::sync::Arc;
-    use std::time::Duration;
 
     fn afc() -> Afc {
         tests_support::open_first_trusted().0
