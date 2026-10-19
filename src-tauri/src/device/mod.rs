@@ -1,3 +1,4 @@
+pub mod files;
 pub mod info;
 pub mod registry;
 #[cfg(windows)]

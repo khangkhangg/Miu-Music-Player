@@ -1,7 +1,8 @@
 pub mod apple;
-mod device;
+pub mod device;
 mod library;
-mod util;
+pub mod sync;
+pub mod util;
 
 use serde::Serialize;
 

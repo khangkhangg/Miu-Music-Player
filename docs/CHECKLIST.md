@@ -48,7 +48,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F0.4 Local SQLite**
   *Test first:* migrations create schema from empty; re-running is a no-op; settings round-trip.
   Scope: migration runner + settings table. Songs (F3) and sync history (F4) are added as new migrations.
-- [ ] Research files copied into `research/db-baseline/` (gitignored, never in tests).
+- [x] Research files copied into `research/db-baseline/` (gitignored, never in tests) — fresh F1.6 backup, 69 songs.
 - [x] CI: GitHub Actions on `windows-latest` running `cargo test` + `node --test`.
 
 ## Phase 1 – DLL spike (gate)
@@ -63,7 +63,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   device source; `#[ignore]` test lists the real iPhone.
 - [x] **F1.4 Device info** — *Test first:* parse lockdown values into `DeviceInfo` (model "iPhone6,1" → "iPhone 5s").
 - [x] **F1.5 AFC list/pull/push** — *Test first:* path validation (stays inside media root); `#[ignore]` real list.
-- [ ] **F1.6 DB backup + restore + db diff**
+- [x] **F1.6 DB backup + restore + db diff**
   *Test first:* backup copies all three files into a timestamped dir and refuses to proceed if any copy fails;
   diff of two synthetic DBs reports added/changed rows per table.
 - [ ] **F2.2 ATC message logger** — *Test first:* message → JSON serialization; `#[ignore]` live capture.

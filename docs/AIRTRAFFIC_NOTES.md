@@ -215,3 +215,13 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
 - `AFCFileRefOpen` mode 1 = read, mode 3 = write/create/truncate (libimobiledevice constants; the research table's
   "2 write, 3 rw" was wrong for our use). `AFCDirectoryCreate(conn, path)` works. UTF-8 paths with Vietnamese
   characters work. 300 KB write/read round trip byte-identical.
+
+## Music DB backup (F1.6) — 2026-10-20
+
+- Read over AFC from `/iTunes_Control/iTunes/`: `MediaLibrary.sqlitedb` 557,056 B, `-shm` 32,768 B,
+  `-wal` 7,622,032 B. The WAL is ~14x the main file: most recent writes (3uTools sync) still live in the WAL,
+  confirming the schema note "always read with the WAL present".
+- Opening a copy with all three files: `SELECT count(*) FROM item WHERE media_type = 8` = **69** (matches the device).
+- Baseline: `%APPDATA%\MiuMusic\backups\e51e30a5\20261019-180954\` and a copy in `research/db-baseline/` (gitignored).
+- Tools: `device-backup` (read-only), `db-diff A B`, `device-restore <dir> --yes-write-to-phone` (backs up the
+  phone first; **never run yet** — needs the user's go-ahead each time).

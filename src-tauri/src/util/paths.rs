@@ -10,6 +10,11 @@ pub fn logs_dir_in(appdata: &Path) -> PathBuf {
     app_data_dir_in(appdata).join("logs")
 }
 
+/// Phone music-database backups (CLAUDE.md hard rule 1).
+pub fn backups_dir_in(appdata: &Path) -> PathBuf {
+    app_data_dir_in(appdata).join("backups")
+}
+
 pub fn db_path_in(appdata: &Path) -> PathBuf {
     app_data_dir_in(appdata).join("miumusic.db")
 }
@@ -44,6 +49,12 @@ mod tests {
     fn apple_dll_copies_live_in_local_app_data() {
         let local = Path::new(r"C:\Users\x\AppData\Local");
         assert_eq!(apple_dlls_dir_in(local), local.join("MiuMusic").join("apple"));
+    }
+
+    #[test]
+    fn device_backups_live_in_app_data() {
+        let base = Path::new(r"C:\Users\x\AppData\Roaming");
+        assert_eq!(backups_dir_in(base), base.join("MiuMusic").join("backups"));
     }
 
     #[test]

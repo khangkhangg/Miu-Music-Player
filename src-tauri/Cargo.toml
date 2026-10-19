@@ -20,6 +20,7 @@ log = { version = "0.4", features = ["std"] }
 object = { version = "0.37", default-features = false, features = ["read", "std"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 thiserror = "2"
+tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
@@ -27,4 +28,4 @@ libloading = "0.8"
 windows-sys = { version = "0.60", features = ["Win32_System_LibraryLoader"] }
 
 [dev-dependencies]
-tempfile = "3"
+

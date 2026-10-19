@@ -6,6 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
 
+use crate::util::time::civil_from_days;
+
 const BASE_NAME: &str = "miumusic";
 pub const MAX_BYTES: u64 = 1024 * 1024;
 pub const MAX_FILES: usize = 5;
@@ -24,19 +26,6 @@ pub fn format_line(unix_ms: u64, level: Level, target: &str, msg: &str) -> Strin
     )
 }
 
-// Howard Hinnant's days-to-civil algorithm.
-fn civil_from_days(z: i64) -> (i64, u32, u32) {
-    let z = z + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    (y, m, d)
-}
 
 /// Size-rotated log file: `miumusic.log`, `miumusic.1.log` … up to `max_files` files in total.
 pub struct RotatingFile {

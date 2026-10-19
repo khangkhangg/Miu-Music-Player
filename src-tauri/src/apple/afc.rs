@@ -244,6 +244,54 @@ fn check(what: &'static str, rc: i32) -> Result<(), AfcError> {
     }
 }
 
+impl crate::device::files::DeviceFiles for Afc {
+    fn list(&self, dir: &str) -> Result<Vec<String>, String> {
+        Afc::list(self, dir).map_err(|e| e.to_string())
+    }
+    fn read(&self, path: &str) -> Result<Vec<u8>, String> {
+        Afc::read(self, path).map_err(|e| e.to_string())
+    }
+    fn write(&self, path: &str, data: &[u8]) -> Result<(), String> {
+        Afc::write(self, path, data).map_err(|e| e.to_string())
+    }
+    fn remove(&self, path: &str) -> Result<(), String> {
+        Afc::remove(self, path).map_err(|e| e.to_string())
+    }
+}
+
+/// AFC on the first trusted USB iPhone that appears within `wait`, with its UDID.
+/// For command-line tools and machine tests; the app uses the device service instead.
+pub fn open_first_trusted(wait: std::time::Duration) -> Result<(Afc, String), String> {
+    use crate::apple::device::watch;
+    use crate::device::registry::{Interface, RawEvent};
+
+    let dlls = crate::apple::loader::load_from_system().map_err(|e| e.to_string())?;
+    let cf = Arc::new(Cf::new(dlls.core_foundation).map_err(|e| e.to_string())?);
+    let md = Arc::new(MobileDevice::new(dlls.mobile_device).map_err(|e| e.to_string())?);
+    let (events, handles) = watch(cf.clone(), md.clone()).map_err(|e| e.to_string())?;
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        match events.recv_timeout(left) {
+            Ok(RawEvent::Connected { udid, interface: Interface::Usb, trusted: true, .. }) => {
+                let device = handles.get(&udid).ok_or("device unplugged")?;
+                return Afc::open(cf, md, &device).map(|afc| (afc, udid)).map_err(|e| e.to_string());
+            }
+            Ok(_) => continue,
+            Err(_) => return Err("no trusted iPhone connected over USB".into()),
+        }
+    }
+}
+
+/// Shared by machine tests in other modules.
+#[cfg(test)]
+pub mod tests_support {
+    /// AFC on the first trusted USB iPhone, and its UDID. Panics if none appears within 20 s.
+    pub fn open_first_trusted() -> (super::Afc, String) {
+        super::open_first_trusted(std::time::Duration::from_secs(20)).expect("trusted iPhone over USB")
+    }
+}
+
 // Machine tests: need Apple's DLLs and the trusted iPhone plugged in.
 // Run with `cargo test afc -- --include-ignored --test-threads=1`.
 #[cfg(test)]
@@ -257,19 +305,7 @@ mod tests {
     use std::time::Duration;
 
     fn afc() -> Afc {
-        let dlls = crate::apple::loader::load_from_system().expect("Apple DLLs");
-        let cf = Arc::new(Cf::new(dlls.core_foundation).unwrap());
-        let md = Arc::new(MobileDevice::new(dlls.mobile_device).unwrap());
-        let (events, handles) = watch(cf.clone(), md.clone()).expect("subscribe");
-        loop {
-            match events.recv_timeout(Duration::from_secs(20)).expect("no trusted USB iPhone within 20 s") {
-                RawEvent::Connected { udid, interface: Interface::Usb, trusted: true, .. } => {
-                    let device = handles.get(&udid).expect("device handle");
-                    return Afc::open(cf, md, &device).expect("open AFC");
-                }
-                _ => continue,
-            }
-        }
+        tests_support::open_first_trusted().0
     }
 
     #[test]
