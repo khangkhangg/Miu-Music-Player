@@ -2,12 +2,15 @@
 //! `library-changed` event carrying the folder list. The logic lives in `folders`, `scan`, `watch`.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, State};
 
 use crate::library::db::Db;
+use crate::library::duplicates::{pending_hashes, store_hash};
+use crate::library::fingerprint::audio_hash;
 use crate::library::folders::{self, WatchedFolder};
 use crate::library::scan::rescan_folder;
 use crate::library::watch::FolderWatcher;
@@ -33,6 +36,40 @@ fn rescan(db: &SharedDb, ids: &[i64]) {
     }
 }
 
+static HASHING: AtomicBool = AtomicBool::new(false);
+
+/// Fingerprint new and changed songs for duplicate detection (F3.6), a batch at a time with the
+/// database unlocked while decoding; announces `library-changed` when done.
+fn hash_in_background(app: &AppHandle, db: &SharedDb) {
+    if HASHING.swap(true, Ordering::AcqRel) {
+        return; // the running pass picks up new songs too
+    }
+    let (app, db) = (app.clone(), db.clone());
+    std::thread::spawn(move || {
+        let mut done = 0;
+        loop {
+            let todo = match db.lock() {
+                Ok(d) => pending_hashes(&d, 25).unwrap_or_default(),
+                Err(_) => break,
+            };
+            if todo.is_empty() {
+                break;
+            }
+            let hashed: Vec<(i64, Option<String>)> = todo.iter().map(|(id, p)| (*id, audio_hash(p).ok())).collect();
+            let Ok(d) = db.lock() else { break };
+            for (id, h) in &hashed {
+                let _ = store_hash(&d, *id, h.as_deref());
+            }
+            done += hashed.len();
+        }
+        HASHING.store(false, Ordering::Release);
+        if done > 0 {
+            log::info!("fingerprinted {done} songs");
+            let _ = app.emit("library-changed", folder_list(&db));
+        }
+    });
+}
+
 /// (Re)start watching every folder; changes trigger a rescan and a `library-changed` event.
 fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &LibraryWatch) {
     let folders: Vec<(i64, String)> = folder_list(db).into_iter().map(|f| (f.id, f.path)).collect();
@@ -40,6 +77,7 @@ fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &LibraryWatch) {
     let watcher = FolderWatcher::start(folders, Duration::from_millis(800), move |ids| {
         rescan(&db2, &ids);
         let _ = app2.emit("library-changed", folder_list(&db2));
+        hash_in_background(&app2, &db2);
     });
     match watcher {
         Ok(w) => *watch.0.lock().unwrap() = Some(w),
@@ -54,6 +92,7 @@ pub fn start(app: AppHandle, db: SharedDb, watch: Arc<LibraryWatch>) {
         rescan(&db, &ids);
         restart_watch(&app, &db, &watch);
         let _ = app.emit("library-changed", folder_list(&db));
+        hash_in_background(&app, &db);
     });
 }
 
@@ -107,6 +146,7 @@ pub fn add_folder(
     log::info!("watching {}", added.path);
     rescan(&db, &[added.id]);
     restart_watch(&app, &db, &watch);
+    hash_in_background(&app, &db);
     Ok(folder_list(&db))
 }
 

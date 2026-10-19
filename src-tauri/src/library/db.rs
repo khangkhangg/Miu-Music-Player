@@ -46,6 +46,9 @@ pub const MIGRATIONS: &[&str] = &[
      ALTER TABLE songs ADD COLUMN bit_depth INTEGER;
      ALTER TABLE songs ADD COLUMN bitrate_kbps INTEGER;
      UPDATE songs SET tags_read = 0;",
+    // 6: audio fingerprint for duplicate detection (F3.6); NULL = not hashed yet, '' = unreadable
+    "ALTER TABLE songs ADD COLUMN audio_hash TEXT;
+     CREATE INDEX songs_audio_hash ON songs(audio_hash);",
 ];
 
 #[derive(Debug, thiserror::Error)]

@@ -23,6 +23,9 @@ pub struct SongRow {
     /// Lossless files only.
     pub bit_depth: Option<u32>,
     pub bitrate_kbps: Option<u32>,
+    pub path: String,
+    /// Lowest song id among songs with the same audio (F3.6); `None` when there is no copy.
+    pub duplicate_group: Option<i64>,
 }
 
 pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
@@ -47,9 +50,20 @@ pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
                 sample_rate: r.get(8)?,
                 bit_depth: r.get(9)?,
                 bitrate_kbps: r.get(10)?,
+                path,
+                duplicate_group: None,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
+    let mut group_of = std::collections::HashMap::new();
+    for g in crate::library::duplicates::find_duplicates(db)? {
+        for id in &g {
+            group_of.insert(*id, g[0]);
+        }
+    }
+    for s in &mut rows {
+        s.duplicate_group = group_of.get(&s.id).copied();
+    }
     rows.sort_by_cached_key(|s| s.title.to_lowercase());
     Ok(rows)
 }

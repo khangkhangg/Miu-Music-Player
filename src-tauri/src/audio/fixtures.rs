@@ -10,11 +10,16 @@ pub fn ramp(i: usize, c: usize) -> f32 {
 
 /// Little-endian PCM WAV, 16 or 24 bit.
 pub fn wav(dir: &Path, name: &str, rate: u32, channels: u16, bits: u16, frames: usize) -> PathBuf {
+    wav_with(dir, name, rate, channels, bits, frames, ramp)
+}
+
+/// A WAV whose sample at frame `i`, channel `c` is `signal(i, c)`.
+pub fn wav_with(dir: &Path, name: &str, rate: u32, channels: u16, bits: u16, frames: usize, signal: impl Fn(usize, usize) -> f32) -> PathBuf {
     let bytes_per = (bits / 8) as usize;
     let mut data = Vec::with_capacity(frames * channels as usize * bytes_per);
     for i in 0..frames {
         for c in 0..channels as usize {
-            let v = ramp(i, c);
+            let v = signal(i, c);
             if bits == 16 {
                 data.extend(((v * 32767.0).round() as i16).to_le_bytes());
             } else {

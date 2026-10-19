@@ -1,6 +1,8 @@
 pub mod convert;
 pub mod db;
+pub mod duplicates;
 pub mod delete;
+pub mod fingerprint;
 pub mod folders;
 pub mod format;
 pub mod scan;

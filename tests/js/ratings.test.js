@@ -50,3 +50,18 @@ test('an unchanged or unknown song is ignored', () => {
   assert.equal(applyRated(byId, { id: 1, rating: 1 }), false);
   assert.equal(applyRated(byId, { id: 9, rating: -1 }), false);
 });
+
+const withCopies = [
+  { id: 1, rating: 0, duplicateGroup: 4 }, { id: 2, rating: 1, duplicateGroup: null },
+  { id: 3, rating: 0, duplicateGroup: 3 }, { id: 4, rating: 1, duplicateGroup: 4 }, { id: 5, rating: 0, duplicateGroup: 3 },
+];
+
+test('the duplicates filter keeps copies next to each other', () => {
+  assert.deepEqual(filterSongs(withCopies, 'duplicates').map(s => s.id), [3, 5, 1, 4]);
+});
+
+test('a duplicates chip appears only when there are copies, or while it is open', () => {
+  assert.equal(filterChips(withCopies, 'all').at(-1).label, 'Duplicates 4');
+  assert.equal(filterChips(list, 'all').some(c => c.id === 'duplicates'), false);
+  assert.deepEqual(filterChips(list, 'duplicates').at(-1), { id: 'duplicates', label: 'Duplicates 0', active: true });
+});

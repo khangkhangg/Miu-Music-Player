@@ -113,7 +113,9 @@ pub fn reconcile_with(
             }
             Some(k) if k.size != f.size as i64 || k.mtime != f.mtime || k.format != f.format.name() || !k.tags_read => {
                 tx.execute(
-                    "UPDATE songs SET size = ?1, mtime = ?2, format = ?3 WHERE id = ?4",
+                    "UPDATE songs SET size = ?1, mtime = ?2, format = ?3,
+                         audio_hash = CASE WHEN size != ?1 OR mtime != ?2 OR format != ?3 THEN NULL ELSE audio_hash END
+                     WHERE id = ?4",
                     rusqlite::params![f.size as i64, f.mtime, f.format.name(), k.id],
                 )?;
                 diff.updated += 1;
