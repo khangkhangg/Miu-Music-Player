@@ -290,3 +290,51 @@ Next questions:
    unknown), the `CoreFP` component (`HKLM\SOFTWARE\Apple Inc.\CoreFP` exists on this PC), and which HostInfo key
    carries it.
 3. If Grappa is out of reach → Phase 2 gate: FB.1 (direct DB write) or FB.2 (player-app Documents).
+
+## Grappa / CoreFP investigation — 2026-10-20 (read-only; nothing sent to the phone)
+
+### Local evidence (our own copies of Apple's DLLs and this PC's registry)
+- `AirTrafficHost.dll` (x64) **implements Grappa itself**: strings "Failed to initialize grappa, err=%d",
+  "Grappa key could not be established, %d", "Grappa host verify fail: %d", "Grappa could not verify message, sending
+  auth error", `GrappaSupportInfo`, and an embedded Apple FairPlay certificate chain for **"GrappaForATH"**.
+- It needs **CoreFP** (FairPlay): it contains the ASCII registry path `Software\Apple Inc.\CoreFP`, the name
+  `CoreFP.dll`, and the identifier `LibraryPath` (most likely the value it reads; medium confidence). It does not
+  import CoreFP.dll statically, so it loads it at run time.
+- `iTunes.exe` imports `ATHostConnectionGetGrappaSessionId` → iTunes asks ATH for the session.
+- ATH also logs "Creating ATHost Connection to device %@, library %@" → `ATHostConnectionCreateWithLibrary` takes a
+  library identifier. Other protocol vocabulary in the DLL: `RequestingSync`, `ReadyForSync`, `DataclassAnchors`,
+  `Anchor`, `Capabilities`, `DeviceInfo`, `FinishedSyncingMetadata`, `AssetManifest`, `FileBegin/Progress/Complete/Error`,
+  `SyncStatus`, `PowerAssertion`, `Ping`/`Pong`, `LocalCloudDownload*`.
+- **This PC's CoreFP key was rewritten by 3uTools**:
+  `HKLM\SOFTWARE\Apple Inc.\CoreFP` → `Libi4CFPath` / `LibiiiiPath` = `C:\Program Files\3uTools9\itunesDll\CoreFP.dll`
+  (WOW6432Node: same names, 3uJailbreak folder). **That file does not exist.** There is no `LibraryPath` value.
+  The Store iTunes package ships a genuine Apple-signed x64 `CoreFP.dll` 2.20.6 (36.7 MB) but, being packaged,
+  cannot register it in the real HKLM.
+- **Working hypothesis (H1):** ATH can't find CoreFP → Grappa init fails → HostInfo has no valid Grappa → the phone
+  answers `SyncFailed {ErrorCode: 4}`. Consistent with everything above; not yet confirmed by the phone's log.
+
+### Web research summary (background agent; see sources)
+- Grappa = per-sync FairPlay credential required by ATC; on Windows produced via CoreFP.dll, located through
+  `HKLM\SOFTWARE\Apple Inc.\CoreFP`. Projects report that i4Tools/3uTools overwrite that key with their own value
+  names, often pointing to a missing DLL, and that the fix was installing **standalone x64 iTunes from apple.com**
+  instead of the Store version. (https://github.com/BB0813/AirCard-Windows/releases/tag/v1.3.0 — medium)
+- Grappa gating reported on iOS 16–27; nothing specific on iOS 12 (low).
+- `ATHostConnectionCreateWithLibrary(CFStringRef, CFStringRef, int)` per a Python binding
+  (https://github.com/peter158/MobileDevice-1/blob/master/AirTrafficHost.py — high for arg count, low for meaning);
+  working forks use it plus a `RequestingSync` flow.
+- No open-source Grappa or `item_extra.integrity` generator exists (high). Some projects ship **pre-generated Grappa
+  tokens**; we will not use those (they bypass Apple's authentication rather than using Apple's own CoreFP).
+- FB.1 (direct DB writes) is likely a dead end: `integrity` needs a FairPlay signature (medium).
+
+### Tools ready
+- `device::syslog` (parser, unit-tested) + `apple::syslog_relay` (live reader, machine-tested: 91 lines in 5 s,
+  read-only). Can capture `atc`'s own error during a handshake.
+
+### Options (need the user's decision; none executed)
+1. Repeat the identical F2.3 handshake once **with the phone's log captured** → confirm H1 from `atc`'s message.
+2. **Private CoreFP, process-local:** copy the package's CoreFP.dll into `%LOCALAPPDATA%\MiuMusic\apple\…` (same as
+   the other DLLs) and make it findable *for our process only* (process PATH / pre-load). No system change. Then a
+   handshake attempt. Unproven: depends on whether ATH falls back to loading `CoreFP.dll` by name.
+3. **Registry value** `HKLM\SOFTWARE\Apple Inc.\CoreFP\LibraryPath` → our private CoreFP copy. System-wide change,
+   needs admin; leaves 3uTools' values alone. The user would have to make this change.
+4. **Install standalone x64 iTunes from apple.com** (the fix reported by other projects); the user would install it.

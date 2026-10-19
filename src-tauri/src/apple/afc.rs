@@ -10,7 +10,7 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::Arc;
 
 use crate::apple::afc_path::{device_path, PathError};
-use crate::apple::cf::{Cf, CfRef, CfValue, Ref};
+use crate::apple::cf::{Cf, CfRef, Ref};
 use crate::apple::device::MobileDevice;
 
 const MODE_READ: u64 = 1;
@@ -31,12 +31,6 @@ pub enum AfcError {
 
 #[allow(non_snake_case)]
 struct Fns {
-    AMDeviceConnect: unsafe extern "C" fn(Ref) -> i32,
-    AMDeviceDisconnect: unsafe extern "C" fn(Ref) -> i32,
-    AMDeviceValidatePairing: unsafe extern "C" fn(Ref) -> i32,
-    AMDeviceStartSession: unsafe extern "C" fn(Ref) -> i32,
-    AMDeviceStopSession: unsafe extern "C" fn(Ref) -> i32,
-    AMDeviceSecureStartService: unsafe extern "C" fn(Ref, Ref, Ref, *mut Ref) -> i32,
     AFCConnectionOpen: unsafe extern "C" fn(usize, u32, *mut *mut c_void) -> i32,
     AMDServiceConnectionGetSocket: unsafe extern "C" fn(Ref) -> usize,
     AFCConnectionClose: unsafe extern "C" fn(*mut c_void) -> i32,
@@ -63,12 +57,6 @@ impl Fns {
     fn load(md: &MobileDevice) -> Result<Self, AfcError> {
         let lib = md.library();
         Ok(Self {
-            AMDeviceConnect: afc_sym!(lib, AMDeviceConnect),
-            AMDeviceDisconnect: afc_sym!(lib, AMDeviceDisconnect),
-            AMDeviceValidatePairing: afc_sym!(lib, AMDeviceValidatePairing),
-            AMDeviceStartSession: afc_sym!(lib, AMDeviceStartSession),
-            AMDeviceStopSession: afc_sym!(lib, AMDeviceStopSession),
-            AMDeviceSecureStartService: afc_sym!(lib, AMDeviceSecureStartService),
             AFCConnectionOpen: afc_sym!(lib, AFCConnectionOpen),
             AMDServiceConnectionGetSocket: afc_sym!(lib, AMDServiceConnectionGetSocket),
             AFCConnectionClose: afc_sym!(lib, AFCConnectionClose),
@@ -98,27 +86,9 @@ pub struct Afc {
 impl Afc {
     pub fn open(cf: Arc<Cf>, md: Arc<MobileDevice>, device: &CfRef) -> Result<Self, AfcError> {
         let f = Fns::load(&md)?;
-        let dev = device.as_ptr();
-        let name = cf.to_cf(&CfValue::String("com.apple.afc".into())).map_err(|_| AfcError::Device("CFString", -1))?;
-        // SAFETY: `dev` is a retained am_device; connect/session are paired with stop/disconnect;
-        // the service connection returned (+1) is adopted and outlives the AFC connection.
+        let service = md.start_service(&cf, device.as_ptr(), "com.apple.afc").map_err(|(call, rc)| AfcError::Device(call, rc))?;
+        // SAFETY: the service connection outlives the AFC connection (both owned by `Afc`).
         unsafe {
-            check("AMDeviceConnect", (f.AMDeviceConnect)(dev))?;
-            let mut service: Ref = std::ptr::null();
-            let rc = match (f.AMDeviceValidatePairing)(dev) {
-                0 => match (f.AMDeviceStartSession)(dev) {
-                    0 => {
-                        let rc = (f.AMDeviceSecureStartService)(dev, name.as_ptr(), std::ptr::null(), &mut service);
-                        (f.AMDeviceStopSession)(dev);
-                        rc
-                    }
-                    e => e,
-                },
-                e => e,
-            };
-            (f.AMDeviceDisconnect)(dev);
-            check("AMDeviceSecureStartService(com.apple.afc)", rc)?;
-            let service = cf.adopt(service).map_err(|_| AfcError::Device("AMDeviceSecureStartService", -1))?;
             let mut conn: *mut c_void = std::ptr::null_mut();
             let socket = (f.AMDServiceConnectionGetSocket)(service.as_ptr());
             check("AFCConnectionOpen", (f.AFCConnectionOpen)(socket, 0, &mut conn))?;

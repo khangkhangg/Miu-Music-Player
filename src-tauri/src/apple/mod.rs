@@ -13,4 +13,6 @@ pub mod exports;
 pub mod loader;
 pub mod locate;
 pub mod stage;
+#[cfg(windows)]
+pub mod syslog_relay;
 pub mod value;

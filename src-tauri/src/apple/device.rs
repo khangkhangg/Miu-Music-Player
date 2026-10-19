@@ -44,6 +44,7 @@ pub struct MobileDevice {
     AMDeviceStartSession: unsafe extern "C" fn(Ref) -> i32,
     AMDeviceStopSession: unsafe extern "C" fn(Ref) -> i32,
     AMDeviceCopyValue: unsafe extern "C" fn(Ref, Ref, Ref) -> Ref,
+    AMDeviceSecureStartService: unsafe extern "C" fn(Ref, Ref, Ref, *mut Ref) -> i32,
     _lib: Library,
 }
 
@@ -72,6 +73,7 @@ impl MobileDevice {
             AMDeviceStartSession: md_sym!(lib, AMDeviceStartSession),
             AMDeviceStopSession: md_sym!(lib, AMDeviceStopSession),
             AMDeviceCopyValue: md_sym!(lib, AMDeviceCopyValue),
+            AMDeviceSecureStartService: md_sym!(lib, AMDeviceSecureStartService),
             _lib: lib,
         })
     }
@@ -112,6 +114,37 @@ impl MobileDevice {
     }
 
     /// All values of a lockdown domain (`None` = default domain) as a dictionary.
+    /// Start a lockdown service (e.g. `com.apple.afc`, `com.apple.syslog_relay`) on a trusted phone.
+    /// Returns the owned AMDServiceConnection, or the failing call and its error code.
+    pub fn start_service(&self, cf: &Cf, device: Ref, name: &str) -> Result<CfRef, (&'static str, i32)> {
+        let name_ref = cf.to_cf(&CfValue::String(name.into())).map_err(|_| ("CFString", -1))?;
+        // SAFETY: `device` is a retained am_device; connect/session are paired with stop/disconnect;
+        // the service connection returned (+1) is adopted.
+        unsafe {
+            match (self.AMDeviceConnect)(device) {
+                0 => {}
+                e => return Err(("AMDeviceConnect", e)),
+            }
+            let mut service: Ref = std::ptr::null();
+            let rc = match (self.AMDeviceValidatePairing)(device) {
+                0 => match (self.AMDeviceStartSession)(device) {
+                    0 => {
+                        let rc = (self.AMDeviceSecureStartService)(device, name_ref.as_ptr(), std::ptr::null(), &mut service);
+                        (self.AMDeviceStopSession)(device);
+                        rc
+                    }
+                    e => e,
+                },
+                e => e,
+            };
+            (self.AMDeviceDisconnect)(device);
+            if rc != 0 {
+                return Err(("AMDeviceSecureStartService", rc));
+            }
+            cf.adopt(service).map_err(|_| ("AMDeviceSecureStartService", -1))
+        }
+    }
+
     unsafe fn copy_domain(&self, cf: &Cf, device: Ref, domain: Option<&str>) -> CfValue {
         let domain_ref = domain.and_then(|d| cf.to_cf(&CfValue::String(d.into())).ok());
         let domain_ptr = domain_ref.as_ref().map_or(std::ptr::null(), CfRef::as_ptr);
