@@ -4,7 +4,6 @@
 
 use std::ffi::c_void;
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::apple::cf::{Cf, CfRef, Ref};
@@ -79,6 +78,7 @@ impl SyslogRelay {
 mod tests {
     use super::*;
     use crate::apple::device::watch;
+    use std::sync::Arc;
     use crate::device::registry::{Interface, RawEvent};
 
     #[test]
