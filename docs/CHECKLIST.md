@@ -59,7 +59,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F1.2 CoreFoundation bridge**
   *Test first (hardware-free once DLL present, else `#[ignore]`):* round-trip String (incl. Vietnamese/CJK),
   i64, f64, bool, Vec, HashMap, bytes through CF types; no leaks (retain counts back to 1).
-- [ ] **F1.3 Device discovery + hot-plug** — *Test first:* event mapping (connect/disconnect/untrusted) via a fake
+- [x] **F1.3 Device discovery + hot-plug** — *Test first:* event mapping (connect/disconnect/untrusted) via a fake
   device source; `#[ignore]` test lists the real iPhone.
 - [ ] **F1.4 Device info** — *Test first:* parse lockdown values into `DeviceInfo` (model "iPhone6,1" → "iPhone 5s").
 - [ ] **F1.5 AFC list/pull/push** — *Test first:* path validation (stays inside media root); `#[ignore]` real list.

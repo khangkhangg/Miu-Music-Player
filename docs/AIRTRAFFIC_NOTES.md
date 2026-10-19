@@ -191,4 +191,4 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
   trusted = true for this PC.
 - The first "connected" event came **~11 s** after subscribing (both in the test and in the app). Unknown whether
   the delay is the notification itself or the trust check; measure in F1.4.
-- Not yet observed: unplug (msg 2) and re-plug while the app runs.
+- Unplug (msg 2) and re-plug while the app runs: verified 2026-10-20, card and log follow.
