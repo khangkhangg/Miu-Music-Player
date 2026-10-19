@@ -24,6 +24,8 @@ fn main() {
     if std::env::var("MIU_ALLOW_SYNC_REQUEST").as_deref() != Ok("1") {
         fail("refusing: this sends HostInfo and a sync request to the phone. Set MIU_ALLOW_SYNC_REQUEST=1.");
     }
+    // Kept alive for the whole run when --private-corefp is used.
+    let _corefp = if std::env::args().any(|a| a == "--private-corefp") { Some(private_corefp()) } else { None };
     let dlls = miu_music_lib::apple::loader::load_from_system().unwrap_or_else(|e| fail(&e.to_string()));
     let cf = Arc::new(Cf::new(dlls.core_foundation).unwrap_or_else(|e| fail(&e.to_string())));
     let md = Arc::new(MobileDevice::new(dlls.mobile_device).unwrap_or_else(|e| fail(&e.to_string())));
@@ -96,6 +98,24 @@ fn main() {
         Err(e) => println!("db-diff failed: {e}"),
     }
     println!("songs: {songs_before} -> {songs_after}");
+}
+
+/// Copy the Store package's CoreFP.dll (+ imports) into Miu's private DLL folder and make it findable
+/// for this process only: folder first on this process's PATH, and the DLL pre-loaded so a load by
+/// name returns it. No registry or system change.
+fn private_corefp() -> libloading::os::windows::Library {
+    use miu_music_lib::apple::{loader, locate, stage};
+    let found = locate::locate_on_system();
+    let cache = paths::apple_dlls_dir_in(&paths::local_appdata_root());
+    let corefp = stage::stage_extra(&found, &cache, "CoreFP.dll").unwrap_or_else(|e| fail(&format!("stage CoreFP: {e}")));
+    let dir = corefp.parent().unwrap().to_path_buf();
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let mut dirs = vec![dir.clone()];
+    dirs.extend(std::env::split_paths(&path));
+    std::env::set_var("PATH", std::env::join_paths(dirs).unwrap());
+    let lib = loader::load_dll(&corefp, &[dir]).unwrap_or_else(|e| fail(&format!("load CoreFP: {e}")));
+    println!("private CoreFP loaded for this process: {}", corefp.display());
+    lib
 }
 
 fn fail(msg: &str) -> ! {

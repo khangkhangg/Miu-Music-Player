@@ -105,6 +105,39 @@ pub fn stage_with(p: &Prereqs, dest_root: &Path, imports: impl Fn(&Path) -> Vec<
     })
 }
 
+/// Copy one more DLL from the same Store package (e.g. `CoreFP.dll`, which AirTrafficHost loads at
+/// run time for Grappa) plus its in-package imports into the private copy. Returns its new path.
+pub fn stage_extra(p: &Prereqs, dest_root: &Path, name: &str) -> io::Result<PathBuf> {
+    stage_extra_with(p, dest_root, name, |f| import_names(f).unwrap_or_default())
+}
+
+pub fn stage_extra_with(
+    p: &Prereqs,
+    dest_root: &Path,
+    name: &str,
+    imports: impl Fn(&Path) -> Vec<String>,
+) -> io::Result<PathBuf> {
+    let dlls: Vec<&PathBuf> = [&p.core_foundation, &p.mobile_device, &p.air_traffic_host].into_iter().flatten().collect();
+    let pkg = dlls
+        .iter()
+        .find_map(|d| package_name(d))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Apple DLLs are not in a Store package"))?;
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for dir in dlls.iter().filter_map(|d| d.parent()) {
+        if !dirs.iter().any(|x| x == dir) {
+            dirs.push(dir.to_path_buf());
+        }
+    }
+    let find = |n: &str| dirs.iter().map(|dir| dir.join(n)).find(|f| f.is_file());
+    let src = find(name).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{name} not in the package")))?;
+    let dest = dest_root.join(&pkg);
+    fs::create_dir_all(&dest)?;
+    for f in dependency_closure(&[src], find, imports) {
+        copy_if_changed(&f, &dest.join(f.file_name().expect("file name")))?;
+    }
+    Ok(dest.join(name))
+}
+
 /// Copy via a temp file + rename so a crash never leaves a half-written DLL behind.
 fn copy_if_changed(src: &Path, dst: &Path) -> io::Result<()> {
     if let (Ok(a), Ok(b)) = (fs::metadata(src), fs::metadata(dst)) {
@@ -226,5 +259,52 @@ mod tests {
         let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
         let names = import_names(&Path::new(&root).join(r"System32\kernel32.dll")).unwrap();
         assert!(names.iter().any(|n| n.eq_ignore_ascii_case("ntdll.dll")), "{names:?}");
+    }
+}
+
+#[cfg(test)]
+mod extra_tests {
+    use super::*;
+    use std::fs;
+
+    fn pkg(base: &Path) -> Prereqs {
+        let root = base.join("WindowsApps").join("AppleInc.iTunes_1_x64__n");
+        for f in [r"AMDS64\MobileDevice.dll", r"AMDS64\AirTrafficHost.dll", "CoreFoundation.dll", "CoreFP.dll", "FPHelper.dll"] {
+            let p = root.join(f);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, f.as_bytes()).unwrap();
+        }
+        Prereqs {
+            air_traffic_host: Some(root.join(r"AMDS64\AirTrafficHost.dll")),
+            mobile_device: Some(root.join(r"AMDS64\MobileDevice.dll")),
+            core_foundation: Some(root.join("CoreFoundation.dll")),
+        }
+    }
+
+    fn imports(path: &Path) -> Vec<String> {
+        match path.file_name().unwrap().to_str().unwrap() {
+            "CoreFP.dll" => vec!["FPHelper.dll".into(), "KERNEL32.dll".into()],
+            _ => vec![],
+        }
+    }
+
+    #[test]
+    fn stages_an_extra_package_dll_and_its_imports_next_to_the_others() {
+        let d = tempfile::tempdir().unwrap();
+        let p = pkg(d.path());
+        let dest = d.path().join("apple");
+        let staged = stage_extra_with(&p, &dest, "CoreFP.dll", imports).unwrap();
+        let dir = dest.join("AppleInc.iTunes_1_x64__n");
+        assert_eq!(staged, dir.join("CoreFP.dll"));
+        assert_eq!(fs::read(&staged).unwrap(), b"CoreFP.dll");
+        assert!(dir.join("FPHelper.dll").exists());
+    }
+
+    #[test]
+    fn a_missing_extra_is_an_error() {
+        let d = tempfile::tempdir().unwrap();
+        let p = pkg(d.path());
+        let err = stage_extra_with(&p, &d.path().join("apple"), "Nope.dll", imports).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 }
