@@ -119,6 +119,8 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 ## Phase 5b – Player and mini player
 - [ ] **F7.1 Native audio engine** — *Test first:* decode each fixture format to the expected sample count and rate;
   gapless join has no inserted silence; seek lands within one packet.
+  Status 2026-10-20: done and verified by listening — decode (symphonia, hi-res kept), sinc resampling to the
+  device rate, gapless queue, seek, volume, WASAPI shared output. **Left:** optional exclusive (bit-perfect) mode.
 - [ ] **F7.2 Ratings + filter chips** — *Test first:* rating transitions and counts; filters return the right songs.
 - [ ] **F7.3 Disliked view + delete** — *Test first:* delete moves the file to Recycle Bin (temp-dir stub of the
   trash API), removes it from the library and queues device removal; undo dislike restores "not rated".
