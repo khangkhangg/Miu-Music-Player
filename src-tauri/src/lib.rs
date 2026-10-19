@@ -75,6 +75,7 @@ pub fn run() {
             check_prereqs,
             list_devices,
             library::service::list_folders,
+            library::service::list_songs,
             library::service::add_folder,
             library::service::remove_folder,
         ])

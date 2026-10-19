@@ -2,6 +2,10 @@ import { resolveTheme } from './theme.js';
 import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
 import { folderItems, librarySummary } from './folders.js';
+import { songRow, visibleRange } from './songs.js';
+
+const ROW_HEIGHT = 36;
+let songs = [];
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 const preference = 'system'; // becomes a setting in F5.5
@@ -22,7 +26,14 @@ if (invoke) {
   invoke('list_devices').then(showDevices);
 
   invoke('list_folders').then(showFolders);
-  window.__TAURI__.event.listen('library-changed', e => showFolders(e.payload));
+  loadSongs();
+  window.__TAURI__.event.listen('library-changed', e => {
+    showFolders(e.payload);
+    loadSongs();
+  });
+  const scroller = document.getElementById('song-scroll');
+  scroller.addEventListener('scroll', () => requestAnimationFrame(renderSongs), { passive: true });
+  new ResizeObserver(() => renderSongs()).observe(scroller);
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
   document.getElementById('add-folder').addEventListener('click', pickFolder);
   document.getElementById('empty-add-folder').addEventListener('click', pickFolder);
@@ -34,11 +45,47 @@ async function pickFolder() {
 }
 
 function addFolder(path) {
-  invoke('add_folder', { path }).then(showFolders).catch(showFolderError);
+  invoke('add_folder', { path }).then(f => { showFolders(f); loadSongs(); }).catch(showFolderError);
+}
+
+function loadSongs() {
+  invoke('list_songs').then(list => {
+    songs = list.map(songRow);
+    document.getElementById('song-spacer').style.height = `${songs.length * ROW_HEIGHT}px`;
+    renderSongs();
+  });
+}
+
+function cell(text, cls) {
+  const span = document.createElement('span');
+  span.textContent = text;
+  span.dir = 'auto'; // RTL titles (Arabic, Hebrew) render right to left
+  if (cls) span.className = cls;
+  return span;
+}
+
+/** Render only the rows in view (plus overscan) inside the tall spacer. */
+function renderSongs() {
+  const scroller = document.getElementById('song-scroll');
+  const spacer = document.getElementById('song-spacer');
+  const { start, end } = visibleRange({
+    scrollTop: scroller.scrollTop, height: scroller.clientHeight, rowHeight: ROW_HEIGHT, total: songs.length, overscan: 8,
+  });
+  const rows = [];
+  for (let i = start; i < end; i++) {
+    const s = songs[i];
+    const row = document.createElement('div');
+    row.className = 'song-row';
+    row.setAttribute('role', 'listitem');
+    row.style.top = `${i * ROW_HEIGHT}px`;
+    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'));
+    rows.push(row);
+  }
+  spacer.replaceChildren(...rows);
 }
 
 function removeFolder(id) {
-  invoke('remove_folder', { id }).then(showFolders).catch(showFolderError);
+  invoke('remove_folder', { id }).then(f => { showFolders(f); loadSongs(); }).catch(showFolderError);
 }
 
 function showFolderError(message) {
@@ -72,7 +119,7 @@ function showFolders(folders) {
   }));
   const summary = librarySummary(folders);
   document.getElementById('empty-state').hidden = Boolean(summary);
-  document.getElementById('library-summary').hidden = !summary;
+  document.getElementById('song-view').hidden = !summary;
   document.getElementById('library-summary-text').textContent = summary ?? '';
 }
 

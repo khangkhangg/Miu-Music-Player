@@ -47,3 +47,17 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .folder-item:hover .folder-remove, .folder-remove:focus-visible { visibility: visible; }
 .folder-error { font-size: 12px; color: var(--danger); margin: 4px 10px; }
 .folder-error[hidden], .empty-state[hidden] { display: none; }
+.main { min-height: 0; }
+.song-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.song-view[hidden] { display: none; }
+.view-header { display: flex; align-items: baseline; gap: 12px; padding: 18px 20px 10px; }
+.view-header h1 { font-size: 20px; font-weight: 600; margin: 0; }
+.song-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px; gap: 12px; align-items: center; height: 36px; padding: 0 20px; font-size: 13px; }
+.song-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.song-head { font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); height: 30px; }
+.song-scroll { flex: 1; overflow-y: auto; position: relative; }
+.song-spacer { position: relative; }
+.song-spacer .song-row { position: absolute; left: 0; right: 0; }
+.song-spacer .song-row:hover { background: var(--surface-muted); }
+.song-title { color: var(--text); }

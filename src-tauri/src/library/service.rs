@@ -58,6 +58,12 @@ pub fn start(app: AppHandle, db: SharedDb, watch: Arc<LibraryWatch>) {
 }
 
 #[tauri::command]
+pub fn list_songs(db: State<'_, SharedDb>) -> Result<Vec<crate::library::songs::SongRow>, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    crate::library::songs::list_songs(&d).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn list_folders(db: State<'_, SharedDb>) -> Vec<WatchedFolder> {
     folder_list(&db)
 }

@@ -47,10 +47,18 @@
         <p class="muted">Choose one or more folders to watch, or drop them here. Miu keeps up with new and removed songs.</p>
         <button class="primary" id="empty-add-folder" type="button">Add folder</button>
       </div>
-      <div class="empty-state" id="library-summary" hidden>
-        <h1>Songs</h1>
-        <p class="muted" id="library-summary-text"></p>
-      </div>
+      <section class="song-view" id="song-view" hidden>
+        <header class="view-header">
+          <h1>Songs</h1>
+          <span class="muted" id="library-summary-text"></span>
+        </header>
+        <div class="song-row song-head" aria-hidden="true">
+          <span>Title</span><span>Artist</span><span>Album</span><span class="num">Time</span>
+        </div>
+        <div class="song-scroll" id="song-scroll" role="list" aria-label="Songs">
+          <div class="song-spacer" id="song-spacer"></div>
+        </div>
+      </section>
       <footer class="status muted" id="app-version"></footer>
     </main>
   </div>
