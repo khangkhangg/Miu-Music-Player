@@ -53,6 +53,12 @@
           <span class="muted" id="library-summary-text"></span>
         </header>
         <div class="chips" id="filter-chips" role="tablist" aria-label="Filter by rating"></div>
+        <div class="disliked-banner" id="disliked-banner" hidden>
+          <p>Disliked songs never sync to your iPhone. Delete moves them to the Recycle Bin and out of Miu Music.
+            Tap the thumbs-down again to keep a song.</p>
+          <button class="danger-btn" id="delete-all" type="button">Delete all</button>
+        </div>
+        <p class="delete-result muted" id="delete-result" role="status" hidden></p>
         <div class="song-row song-head" aria-hidden="true">
           <span>Title</span><span>Artist</span><span>Album</span><span class="num">Time</span><span></span>
         </div>

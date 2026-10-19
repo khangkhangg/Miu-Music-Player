@@ -5,6 +5,7 @@ import { folderItems, librarySummary } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
 import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, filterSongs, filterChips } from './ratings.js';
+import { deletePrompt, deleteResult } from './delete.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
@@ -48,7 +49,10 @@ if (invoke) {
   });
   scroller.addEventListener('click', e => {
     const btn = e.target.closest('button[data-act]');
-    if (btn) rate(shown[Number(btn.closest('.song-row').dataset.index)].id, btn.dataset.act);
+    if (!btn) return;
+    const song = shown[Number(btn.closest('.song-row').dataset.index)];
+    if (btn.dataset.act === 'delete') confirmDelete([song]);
+    else rate(song.id, btn.dataset.act);
   });
   for (const id of ['np-like', 'np-dislike']) {
     document.getElementById(id).addEventListener('click', e => {
@@ -66,6 +70,7 @@ if (invoke) {
     const ms = seekTarget((e.clientX - rect.left) / rect.width, song?.durationMs);
     if (ms != null) invoke('player_seek', { ms });
   });
+  document.getElementById('delete-all').addEventListener('click', () => confirmDelete(shown.filter(x => x.rating === -1)));
   document.getElementById('np-volume').addEventListener('input', e =>
     invoke('player_volume', { volume: Number(e.target.value) / 100 }));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
@@ -97,6 +102,23 @@ function refreshList() {
   renderChips();
   renderSongs();
   updateRateButtons();
+  document.getElementById('disliked-banner').hidden = !(activeFilter === 'disliked' && shown.length > 0);
+}
+
+/** Ask, then move disliked songs to the Recycle Bin (F7.3). */
+async function confirmDelete(list) {
+  if (!list.length) return;
+  const p = deletePrompt(list);
+  const ok = await window.__TAURI__.dialog.ask(p.message, {
+    title: p.title, kind: 'warning', okLabel: 'Move to Recycle Bin', cancelLabel: 'Cancel',
+  });
+  if (!ok) return;
+  const report = await invoke('delete_songs', { ids: list.map(x => x.id) });
+  const el = document.getElementById('delete-result');
+  el.textContent = deleteResult(report);
+  el.hidden = false;
+  setTimeout(() => { el.hidden = true; }, 8000);
+  loadSongs();
 }
 
 function renderChips() {
@@ -159,9 +181,21 @@ function showPlayer(event) {
 const THUMB_UP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>';
 const THUMB_DOWN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>';
 
-function rateCell(rating) {
+const TRASH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h6v1h3v1.5H2V3h3zM3.5 6h9l-.8 8H4.3z"/></svg>';
+
+function rateCell(rating, withDelete) {
   const span = document.createElement('span');
   span.className = 'rate-cell';
+  if (withDelete) {
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'icon-btn rate-btn delete-btn';
+    del.dataset.act = 'delete';
+    del.setAttribute('aria-label', 'Delete (move to Recycle Bin)');
+    del.title = 'Delete (move to Recycle Bin)';
+    del.innerHTML = TRASH; // constant markup, no user data
+    span.append(del);
+  }
   for (const [act, icon, label, on] of [['dislike', THUMB_DOWN, 'Dislike', rating === -1], ['like', THUMB_UP, 'Like', rating === 1]]) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -198,7 +232,7 @@ function renderSongs() {
     row.dataset.index = i;
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
-    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'), rateCell(shown[i].rating));
+    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'), rateCell(shown[i].rating, activeFilter === 'disliked'));
     rows.push(row);
   }
   spacer.replaceChildren(...rows);

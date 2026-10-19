@@ -81,6 +81,7 @@ pub fn run() {
             library::service::list_folders,
             library::service::list_songs,
             library::service::rate_song,
+            library::service::delete_songs,
             library::service::add_folder,
             library::service::remove_folder,
             audio::service::play_songs,

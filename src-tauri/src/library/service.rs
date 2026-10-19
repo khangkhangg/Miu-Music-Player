@@ -71,6 +71,15 @@ pub fn rate_song(id: i64, rating: i64, db: State<'_, SharedDb>) -> Result<(), St
     crate::library::songs::set_rating(&d, id, rating)
 }
 
+/// Move disliked songs' files to the Recycle Bin and remove them from the library.
+#[tauri::command]
+pub fn delete_songs(ids: Vec<i64>, db: State<'_, SharedDb>) -> Result<crate::library::delete::DeleteReport, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    let report = crate::library::delete::delete_disliked(&d, &ids, &crate::library::delete::RecycleBin).map_err(|e| e.to_string())?;
+    log::info!("moved {} disliked songs to the Recycle Bin ({} left alone)", report.deleted.len(), report.failed.len());
+    Ok(report)
+}
+
 #[tauri::command]
 pub fn list_folders(db: State<'_, SharedDb>) -> Vec<WatchedFolder> {
     folder_list(&db)

@@ -1,4 +1,5 @@
 pub mod db;
+pub mod delete;
 pub mod folders;
 pub mod format;
 pub mod scan;
