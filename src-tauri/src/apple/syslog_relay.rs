@@ -1,6 +1,7 @@
 //! The phone's live system log via `com.apple.syslog_relay` (read-only). Used to see why the
 //! phone refuses a sync (e.g. atc's Grappa errors). Parsing lives in `device::syslog`.
-//! `AMDServiceConnectionReceive(svc, buf, len) -> bytes read` (≤ 0 = closed); confidence medium.
+//! `int AMDServiceConnectionReceive(svc, buf, len)` → bytes read, ≤ 0 = closed. Returns a 32-bit int:
+//! declaring it 64-bit turned -1 into 4294967295 (seen 2026-10-20). Confidence: high.
 
 use std::ffi::c_void;
 use std::sync::mpsc;
@@ -10,7 +11,7 @@ use crate::apple::cf::{Cf, CfRef, Ref};
 use crate::apple::device::MobileDevice;
 use crate::device::syslog::LineSplitter;
 
-type Receive = unsafe extern "C" fn(Ref, *mut c_void, usize) -> isize;
+type Receive = unsafe extern "C" fn(Ref, *mut c_void, usize) -> i32;
 type Invalidate = unsafe extern "C" fn(Ref);
 
 pub struct SyslogRelay {

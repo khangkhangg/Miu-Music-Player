@@ -338,3 +338,27 @@ Next questions:
 3. **Registry value** `HKLM\SOFTWARE\Apple Inc.\CoreFP\LibraryPath` → our private CoreFP copy. System-wide change,
    needs admin; leaves 3uTools' values alone. The user would have to make this change.
 4. **Install standalone x64 iTunes from apple.com** (the fix reported by other projects); the user would install it.
+
+## Grappa confirmation runs — 2026-10-20 (approved; backups before/after each, DB unchanged both times)
+
+**Run 1 (18:43:50Z) — identical F2.3 handshake + phone syslog** (`research/captures/20261019-184350-*`):
+- Phone log: `atc(AirTrafficDevice)[33] <Error>: Grappa session could not be established. Aborting` →
+  `SyncFailed { ErrorCode = 4 }`. **Cause confirmed: Grappa.** Confidence: high.
+- The phone's first message is `Capabilities` with `GrappaSupportInfo = { deviceType = 0; protocolVersion = 1;
+  version = 1; }` — AirTrafficHost consumes it internally (our reader never sees it). So iOS 12.5.8 *does* advertise
+  and require Grappa; the F2.2 note "no GrappaSupportInfo" was wrong (it is in Capabilities, not SyncAllowed).
+- On the wire: `HostInfo` (ATH adds `LocalCloudSupport = 0`), then `RequestingSync { Dataclasses = (Media);
+  DataclassAnchors = {}; HostInfo = … }`. **No Grappa field** → ATH produced no Grappa session.
+- The phone shows **two host links** (`0x1391340f0` and ours); the other one also gets InstalledAssets/
+  AssetMetrics/SyncAllowed/Ping — another program on this PC (3uTools service or an Apple helper) is connected.
+- db-diff before/after: no differences; 69 songs.
+
+**Run 2 (18:46:50Z) — same, with `--private-corefp`** (package CoreFP.dll 2.20.6 + imports copied to the private
+folder, first on this process's PATH, pre-loaded before AirTrafficHost):
+- CoreFP loads fine from the private copy, but the phone logs the same Grappa failure; HostInfo still has no Grappa.
+  → AirTrafficHost does **not** fall back to a CoreFP that is merely loaded / on PATH; it most likely needs the
+  registry value (`HKLM\SOFTWARE\Apple Inc.\CoreFP` → probably `LibraryPath`). Confidence: medium.
+- db-diff: no differences; 69 songs.
+
+Also fixed: `AMDServiceConnectionReceive` returns a 32-bit `int`; declared as 64-bit, `-1` became 4294967295 and
+the syslog reader thread panicked at shutdown (lines were already saved).
