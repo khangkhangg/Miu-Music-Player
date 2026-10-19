@@ -52,7 +52,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] CI: GitHub Actions on `windows-latest` running `cargo test` + `node --test`.
 
 ## Phase 1 – DLL spike (gate)
-- [ ] **F2.1 DLL export map** — tool written in Rust (`tools/dll-exports`, `object` crate) instead of Python.
+- [x] **F2.1 DLL export map** — `apple/exports.rs` (`object` crate) + `cargo run --bin dll-exports`; required exports pinned and machine-tested.
   *Test first:* parses exports of a known system DLL (e.g. `kernel32.dll`) and finds `CreateFileW`.
 - [ ] **F1.1 DLL loader**
   *Test first:* search-path builder orders registry → Program Files → WindowsApps; missing DLL → typed error.

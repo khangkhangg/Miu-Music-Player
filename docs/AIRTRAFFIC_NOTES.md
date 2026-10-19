@@ -32,3 +32,39 @@ Findings:
   Store packages (Apple Devices before iTunes). Confidence: high (works on this PC).
 - Not yet checked: the **Apple Devices** Store app layout, and whether `WindowsApps` DLLs can be loaded
   from a non-packaged process (expected yes — 3uTools-style tools do this — verify in F1.1).
+
+## Export map (F2.1) — 2026-10-20
+
+Tool: `cargo run --bin dll-exports` (in `src-tauri/`) → full lists in `research/dll-exports/*.txt` (gitignored).
+Required sets are pinned in `src-tauri/src/apple/exports.rs` and checked by an `#[ignore]` machine test.
+
+| DLL | Version | Exports | Notable groups |
+|---|---|---|---|
+| `AirTrafficHost.dll` (x64) | 4026.110.1.6 | 59 | `ATHost*` 42, `ATCFMessage*` 5, `ATProcessLink*` 9 |
+| `MobileDevice.dll` (x64) | 1860.2.5.1 | 586 | `AMDevice*` 88, `AFC*` 135, `AMDServiceConnection*` 9, `AMRestorableDevice*` 34 |
+| `CoreFoundation.dll` (x64) | 1750.443.0 | 2021 | `CF*` 858 |
+
+**All 9 `ATHostConnection*` names the plan listed as "unverified" exist** (confidence: high, read from the export table):
+`CreateWithLibrary`, `SendHostInfo`, `ReadMessage`, `SendSyncRequest`, `SendFileBegin`, `SendAssetCompleted`,
+`GetGrappaSessionId`, `Invalidate`, `Release`. Signatures are still unknown — exports carry names only.
+
+Other `AirTrafficHost.dll` exports worth knowing (names only, purpose guessed from the name, confidence low):
+- Connection variants: `ATHostConnectionCreate`, `…CreateWithCallbacks`, `…CreateWithQueryCallback`, `…Destroy`, `…Retain`
+- Messaging: `ATHostConnectionSendMessage`, `…SendPing`, `…SendStatusMessage`, `…SendPowerAssertion`,
+  `…SendConnectionInvalid`, `…GetCurrentSessionNumber`, `ATHostWaitForQueueToDrain`
+- Asset flow: `…SendFileProgress`, `…SendFileError`, `…SendFileErrorWithParams`,
+  `…SendAssetCompletedWithMetadata`, `…SendAssetMetricsRequest`, `…SendMetadataSyncFinished`, `…SendSyncFailed`
+- Message objects: `ATCFMessageCreate`, `ATCFMessageGetName`, `ATCFMessageGetParam`, `ATCFMessageGetSessionNumber`,
+  `ATCFMessageVerify` — likely how we read the name/params of what `ReadMessage` returns
+- Device side: `ATHostDeviceObserverCreate/Destroy/IsAttached`, `ATHostDeviceNotificationObserverCreate/Destroy`,
+  `ATHostCreateDeviceServiceConnection`, `ATHostAMDeviceSocketCreate/Destroy/Write`
+- Environment: `ATAddAppleSearchPathsToEnvironmentFromReg` — probably sets the DLL search path from the registry
+  (classic installs); may matter for F1.1 with the Store layout.
+
+`MobileDevice.dll` has the classic names we need for F1.3–F1.5: `AMDeviceNotificationSubscribe`, `AMDeviceConnect`,
+`AMDeviceIsPaired`, `AMDeviceValidatePairing`, `AMDeviceStartSession`/`StopSession`, `AMDeviceCopyValue`,
+`AMDeviceCopyDeviceIdentifier`, `AMDeviceSecureStartService`, `AMDeviceStartService`, `AMDServiceConnectionGetSocket`,
+`AFCConnectionOpen`, `AFCDirectoryOpen/Read`, `AFCFileRefOpen/Read/Write/Close`, `AFCRemovePath`, `AFCRenamePath`.
+
+Next (F1.1/F1.2): find published signatures for these (open-source projects that call them), record each with source
+and confidence here before writing FFI declarations.

@@ -3,6 +3,7 @@ name = "miu-music"
 version = "0.1.0"
 description = "Miu Music - light music player that syncs liked songs to iPhone"
 edition = "2021"
+default-run = "miu-music"
 
 [lib]
 name = "miu_music_lib"
@@ -16,6 +17,7 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = { version = "0.4", features = ["std"] }
+object = { version = "0.37", default-features = false, features = ["read", "std"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 thiserror = "2"
 
