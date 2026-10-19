@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use rusqlite::OptionalExtension;
 use serde::Serialize;
 
 use crate::library::db::Db;
@@ -44,6 +45,18 @@ pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
         .collect::<rusqlite::Result<_>>()?;
     rows.sort_by_cached_key(|s| s.title.to_lowercase());
     Ok(rows)
+}
+
+/// File paths for `ids`, in the same order; ids no longer in the library are skipped.
+pub fn paths_for(db: &Db, ids: &[i64]) -> rusqlite::Result<Vec<(i64, std::path::PathBuf)>> {
+    let mut stmt = db.conn().prepare_cached("SELECT path FROM songs WHERE id = ?1")?;
+    let mut out = Vec::with_capacity(ids.len());
+    for &id in ids {
+        if let Some(path) = stmt.query_row([id], |r| r.get::<_, String>(0)).optional()? {
+            out.push((id, std::path::PathBuf::from(path)));
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -92,5 +105,24 @@ mod tests {
         let json = serde_json::to_value(&list_songs(&db).unwrap()[0]).unwrap();
         assert_eq!(json["durationMs"], 1000);
         assert!(json["artist"].is_null());
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+
+    #[test]
+    fn paths_come_back_in_the_order_asked_and_unknown_ids_are_skipped() {
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, r"E:\Nhạc", 1).unwrap();
+        for p in [r"E:\Nhạc\a.mp3", r"E:\Nhạc\Diễm xưa.flac", r"E:\Nhạc\c.mp3"] {
+            db.conn().execute("INSERT INTO songs (folder_id, path, size, mtime, added_at) VALUES (?1, ?2, 1, 1, 1)", rusqlite::params![f.id, p]).unwrap();
+        }
+        let got = paths_for(&db, &[3, 999, 1, 2]).unwrap();
+        let ids: Vec<i64> = got.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, vec![3, 1, 2]);
+        assert_eq!(got[2].1, std::path::PathBuf::from(r"E:\Nhạc\Diễm xưa.flac"));
     }
 }

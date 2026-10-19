@@ -1,4 +1,5 @@
 pub mod apple;
+pub mod audio;
 pub mod device;
 pub mod library;
 pub mod sync;
@@ -60,14 +61,17 @@ pub fn run() {
     let library_watch = std::sync::Arc::new(library::service::LibraryWatch::default());
 
     let registry = device::service::SharedRegistry::default();
+    let player: audio::service::SharedPlayer = std::sync::Arc::new(audio::service::PlayerHandle::new());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(registry.clone())
         .manage(db.clone())
         .manage(library_watch.clone())
+        .manage(player.clone())
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
             library::service::start(app.handle().clone(), db, library_watch);
+            audio::service::start(app.handle().clone(), player);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,6 +82,12 @@ pub fn run() {
             library::service::list_songs,
             library::service::add_folder,
             library::service::remove_folder,
+            audio::service::play_songs,
+            audio::service::player_pause,
+            audio::service::player_resume,
+            audio::service::player_seek,
+            audio::service::player_volume,
+            audio::service::player_skip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");

@@ -59,6 +59,30 @@
           <div class="song-spacer" id="song-spacer"></div>
         </div>
       </section>
+      <div class="now-playing" id="now-playing" hidden>
+        <div class="np-text">
+          <p class="np-title" id="np-title" dir="auto"></p>
+          <p class="np-artist muted" id="np-artist" dir="auto"></p>
+        </div>
+        <div class="np-controls">
+          <button class="icon-btn np-btn" id="np-prev" type="button" aria-label="Previous song">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg>
+          </button>
+          <button class="np-play" id="np-play" type="button" aria-label="Pause">
+            <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
+            <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg>
+          </button>
+          <button class="icon-btn np-btn" id="np-next" type="button" aria-label="Next song">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg>
+          </button>
+        </div>
+        <div class="np-progress">
+          <span class="muted np-time" id="np-elapsed">0:00</span>
+          <div class="np-bar" id="np-bar" role="slider" aria-label="Position" tabindex="0"><div class="np-fill" id="np-fill"></div></div>
+          <span class="muted np-time" id="np-duration"></span>
+        </div>
+        <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume">
+      </div>
       <footer class="status muted" id="app-version"></footer>
     </main>
   </div>

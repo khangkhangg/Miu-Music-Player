@@ -15,6 +15,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+cpal = "0.16"
+rtrb = "0.3"
+rubato = "0.16"
+symphonia = { version = "0.5", features = ["all"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 lofty = "0.22"
@@ -32,3 +36,7 @@ windows-sys = { version = "0.60", features = ["Win32_System_LibraryLoader"] }
 
 [dev-dependencies]
 
+
+# Decoding and resampling are far too slow unoptimised; optimise dependencies even in dev builds.
+[profile.dev.package."*"]
+opt-level = 3

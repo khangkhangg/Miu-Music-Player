@@ -61,3 +61,22 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .song-spacer .song-row { position: absolute; left: 0; right: 0; }
 .song-spacer .song-row:hover { background: var(--surface-muted); }
 .song-title { color: var(--text); }
+.song-spacer .song-row { cursor: default; user-select: none; }
+.song-spacer .song-row.current .song-title { color: var(--accent); font-weight: 600; }
+.now-playing { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr) 110px; gap: 18px; align-items: center; padding: 10px 20px; border-top: 1px solid var(--border); background: var(--surface); }
+.now-playing[hidden] { display: none; }
+.np-text p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-title { font-weight: 600; font-size: 13px; }
+.np-artist { font-size: 12px; }
+.np-controls { display: flex; align-items: center; gap: 6px; }
+.np-btn svg { width: 14px; height: 14px; fill: currentColor; }
+.np-play { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--text); color: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.np-play svg { width: 14px; height: 14px; fill: currentColor; }
+.np-play .i-play, .np-play.paused .i-pause { display: none; }
+.np-play.paused .i-play { display: block; }
+.np-progress { display: flex; align-items: center; gap: 8px; }
+.np-time { font-size: 11px; font-variant-numeric: tabular-nums; min-width: 34px; text-align: center; }
+.np-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-muted); cursor: pointer; position: relative; }
+.np-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.np-fill { height: 100%; width: 0; border-radius: 2px; background: var(--text-muted); }
+.np-volume { width: 100%; accent-color: var(--accent); }

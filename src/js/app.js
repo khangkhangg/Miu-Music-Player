@@ -3,9 +3,13 @@ import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
 import { folderItems, librarySummary } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
+import { nowPlaying, seekTarget } from './player.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
+let rawSongs = [];
+let songsById = new Map();
+let playerState = null;
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 const preference = 'system'; // becomes a setting in F5.5
@@ -34,6 +38,24 @@ if (invoke) {
   const scroller = document.getElementById('song-scroll');
   scroller.addEventListener('scroll', () => requestAnimationFrame(renderSongs), { passive: true });
   new ResizeObserver(() => renderSongs()).observe(scroller);
+
+  scroller.addEventListener('dblclick', e => {
+    const row = e.target.closest('.song-row');
+    if (row) invoke('play_songs', { ids: rawSongs.map(s => s.id), start: Number(row.dataset.index) });
+  });
+  window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
+  document.getElementById('np-play').addEventListener('click', () =>
+    invoke(playerState?.playing ? 'player_pause' : 'player_resume'));
+  document.getElementById('np-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));
+  document.getElementById('np-next').addEventListener('click', () => invoke('player_skip', { by: 1 }));
+  document.getElementById('np-bar').addEventListener('click', e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const song = songsById.get(playerState?.songId);
+    const ms = seekTarget((e.clientX - rect.left) / rect.width, song?.durationMs);
+    if (ms != null) invoke('player_seek', { ms });
+  });
+  document.getElementById('np-volume').addEventListener('input', e =>
+    invoke('player_volume', { volume: Number(e.target.value) / 100 }));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
   document.getElementById('add-folder').addEventListener('click', pickFolder);
   document.getElementById('empty-add-folder').addEventListener('click', pickFolder);
@@ -50,10 +72,30 @@ function addFolder(path) {
 
 function loadSongs() {
   invoke('list_songs').then(list => {
+    rawSongs = list;
+    songsById = new Map(list.map(s => [s.id, s]));
     songs = list.map(songRow);
     document.getElementById('song-spacer').style.height = `${songs.length * ROW_HEIGHT}px`;
     renderSongs();
   });
+}
+
+function showPlayer(event) {
+  const songChanged = event?.songId !== playerState?.songId;
+  playerState = event;
+  const np = nowPlaying(event, songsById);
+  const bar = document.getElementById('now-playing');
+  bar.hidden = !np;
+  if (songChanged) renderSongs();
+  if (!np) return;
+  document.getElementById('np-title').textContent = np.title;
+  document.getElementById('np-artist').textContent = np.artist;
+  document.getElementById('np-elapsed').textContent = np.elapsed;
+  document.getElementById('np-duration').textContent = np.duration;
+  document.getElementById('np-fill').style.width = `${np.progress * 100}%`;
+  const play = document.getElementById('np-play');
+  play.classList.toggle('paused', !np.playing);
+  play.setAttribute('aria-label', np.playing ? 'Pause' : 'Play');
 }
 
 function cell(text, cls) {
@@ -75,7 +117,8 @@ function renderSongs() {
   for (let i = start; i < end; i++) {
     const s = songs[i];
     const row = document.createElement('div');
-    row.className = 'song-row';
+    row.className = s.id === playerState?.songId ? 'song-row current' : 'song-row';
+    row.dataset.index = i;
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
     row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.duration, 'num muted'));
