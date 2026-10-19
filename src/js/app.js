@@ -6,6 +6,7 @@ import { songRow, visibleRange } from './songs.js';
 import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
+import { searchSongs } from './search.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 
@@ -14,6 +15,7 @@ let songs = [];
 let rawSongs = [];
 let shown = []; // rawSongs after the rating filter, in display order
 let activeFilter = 'all';
+let query = '';
 let songsById = new Map();
 let playerState = null;
 
@@ -80,6 +82,18 @@ if (invoke) {
     invoke('player_volume', { volume: Number(e.target.value) / 100 }));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
   document.getElementById('add-folder').addEventListener('click', pickFolder);
+  const search = document.getElementById('search');
+  search.addEventListener('input', () => {
+    query = search.value;
+    document.getElementById('song-scroll').scrollTop = 0;
+    refreshList();
+  });
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && search.value) { search.value = ''; search.dispatchEvent(new Event('input')); }
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); search.focus(); search.select(); }
+  });
   document.getElementById('empty-add-folder').addEventListener('click', pickFolder);
 }
 
@@ -101,7 +115,7 @@ function loadSongs() {
 }
 
 function refreshList() {
-  shown = filterSongs(rawSongs, activeFilter);
+  shown = searchSongs(filterSongs(rawSongs, activeFilter), query);
   songs = shown.map(songRow);
   document.getElementById('song-spacer').style.height = `${songs.length * ROW_HEIGHT}px`;
   renderChips();
