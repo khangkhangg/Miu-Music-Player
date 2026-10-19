@@ -1,3 +1,4 @@
+mod apple;
 mod util;
 
 use serde::Serialize;
@@ -16,6 +17,17 @@ fn app_info() -> AppInfo {
     }
 }
 
+#[tauri::command]
+fn check_prereqs() -> apple::locate::PrereqReport {
+    let report = apple::locate::PrereqReport::from(apple::locate::locate_on_system());
+    if report.ready {
+        log::info!("Apple DLLs found: {:?}", report.paths);
+    } else {
+        log::warn!("Apple DLLs missing: {:?}", report.missing);
+    }
+    report
+}
+
 pub fn run() {
     let logs = util::paths::logs_dir_in(&util::paths::appdata_root());
     if let Err(e) = util::log::init(&logs, log::LevelFilter::Info) {
@@ -24,7 +36,7 @@ pub fn run() {
     log::info!("Miu Music {} started", env!("CARGO_PKG_VERSION"));
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .invoke_handler(tauri::generate_handler![app_info, check_prereqs])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");
 }

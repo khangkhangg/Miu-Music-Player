@@ -42,7 +42,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   *Done when:* window opens with "No device connected" placeholder in light and dark.
 - [x] **F0.2 Logging**
   *Test first:* log dir resolves to `%APPDATA%\MiuMusic\logs`; files rotate at the size limit; old files pruned.
-- [ ] **F0.3 Prerequisite check**
+- [x] **F0.3 Prerequisite check**
   *Test first:* `find_apple_dlls` with a fake directory tree (temp dir) finds classic, Program Files and
   Store-app layouts; returns a clear "missing" result when absent.
 - [ ] **F0.4 Local SQLite**
