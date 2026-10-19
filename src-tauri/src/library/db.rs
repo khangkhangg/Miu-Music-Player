@@ -28,6 +28,19 @@ pub const MIGRATIONS: &[&str] = &[
      CREATE INDEX songs_folder ON songs(folder_id);",
     // 3: detected file format (F3.2), as `format::Format::name()`
     "ALTER TABLE songs ADD COLUMN format TEXT NOT NULL DEFAULT 'unknown';",
+    // 4: tags (F3.3); tags_read = 0 marks rows scanned before tags were read
+    "ALTER TABLE songs ADD COLUMN title TEXT;
+     ALTER TABLE songs ADD COLUMN artist TEXT;
+     ALTER TABLE songs ADD COLUMN album TEXT;
+     ALTER TABLE songs ADD COLUMN album_artist TEXT;
+     ALTER TABLE songs ADD COLUMN genre TEXT;
+     ALTER TABLE songs ADD COLUMN year INTEGER;
+     ALTER TABLE songs ADD COLUMN track_no INTEGER;
+     ALTER TABLE songs ADD COLUMN track_total INTEGER;
+     ALTER TABLE songs ADD COLUMN disc_no INTEGER;
+     ALTER TABLE songs ADD COLUMN duration_ms INTEGER;
+     ALTER TABLE songs ADD COLUMN has_artwork INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE songs ADD COLUMN tags_read INTEGER NOT NULL DEFAULT 0;",
 ];
 
 #[derive(Debug, thiserror::Error)]

@@ -91,7 +91,8 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   (create/rename/delete in a temp dir) update the library; nested/duplicate folders rejected.
 - [x] **F3.2 Content-based format detection** — *Test first:* a FLAC renamed `.mp3` is detected as FLAC.
   Done with file signatures in Rust (no ffprobe): MP3, AAC (ADTS + M4A), ALAC, FLAC, WAV, AIFF, Opus, Vorbis, WMA, APE, WavPack; non-audio content is skipped.
-- [ ] **F3.3 Tags + artwork** — *Test first:* fixtures with Vietnamese, CJK and RTL tags read exactly; artwork extracted.
+- [x] **F3.3 Tags + artwork** — *Test first:* fixtures with Vietnamese, CJK and RTL tags read exactly; artwork extracted.
+  Done with `lofty`; tags stored on scan (migration 4), read only for new/changed files. Benchmark: 500 tagged files in 81 ms (release), unchanged rescan 29 ms.
 - [ ] **F3.4 Conversion policy + Hi-res for iPhone** — *Test first:* table test format/bit depth/rate → action
   (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected.
 - [ ] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.

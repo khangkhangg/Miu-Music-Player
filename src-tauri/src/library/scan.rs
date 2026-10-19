@@ -8,6 +8,7 @@ use std::time::UNIX_EPOCH;
 
 use crate::library::db::Db;
 use crate::library::format::{detect_file, Format};
+use crate::library::tags::{read_tags, TrackTags};
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "m4a", "aac", "alac", "flac", "wav", "aif", "aiff", "ogg", "oga", "opus", "wma", "ape", "wv"];
 
@@ -63,46 +64,84 @@ pub fn scan_folder(root: &Path) -> Vec<FileEntry> {
 }
 
 /// Make the folder's rows in `songs` match `found`: insert new files, update changed ones
-/// (keeping rating), delete files that are gone. One transaction.
+/// (keeping rating), delete files that are gone. Tags are read only for new or changed files
+/// (and rows that never had them read). One transaction.
 pub fn reconcile(db: &Db, folder_id: i64, found: &[FileEntry], now_unix: u64) -> rusqlite::Result<ScanDiff> {
+    reconcile_with(db, folder_id, found, now_unix, |p| read_tags(p).unwrap_or_default())
+}
+
+struct Known {
+    id: i64,
+    size: i64,
+    mtime: i64,
+    format: String,
+    tags_read: bool,
+}
+
+pub fn reconcile_with(
+    db: &Db,
+    folder_id: i64,
+    found: &[FileEntry],
+    now_unix: u64,
+    read: impl Fn(&Path) -> TrackTags,
+) -> rusqlite::Result<ScanDiff> {
     let conn = db.conn();
     let tx = conn.unchecked_transaction()?;
-    let mut known: HashMap<String, (i64, i64, i64, String)> = HashMap::new();
+    let mut known: HashMap<String, Known> = HashMap::new();
     {
-        let mut stmt = tx.prepare("SELECT id, path, size, mtime, format FROM songs WHERE folder_id = ?1")?;
-        let rows = stmt.query_map([folder_id], |r| Ok((r.get::<_, String>(1)?.to_lowercase(), (r.get(0)?, r.get(2)?, r.get(3)?, r.get(4)?))))?;
+        let mut stmt = tx.prepare("SELECT id, path, size, mtime, format, tags_read FROM songs WHERE folder_id = ?1")?;
+        let rows = stmt.query_map([folder_id], |r| {
+            let k = Known { id: r.get(0)?, size: r.get(2)?, mtime: r.get(3)?, format: r.get(4)?, tags_read: r.get(5)? };
+            Ok((r.get::<_, String>(1)?.to_lowercase(), k))
+        })?;
         for row in rows {
-            let (path, v) = row?;
-            known.insert(path, v);
+            let (path, k) = row?;
+            known.insert(path, k);
         }
     }
     let mut diff = ScanDiff::default();
     for f in found {
         let path = f.path.to_string_lossy();
-        match known.remove(&path.to_lowercase()) {
+        let id = match known.remove(&path.to_lowercase()) {
             None => {
                 tx.execute(
                     "INSERT INTO songs (folder_id, path, size, mtime, added_at, format) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     rusqlite::params![folder_id, path, f.size as i64, f.mtime, now_unix as i64, f.format.name()],
                 )?;
                 diff.added += 1;
+                tx.last_insert_rowid()
             }
-            Some((id, size, mtime, format)) if size != f.size as i64 || mtime != f.mtime || format != f.format.name() => {
+            Some(k) if k.size != f.size as i64 || k.mtime != f.mtime || k.format != f.format.name() || !k.tags_read => {
                 tx.execute(
                     "UPDATE songs SET size = ?1, mtime = ?2, format = ?3 WHERE id = ?4",
-                    rusqlite::params![f.size as i64, f.mtime, f.format.name(), id],
+                    rusqlite::params![f.size as i64, f.mtime, f.format.name(), k.id],
                 )?;
                 diff.updated += 1;
+                k.id
             }
-            Some(_) => {}
-        }
+            Some(_) => continue,
+        };
+        store_tags(&tx, id, &read(&f.path))?;
     }
-    for (id, ..) in known.into_values() {
+    for Known { id, .. } in known.into_values() {
         tx.execute("DELETE FROM songs WHERE id = ?1", [id])?;
         diff.removed += 1;
     }
     tx.commit()?;
     Ok(diff)
+}
+
+fn store_tags(tx: &rusqlite::Transaction<'_>, id: i64, t: &TrackTags) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE songs SET title = ?1, artist = ?2, album = ?3, album_artist = ?4, genre = ?5, year = ?6,
+             track_no = ?7, track_total = ?8, disc_no = ?9, duration_ms = ?10, has_artwork = ?11, tags_read = 1
+         WHERE id = ?12",
+        rusqlite::params![
+            t.title, t.artist, t.album, t.album_artist, t.genre, t.year, t.track, t.track_total, t.disc,
+            t.duration_ms.map(|d| d as i64), t.has_artwork, id
+        ],
+    )?;
+    Ok(())
 }
 
 pub fn rescan_folder(db: &Db, folder_id: i64, root: &str, now_unix: u64) -> rusqlite::Result<ScanDiff> {
@@ -267,5 +306,91 @@ mod backfill_tests {
         assert_eq!(rescan_folder(&db, f.id, &f.path, 2).unwrap().updated, 1);
         let fmt: String = db.conn().query_row("SELECT format FROM songs", [], |r| r.get(0)).unwrap();
         assert_eq!(fmt, "flac");
+    }
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+    use crate::library::tags::fixtures::{silent_mp3, write_tags, Fields};
+    use crate::library::tags::TrackTags;
+    use lofty::tag::TagType;
+    use std::cell::Cell;
+
+    fn fields() -> Fields<'static> {
+        Fields { title: "Diễm xưa", artist: "Khánh Ly", album: "Trịnh Công Sơn", album_artist: "Khánh Ly", genre: "Nhạc Trịnh",
+                 year: "1970", track: 2, track_total: 10, disc: 1, cover: true }
+    }
+
+    fn row(db: &Db) -> (Option<String>, Option<String>, Option<i64>, Option<i64>, i64) {
+        db.conn()
+            .query_row("SELECT title, artist, year, track_no, has_artwork FROM songs", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))
+            .unwrap()
+    }
+
+    #[test]
+    fn new_songs_get_their_tags_stored() {
+        let d = tempfile::tempdir().unwrap();
+        write_tags(&silent_mp3(d.path(), "a.mp3"), TagType::Id3v2, &fields());
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        assert_eq!(row(&db), (Some("Diễm xưa".into()), Some("Khánh Ly".into()), Some(1970), Some(2), 1));
+    }
+
+    #[test]
+    fn unchanged_files_are_not_read_again() {
+        let d = tempfile::tempdir().unwrap();
+        silent_mp3(d.path(), "a.mp3");
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        let reads = Cell::new(0);
+        let reader = |_: &Path| { reads.set(reads.get() + 1); TrackTags::default() };
+        reconcile_with(&db, f.id, &scan_folder(d.path()), 1, reader).unwrap();
+        reconcile_with(&db, f.id, &scan_folder(d.path()), 2, reader).unwrap();
+        assert_eq!(reads.get(), 1);
+    }
+
+    #[test]
+    fn songs_scanned_before_tag_reading_get_tags_on_the_next_rescan() {
+        let d = tempfile::tempdir().unwrap();
+        write_tags(&silent_mp3(d.path(), "a.mp3"), TagType::Id3v2, &fields());
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        db.conn().execute("UPDATE songs SET title = NULL, artist = NULL, tags_read = 0", []).unwrap(); // as stored by F3.1/F3.2
+        assert_eq!(rescan_folder(&db, f.id, &f.path, 2).unwrap().updated, 1);
+        assert_eq!(row(&db).0.as_deref(), Some("Diễm xưa"));
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    use super::*;
+    use crate::library::folders::add_folder;
+    use crate::library::tags::fixtures::{silent_mp3, write_tags, Fields};
+    use lofty::tag::TagType;
+
+    /// Plan target: a 500-file folder scanned (with tags) in under 10 s. Run with --include-ignored.
+    #[test]
+    #[ignore]
+    fn scans_500_tagged_files_quickly() {
+        let d = tempfile::tempdir().unwrap();
+        for i in 0..500 {
+            let p = silent_mp3(d.path(), &format!("Bài hát {i:03}.mp3"));
+            write_tags(&p, TagType::Id3v2, &Fields { title: "Mùa thu", artist: "Ngọc Lan", album: "Album", album_artist: "Ngọc Lan",
+                genre: "Pop", year: "1990", track: 1, track_total: 1, disc: 1, cover: false });
+        }
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        let t = std::time::Instant::now();
+        let diff = rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        let first = t.elapsed();
+        let t = std::time::Instant::now();
+        rescan_folder(&db, f.id, &f.path, 2).unwrap();
+        println!("first scan of {} files: {first:?}; unchanged rescan: {:?}", diff.added, t.elapsed());
+        assert_eq!(diff.added, 500);
+        assert!(first.as_secs_f64() < 10.0);
     }
 }
