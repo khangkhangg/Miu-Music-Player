@@ -10,7 +10,7 @@ use std::sync::Arc;
 use libloading::os::windows::Library;
 
 use crate::apple::cf::{Cf, CfRef, CfValue, Ref};
-use crate::device::registry::{Interface, NotifyKind, RawEvent};
+use crate::device::registry::{short_udid, Interface, NotifyKind, RawEvent};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DeviceError {
@@ -144,11 +144,18 @@ pub fn watch(cf: Arc<Cf>, md: Arc<MobileDevice>) -> Result<Receiver<RawEvent>, D
         .name("apple-devices".into())
         .spawn(move || {
             for (kind, device) in note_rx {
-                let Some(udid) = md.udid(&cf, device.as_ptr()) else { continue };
+                let Some(udid) = md.udid(&cf, device.as_ptr()) else {
+                    log::warn!("device notification {kind:?} without a UDID");
+                    continue;
+                };
                 let interface = md.interface(device.as_ptr());
+                log::info!("device notification {kind:?} {} via {interface:?}", short_udid(&udid));
                 let event = match kind {
                     NotifyKind::Connected => {
-                        RawEvent::Connected { trusted: md.is_trusted(device.as_ptr()), udid, interface }
+                        let started = std::time::Instant::now();
+                        let trusted = md.is_trusted(device.as_ptr());
+                        log::info!("trust check for {} took {} ms", short_udid(&udid), started.elapsed().as_millis());
+                        RawEvent::Connected { trusted, udid, interface }
                     }
                     NotifyKind::Disconnected => RawEvent::Disconnected { udid, interface },
                     NotifyKind::Unsubscribed => continue,

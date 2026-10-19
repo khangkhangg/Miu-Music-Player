@@ -189,6 +189,8 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
 - `AMDeviceCopyDeviceIdentifier` → 24+ char UDID string; `AMDeviceGetInterfaceType` → 1 for USB.
 - Trust check `AMDeviceConnect` → `AMDeviceIsPaired` → `AMDeviceValidatePairing` → `AMDeviceDisconnect` reports
   trusted = true for this PC.
-- The first "connected" event came **~11 s** after subscribing (both in the test and in the app). Unknown whether
-  the delay is the notification itself or the trust check; measure in F1.4.
-- Unplug (msg 2) and re-plug while the app runs: verified 2026-10-20, card and log follow.
+- The first "connected" event comes **~11 s after subscribing**; the delay is in the notification itself
+  (trust check measured at 148-261 ms). Expect an 11 s "No device" moment at app start.
+- Unplug / re-plug verified 2026-10-20 (17:51-17:52Z): Disconnected (msg 2) arrives within the same millisecond
+  as the unplug is processed; re-plug Connected arrives a few seconds after plugging in; trust check 148 ms.
+  An earlier "verification" coincided with dev-mode app restarts, which reset the card the same way — check logs.
