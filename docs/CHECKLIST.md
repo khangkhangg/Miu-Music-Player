@@ -54,7 +54,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 ## Phase 1 – DLL spike (gate)
 - [x] **F2.1 DLL export map** — `apple/exports.rs` (`object` crate) + `cargo run --bin dll-exports`; required exports pinned and machine-tested.
   *Test first:* parses exports of a known system DLL (e.g. `kernel32.dll`) and finds `CreateFileW`.
-- [ ] **F1.1 DLL loader**
+- [x] **F1.1 DLL loader** — Store packages are copied to `%LOCALAPPDATA%MiuMusicpple<package>` (Windows blocks loading from WindowsApps); classic installs load in place.
   *Test first:* search-path builder orders registry → Program Files → WindowsApps; missing DLL → typed error.
 - [ ] **F1.2 CoreFoundation bridge**
   *Test first (hardware-free once DLL present, else `#[ignore]`):* round-trip String (incl. Vietnamese/CJK),

@@ -68,3 +68,114 @@ Other `AirTrafficHost.dll` exports worth knowing (names only, purpose guessed fr
 
 Next (F1.1/F1.2): find published signatures for these (open-source projects that call them), record each with source
 and confidence here before writing FFI declarations.
+
+## Loading the DLLs from the Store package (F1.1) — 2026-10-20
+
+- `LoadLibraryExW` on `…\WindowsApps\AppleInc.iTunes_…\CoreFoundation.dll` from our (unpackaged) process fails
+  with **error 5 (access denied)**, although `BUILTIN\Users` has RX on the file. The package files carry the
+  `S-1-19-512-4096` trust label; Windows blocks loading package binaries into non-package processes.
+  Confidence: high (reproduced with plain `LoadLibraryExW`).
+- **A private copy loads fine.** Copying the DLLs out and loading them with
+  `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` works for all three.
+  Needed set (transitive closure of imports found in the package, x64): `AMDS64\{MobileDevice, AirTrafficHost}.dll`
+  + root `CoreFoundation.dll, objc.dll, ASL.dll, libdispatch.dll, libicuin.dll, libicuuc.dll, icudt62.dll,
+  CFNetwork.dll, pthreadVC2.dll, zlib1.dll, libxml2.dll, SQLite3.dll` (~40 MB). VC runtime comes from the system.
+- The **Apple Mobile Device service from the Store package is running** (listening on `127.0.0.1:27015`), so the
+  copied `MobileDevice.dll` should reach the phone through it. Not yet verified with a device (F1.3).
+- Decision (user, 2026-10-20): **private copy** into `%LOCALAPPDATA%\MiuMusic\apple\<package folder name>\`, refreshed
+  when the package version changes. Classic `Common Files\Apple` installs are loaded in place. DLLs are never shipped.
+
+## Published signatures (research, 2026-10-20)
+
+Gathered by web research; nothing below is verified against our DLLs yet except that every name exists in our export
+map. Reading notes for our project:
+- The only published `ATHostConnection*` prototypes come from the **airlift** family of repos (macOS ObjC + Windows
+  ctypes ports) which drive a **"Book"** sync. Our **"Media"** (music) flow is assumed analogous but unproven.
+- The Grappa findings (S6) concern **iOS 27.x**. Our device runs **iOS 12.5.8**; whether it demands Grappa is unknown
+  (the 57-byte `integrity` blob in its DB suggests some signing happens) — find out in F2.2/F2.3 by logging messages.
+- Calling convention: `cdecl` (single convention on x64). All `*Ref` types are opaque pointers.
+
+Sources:
+- S1 airlift `cleanroom/host.m` — https://raw.githubusercontent.com/0xjohnnydev/airlift/main/cleanroom/host.m
+- S2 airlift `archive/original/Sources/airtraffic_host.m` — https://raw.githubusercontent.com/0xjohnnydev/airlift/main/archive/original/Sources/airtraffic_host.m
+- S3 AirCard-Windows `aircard/airtraffic.py` (x64 ctypes) — https://raw.githubusercontent.com/alrrstd/AirCard-Windows/main/aircard/airtraffic.py
+- S4 airlift-windows `airlift.py` (ctypes) — https://github.com/DahanGuy/airlift-windows
+- S5 ios-deploy `MobileDevice.h` — https://raw.githubusercontent.com/ios-control/ios-deploy/master/src/ios-deploy/MobileDevice.h
+- S6 AirliftSilence README (Grappa) — https://github.com/YiHoooong/AirliftSilence
+- S7 opendll AirTrafficHost export list (names only; page not fetchable directly)
+
+Confidence: high = 2+ independent sources agree; medium = one credible source; low = name only / inferred.
+
+### A) AirTrafficHost.dll
+
+| Function | Prototype | Sources | Confidence | Notes |
+|---|---|---|---|---|
+| ATHostConnectionCreate | `ATHostConnectionRef ATHostConnectionCreate(CFStringRef udid)` | S1–S4 | high | UDID as CFString |
+| ATHostConnectionCreateWithLibrary | not found | S7 | low | maybe `(CFStringRef udid, CFTypeRef library)` — do not rely on |
+| ATHostConnectionRelease | `void ATHostConnectionRelease(ATHostConnectionRef)` | S1–S4 | high | |
+| ATHostConnectionInvalidate | not found | S7 | low | probably `void (ATHostConnectionRef)` |
+| ATHostConnectionReadMessage | `CFDictionaryRef ATHostConnectionReadMessage(ATHostConnectionRef)` | S1–S4 | high | blocking; caller CFReleases |
+| ATHostConnectionSendHostInfo | `void ATHostConnectionSendHostInfo(ATHostConnectionRef, CFDictionaryRef hostInfo)` | S1–S4 | high | |
+| ATHostConnectionSendSyncRequest | `void ATHostConnectionSendSyncRequest(ATHostConnectionRef, CFArrayRef dataclasses, CFDictionaryRef anchors, CFDictionaryRef hostInfo)` | S1–S4 | high | e.g. `["Book"]`, anchors `{}` |
+| ATHostConnectionSendMetadataSyncFinished | `void ATHostConnectionSendMetadataSyncFinished(ATHostConnectionRef, CFDictionaryRef syncTypes, CFDictionaryRef anchors)` | S1–S4 | high | e.g. `{Book: 1}` |
+| ATHostConnectionSendAssetCompleted | `void ATHostConnectionSendAssetCompleted(ATHostConnectionRef, CFStringRef assetId, CFStringRef dataclass, CFStringRef devicePath)` | S1–S4 | high | after the file is staged over AFC |
+| ATHostConnectionSendFileBegin / SendFileProgress | not found | S7 | low | airlift never calls them |
+| ATHostConnectionGetGrappaSessionId | not found | S6, S7 | low | S6: returns 0 when no session |
+| ATHostConnectionSendMessage / SendPowerAssertion / GetCurrentSessionNumber | not found | S7 | low | |
+| ATCFMessageGetName | `CFStringRef ATCFMessageGetName(CFDictionaryRef msg)` | S1–S4 | high | |
+| ATCFMessageGetParam | `CFTypeRef ATCFMessageGetParam(CFDictionaryRef msg, CFStringRef key)` | S1–S4 | high | |
+| ATCFMessageCreate / GetSessionNumber | not found | — | low | |
+
+### B) MobileDevice.dll
+
+`mach_error_t` / `afc_error_t` are 32-bit int, 0 = success.
+
+| Function | Prototype | Sources | Confidence | Notes |
+|---|---|---|---|---|
+| AMDeviceNotificationSubscribe | `mach_error_t (am_device_notification_callback cb, unsigned u0, unsigned u1, void *ctx, am_device_notification **out)` | S1, S5 | medium | S5/S1 use `…WithOptions` (+ trailing `CFDictionaryRef`, pass NULL) |
+| callback | `void (*)(struct am_device_notification_callback_info *info, void *ctx)` | S5 | high | |
+| am_device_notification_callback_info | `{ struct am_device *dev; unsigned int msg; }` packed | S5 | high | msg 1 = connected, 2 = disconnected, 3 = unsubscribed |
+| AMDeviceConnect / Disconnect / ValidatePairing / StartSession / StopSession | `mach_error_t (struct am_device *)` | S1, S5 | high | |
+| AMDeviceIsPaired | `int (struct am_device *)` | S1, S5 | high | |
+| AMDeviceCopyValue | `CFTypeRef (struct am_device *, CFStringRef domain /*NULL*/, CFStringRef key)` | S1, S5 | high | caller releases |
+| AMDeviceCopyDeviceIdentifier | `CFStringRef (struct am_device *)` | S1 | medium | UDID |
+| AMDeviceSecureStartService | `mach_error_t (struct am_device *, CFStringRef service, CFDictionaryRef opts, ServiceConnRef *out)` | S1 | high | modern path, returns AMDServiceConnection |
+| AMDeviceStartService | `mach_error_t (struct am_device *, CFStringRef service, ServiceConnRef *out, unsigned *unknown)` | S5 | medium | older path |
+| AMDServiceConnectionGetSocket | `int (ServiceConnRef)` | S1, S5 | high | |
+| AFCConnectionOpen | `afc_error_t (ServiceConnRef or int socket, unsigned io_timeout, AFCConnectionRef *out)` | S1, S5 | high | **first arg depends on start-service path** — ServiceConnRef (8 bytes on x64) with SecureStartService |
+| AFCDirectoryOpen | `afc_error_t (AFCConnectionRef, const char *path, afc_directory **dir)` | S1, S5 | high | |
+| AFCDirectoryRead | `afc_error_t (AFCConnectionRef, afc_directory *, char **entry)` | S1, S5 | high | NULL entry = end |
+| AFCDirectoryClose | `afc_error_t (AFCConnectionRef, afc_directory *)` | S1, S5 | high | |
+| AFCFileRefOpen | `afc_error_t (AFCConnectionRef, const char *path, uint64 mode, afc_file_ref *ref)` | S1, S5 | high | mode 1 read, 2 write, 3 rw |
+| AFCFileRefRead | `afc_error_t (AFCConnectionRef, afc_file_ref, void *buf, size_t *len)` | S1, S5 | high | len in/out, 8 bytes on x64 |
+| AFCFileRefWrite | `afc_error_t (AFCConnectionRef, afc_file_ref, const void *buf, size_t len)` | S1, S5 | high | |
+| AFCFileRefClose | `afc_error_t (AFCConnectionRef, afc_file_ref)` | S1, S5 | high | |
+| AFCRemovePath | `afc_error_t (AFCConnectionRef, const char *path)` | S1, S5 | high | |
+| AFCRenamePath | `afc_error_t (AFCConnectionRef, const char *from, const char *to)` | S5 | medium | |
+| AFCFileInfoOpen / AFCKeyValueRead / AFCKeyValueClose | `(AFCConnectionRef, const char *, afc_dictionary **)` / `(afc_dictionary *, char **key, char **val)` / `(afc_dictionary *)` | S1 | high | |
+
+### C) CoreFoundation on Windows
+- Notification callbacks are delivered through the CF run loop: run `CFRunLoopRun`/`CFRunLoopRunInMode` on the
+  subscribing thread (S1, macOS — verify on Windows). Confidence: medium.
+- Build CFStrings with `CFStringCreateWithCString(NULL, s, kCFStringEncodingUTF8)` and release them (S3, S4). Medium.
+- No source calls `__CFInitialize` manually. Medium.
+
+### Message flow seen in sources (Book sync, S1–S4)
+1. `ATHostConnectionCreate(udid)` → read messages until **`SyncAllowed`** (`SyncFailed` = abort).
+2. `SendHostInfo(hostInfo)` → `SendSyncRequest(["Book"], {}, hostInfo)` → read until **`ReadyForSync`**.
+3. `SendMetadataSyncFinished({Book: 1}, {})` → read **`AssetManifest`** (param `AssetManifest`: dataclass → array
+   of `{AssetID, IsDownload}`) until **`SyncFinished`** / `SyncFailed`.
+4. Copy each file over **AFC**, then `SendAssetCompleted(assetId, "Book", devicePath)`; finally `Release`.
+
+Grappa (S6, iOS 27.x): the device advertises `GrappaSupportInfo` and fails with `SyncFailed {ErrorCode: 4}` without a
+Grappa session; the DLL does not create one by itself. Mechanism unpublished.
+
+### Open questions
+1. Prototypes still unknown: `CreateWithLibrary`, `GetGrappaSessionId`, `Invalidate`, `SendFileBegin`, `SendFileProgress`,
+   `SendMessage`, `SendPowerAssertion`, `GetCurrentSessionNumber`, `ATCFMessageCreate`, `ATCFMessageGetSessionNumber`.
+2. Does a Media sync stream files with `SendFileBegin`/`Progress`, or stage over AFC then `SendAssetCompleted`?
+3. `HostInfo`, `SyncRequest` and anchor contents for the `"Media"` dataclass.
+4. Plain `AMDeviceNotificationSubscribe` (exported) vs `…WithOptions`: check arg count on 1860.2.5.1.
+5. `AFCConnectionOpen` first argument with `AMDeviceSecureStartService` on our DLL.
+6. CF run loop needed for notifications on Windows?
+7. Does iOS 12.5.8 require Grappa?
