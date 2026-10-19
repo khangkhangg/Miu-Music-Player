@@ -94,6 +94,8 @@ pub fn run() {
             audio::service::player_volume,
             audio::service::player_skip,
             windows::open_main,
+            windows::mini_on_top,
+            windows::set_mini_on_top,
             windows::set_mini_on_minimize,
         ])
         .run(tauri::generate_context!())

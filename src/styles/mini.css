@@ -21,3 +21,4 @@ body { font-family: var(--font); background: var(--surface); color: var(--text);
 .mini-play { width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--text); color: var(--surface); display: grid; place-items: center; cursor: pointer; }
 .mini-play .i-play, .mini-play.paused .i-pause { display: none; }
 .mini-play.paused .i-play { display: block; }
+.pin.on { color: var(--accent); }

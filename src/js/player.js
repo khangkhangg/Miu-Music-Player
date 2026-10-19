@@ -20,3 +20,8 @@ export function seekTarget(fraction, durationMs) {
   if (!durationMs) return null;
   return Math.round(Math.min(1, Math.max(0, fraction)) * durationMs);
 }
+
+/** Mini player pin (F7.5): state and the label for what a click will do. */
+export function pinButton(onTop) {
+  return { pressed: Boolean(onTop), label: onTop ? 'Stop keeping on top' : 'Keep on top of other windows' };
+}
