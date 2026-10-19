@@ -10,6 +10,8 @@ use miu_music_lib::apple::afc::Afc;
 use miu_music_lib::apple::airtraffic::{AirTraffic, HandshakeEvent};
 use miu_music_lib::apple::cf::Cf;
 use miu_music_lib::apple::device::{watch, MobileDevice};
+use miu_music_lib::apple::syslog_relay::SyslogRelay;
+use miu_music_lib::device::syslog::is_sync_related;
 use miu_music_lib::device::registry::{Interface, RawEvent};
 use miu_music_lib::library::db::Db;
 use miu_music_lib::sync::atc_log::CaptureLog;
@@ -52,6 +54,16 @@ fn main() {
     let info = host_info(&id);
     println!("HostInfo: {}", info.to_json());
 
+    // Phone log, captured during the handshake (read-only service).
+    let device = handles.get(&udid).unwrap_or_else(|| fail("iPhone unplugged"));
+    let relay = SyslogRelay::start(&cf, &md, &device).unwrap_or_else(|e| fail(&e));
+    let syslog = std::thread::spawn(move || {
+        let mut lines = Vec::new();
+        relay.read_for(Duration::from_secs(14), |l| lines.push(l));
+        lines
+    });
+    std::thread::sleep(Duration::from_millis(500));
+
     let ath = AirTraffic::new(dlls.air_traffic_host).unwrap_or_else(|e| fail(&e.to_string()));
     let mut log = CaptureLog::create(Path::new("../research/captures"), now_unix()).unwrap_or_else(|e| fail(&e.to_string()));
     let outcome = ath
@@ -64,6 +76,17 @@ fn main() {
         })
         .unwrap_or_else(|e| fail(&e.to_string()));
     println!("outcome: {outcome:?}  (capture: {})", log.path().display());
+
+    let lines = syslog.join().unwrap_or_default();
+    let syslog_path = log.path().with_file_name(
+        log.path().file_name().unwrap().to_string_lossy().replace("-atc.jsonl", "-syslog.txt"),
+    );
+    std::fs::write(&syslog_path, lines.join("\n")).unwrap_or_else(|e| fail(&e.to_string()));
+    let related: Vec<&String> = lines.iter().filter(|l| is_sync_related(l)).collect();
+    println!("phone log: {} lines, {} sync-related -> {}", lines.len(), related.len(), syslog_path.display());
+    for l in related {
+        println!("  {l}");
+    }
 
     std::thread::sleep(Duration::from_secs(3)); // let the phone settle after the aborted session
     let (after, songs_after) = take_backup("after");
