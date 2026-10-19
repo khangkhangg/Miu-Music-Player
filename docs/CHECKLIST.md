@@ -36,7 +36,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 ## Phase 0 – Setup and safety
 - [x] **Toolchain** — Rust (rustup, MSVC target), VS Build Tools C++ workload, Tauri CLI, Python not required.
   *Done when:* `cargo --version`, `cargo tauri --version` work.
-- [ ] **F0.1 Skeleton + theme tokens**
+- [x] **F0.1 Skeleton + theme tokens**
   *Test first:* Rust — app builds and a `app_info` command returns name "Miu Music" + version;
   JS — `theme.resolve('system', prefersDark)` picks light/dark; tokens file defines every token for both themes.
   *Done when:* window opens with "No device connected" placeholder in light and dark.
