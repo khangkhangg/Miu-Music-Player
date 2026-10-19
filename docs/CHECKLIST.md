@@ -70,6 +70,11 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **Gate decision:** stay Rust FFI / switch device layer to C# helper. → **Stay with Rust FFI** (user, 2026-10-20): every Phase 1 call works from Rust.
 
 ## Phase 2 – One-track sync (gate)
+
+> **Paused 2026-10-20.** The phone requires a Grappa (FairPlay) session that Apple's AirTrafficHost only creates
+> with a properly installed CoreFP. We don't reverse-engineer or bypass that, and Miu doesn't change Apple's system
+> configuration (CLAUDE.md rule 10). Revisit with a standard Apple install, or decide on FB.2. Details:
+> AIRTRAFFIC_NOTES.md. Work continues on the PC side (Phase 3+).
 - [ ] **F2.3 Sync session handshake** — *Test first:* session state machine accepts the recorded message
   Status 2026-10-20: handshake built and run once; phone replies `SyncFailed {ErrorCode: 4}` (likely Grappa). Blocked.
   sequence from `research/captures` (replayed as a sanitized fixture) and rejects out-of-order messages.

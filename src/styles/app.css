@@ -34,3 +34,16 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .storage-bar { height: 6px; border-radius: 3px; background: var(--surface-muted); overflow: hidden; }
 .storage-used { height: 100%; width: 0; background: var(--accent); }
 .storage-label { font-size: 11px !important; margin-top: 4px !important; }
+.section-row { display: flex; align-items: center; justify-content: space-between; }
+.icon-btn { font: inherit; background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: 6px; width: 22px; height: 22px; line-height: 1; padding: 0; }
+.icon-btn:hover { background: var(--surface-muted); color: var(--text); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.folder-list { list-style: none; margin: 0; padding: 0; }
+.folder-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: var(--radius); font-size: 13px; }
+.folder-item:hover { background: var(--surface-muted); }
+.folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-count { font-size: 12px; }
+.folder-remove { visibility: hidden; }
+.folder-item:hover .folder-remove, .folder-remove:focus-visible { visibility: visible; }
+.folder-error { font-size: 12px; color: var(--danger); margin: 4px 10px; }
+.folder-error[hidden], .empty-state[hidden] { display: none; }

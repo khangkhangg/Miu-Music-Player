@@ -17,6 +17,12 @@
         <a class="nav-item">Albums</a>
         <a class="nav-item">Artists</a>
       </nav>
+      <div class="section-label section-row">
+        <span>Watched folders</span>
+        <button class="icon-btn" id="add-folder" type="button" title="Add a folder" aria-label="Add a folder">+</button>
+      </div>
+      <ul class="folder-list" id="folder-list"></ul>
+      <p class="folder-error" id="folder-error" role="alert" hidden></p>
       <div class="section-label">Device</div>
       <div class="device-card empty" id="device-card" aria-live="polite">
         <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="34" r="2"/></svg>
@@ -36,10 +42,14 @@
         <p class="notice-body"></p>
         <p class="notice-detail muted"></p>
       </div>
-      <div class="empty-state">
+      <div class="empty-state" id="empty-state">
         <h1>Add your music</h1>
-        <p class="muted">Choose one or more folders to watch. Songs you like will sync to your iPhone.</p>
-        <button class="primary" type="button">Add folder</button>
+        <p class="muted">Choose one or more folders to watch, or drop them here. Miu keeps up with new and removed songs.</p>
+        <button class="primary" id="empty-add-folder" type="button">Add folder</button>
+      </div>
+      <div class="empty-state" id="library-summary" hidden>
+        <h1>Songs</h1>
+        <p class="muted" id="library-summary-text"></p>
       </div>
       <footer class="status muted" id="app-version"></footer>
     </main>

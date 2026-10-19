@@ -10,6 +10,22 @@ use serde::Serialize;
 pub const MIGRATIONS: &[&str] = &[
     // 1: key/value settings
     "CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL) STRICT;",
+    // 2: watched folders and the songs found in them (F3.1); tags come in a later migration
+    "CREATE TABLE watched_folders (
+         id INTEGER PRIMARY KEY,
+         path TEXT NOT NULL UNIQUE COLLATE NOCASE,
+         added_at INTEGER NOT NULL
+     ) STRICT;
+     CREATE TABLE songs (
+         id INTEGER PRIMARY KEY,
+         folder_id INTEGER NOT NULL REFERENCES watched_folders(id) ON DELETE CASCADE,
+         path TEXT NOT NULL UNIQUE COLLATE NOCASE,
+         size INTEGER NOT NULL,
+         mtime INTEGER NOT NULL,
+         rating INTEGER NOT NULL DEFAULT 0 CHECK (rating IN (-1, 0, 1)),
+         added_at INTEGER NOT NULL
+     ) STRICT;
+     CREATE INDEX songs_folder ON songs(folder_id);",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -51,6 +67,11 @@ impl Db {
     fn init(conn: &mut Connection) -> Result<()> {
         conn.pragma_update(None, "foreign_keys", true)?;
         migrate(conn, MIGRATIONS)
+    }
+
+    /// For library modules in this crate that run their own queries.
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.conn
     }
 
     pub fn schema_version(&self) -> Result<i64> {

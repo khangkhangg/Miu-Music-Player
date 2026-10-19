@@ -44,24 +44,40 @@ pub fn run() {
     }
     log::info!("Miu Music {} started", env!("CARGO_PKG_VERSION"));
 
-    let mut builder = tauri::Builder::default();
     let db_path = util::paths::db_path_in(&util::paths::appdata_root());
-    match library::db::Db::open(&db_path) {
+    let db = match library::db::Db::open(&db_path) {
         Ok(db) => {
             log::info!("database ready: {} (schema v{})", db_path.display(), db.schema_version().unwrap_or(-1));
-            builder = builder.manage(std::sync::Mutex::new(db));
+            db
         }
-        Err(e) => log::error!("database unavailable at {}: {e}", db_path.display()),
-    }
+        Err(e) => {
+            // Keep the app usable this session; nothing will be saved.
+            log::error!("database unavailable at {}: {e}; using a temporary in-memory one", db_path.display());
+            library::db::Db::open_in_memory().expect("in-memory database")
+        }
+    };
+    let db: library::service::SharedDb = std::sync::Arc::new(std::sync::Mutex::new(db));
+    let library_watch = std::sync::Arc::new(library::service::LibraryWatch::default());
 
     let registry = device::service::SharedRegistry::default();
-    builder
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(registry.clone())
+        .manage(db.clone())
+        .manage(library_watch.clone())
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
+            library::service::start(app.handle().clone(), db, library_watch);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app_info, check_prereqs, list_devices])
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            check_prereqs,
+            list_devices,
+            library::service::list_folders,
+            library::service::add_folder,
+            library::service::remove_folder,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");
 }
