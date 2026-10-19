@@ -262,3 +262,31 @@ Backups at 18:09:54Z and 18:21:50Z bracket the F2.2 capture runs. db-diff: only 
 **`MPDateLastSynced` 814114539 → 814126261 = 2026-10-19 18:11:01 UTC**, the moment the capture test ran.
 So opening an ATC connection (without HostInfo or SyncRequest) makes iOS record a sync. Songs untouched (69).
 Confidence: high on the change, medium on the cause (timing matches; nothing else touched the phone).
+
+## Media sync handshake (F2.3) — 2026-10-20 18:27Z, run once with approval
+
+Sent exactly the payloads in `docs/plans/F2.3-sync-handshake.md` (LibraryID `31140337351CE5CE`, kept in settings).
+
+| ms | dir | message |
+|---|---|---|
+| 515 | ← | InstalledAssets |
+| 516 | ← | AssetMetrics |
+| 516 | ← | SyncAllowed (Id 758) |
+| 519 | → | HostInfo |
+| 3564 | → | SyncRequest(["Media"], {}, HostInfo) |
+| 3584 | ← | **SyncFailed { ErrorCode: 4 }** (Id 759) |
+
+- Phone DB **unchanged**: backups 18:27:27Z and 18:27:40Z, db-diff "no differences", 69 → 69 songs
+  (not even `MPDateLastSynced` moved this time).
+- **ErrorCode 4 = the Grappa failure signature reported in S6** ("Grappa session could not be established").
+  Correction to the F2.2 note: `SyncAllowed` has no `GrappaSupportInfo` on iOS 12.5.8, but the phone still
+  refuses the sync — it most likely requires a Grappa session in HostInfo. Confidence: medium (same code as S6;
+  not yet confirmed from the phone's own log).
+- The refusal came 20 ms after the request: the phone checks HostInfo/SyncRequest up front, before any data.
+
+Next questions:
+1. Confirm the cause from the phone's syslog (`com.apple.syslog_relay` over the same AFC-style service start).
+2. How iTunes / 3uTools obtain the Grappa session on Windows: `ATHostConnectionGetGrappaSessionId` (signature
+   unknown), the `CoreFP` component (`HKLM\SOFTWARE\Apple Inc.\CoreFP` exists on this PC), and which HostInfo key
+   carries it.
+3. If Grappa is out of reach → Phase 2 gate: FB.1 (direct DB write) or FB.2 (player-app Documents).

@@ -71,6 +71,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 
 ## Phase 2 – One-track sync (gate)
 - [ ] **F2.3 Sync session handshake** — *Test first:* session state machine accepts the recorded message
+  Status 2026-10-20: handshake built and run once; phone replies `SyncFailed {ErrorCode: 4}` (likely Grappa). Blocked.
   sequence from `research/captures` (replayed as a sanitized fixture) and rejects out-of-order messages.
 - [ ] **F2.4 Track metadata** — *Test first:* `Track` → metadata dictionary matches the captured format.
 - [ ] **F2.5 File transfer + progress** — *Test first:* progress events are monotonic and end at 100 %.
