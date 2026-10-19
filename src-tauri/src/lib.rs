@@ -1,4 +1,5 @@
 mod apple;
+mod library;
 mod util;
 
 use serde::Serialize;
@@ -35,7 +36,17 @@ pub fn run() {
     }
     log::info!("Miu Music {} started", env!("CARGO_PKG_VERSION"));
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    let db_path = util::paths::db_path_in(&util::paths::appdata_root());
+    match library::db::Db::open(&db_path) {
+        Ok(db) => {
+            log::info!("database ready: {} (schema v{})", db_path.display(), db.schema_version().unwrap_or(-1));
+            builder = builder.manage(std::sync::Mutex::new(db));
+        }
+        Err(e) => log::error!("database unavailable at {}: {e}", db_path.display()),
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![app_info, check_prereqs])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");

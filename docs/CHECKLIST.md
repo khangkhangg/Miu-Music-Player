@@ -45,8 +45,9 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F0.3 Prerequisite check**
   *Test first:* `find_apple_dlls` with a fake directory tree (temp dir) finds classic, Program Files and
   Store-app layouts; returns a clear "missing" result when absent.
-- [ ] **F0.4 Local SQLite**
+- [x] **F0.4 Local SQLite**
   *Test first:* migrations create schema from empty; re-running is a no-op; settings round-trip.
+  Scope: migration runner + settings table. Songs (F3) and sync history (F4) are added as new migrations.
 - [ ] Research files copied into `research/db-baseline/` (gitignored, never in tests).
 - [ ] CI: GitHub Actions on `windows-latest` running `cargo test` + `node --test`.
 

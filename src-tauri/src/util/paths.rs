@@ -10,6 +10,10 @@ pub fn logs_dir_in(appdata: &Path) -> PathBuf {
     app_data_dir_in(appdata).join("logs")
 }
 
+pub fn db_path_in(appdata: &Path) -> PathBuf {
+    app_data_dir_in(appdata).join("miumusic.db")
+}
+
 /// `%APPDATA%\MiuMusic`, falling back to the temp dir if APPDATA is unset.
 pub fn appdata_root() -> PathBuf {
     std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir)
@@ -24,6 +28,12 @@ mod tests {
     fn app_data_dir_is_miumusic_under_appdata() {
         let base = Path::new(r"C:\Users\x\AppData\Roaming");
         assert_eq!(app_data_dir_in(base), base.join("MiuMusic"));
+    }
+
+    #[test]
+    fn database_file_is_in_app_data_dir() {
+        let base = Path::new(r"C:\Users\x\AppData\Roaming");
+        assert_eq!(db_path_in(base), base.join("MiuMusic").join("miumusic.db"));
     }
 
     #[test]
