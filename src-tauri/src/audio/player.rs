@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -41,9 +42,15 @@ struct Shared {
     played: AtomicU64,
 }
 
+/// The most recent samples the device played (mono, before volume), for the visualizer.
+type Tap = Arc<Mutex<VecDeque<f32>>>;
+const TAP_LEN: usize = 2048;
+
 pub struct Player {
     tx: Sender<Cmd>,
     status: Arc<Mutex<Status>>,
+    tap: Tap,
+    rate: u32,
 }
 
 impl Player {
@@ -53,12 +60,14 @@ impl Player {
         let status = Arc::new(Mutex::new(Status { volume: 1.0, ..Default::default() }));
         let (ready_tx, ready_rx) = mpsc::channel();
         let engine_status = status.clone();
+        let tap: Tap = Arc::new(Mutex::new(VecDeque::with_capacity(TAP_LEN * 2)));
+        let engine_tap = tap.clone();
         std::thread::Builder::new()
             .name("audio-engine".into())
-            .spawn(move || engine(rx, engine_status, ready_tx))
+            .spawn(move || engine(rx, engine_status, engine_tap, ready_tx))
             .map_err(|e| AudioError(e.to_string()))?;
-        ready_rx.recv().map_err(|_| AudioError("audio engine stopped".into()))??;
-        Ok(Self { tx, status })
+        let rate = ready_rx.recv().map_err(|_| AudioError("audio engine stopped".into()))??;
+        Ok(Self { tx, status, tap, rate })
     }
 
     pub fn play(&self, tracks: Vec<PathBuf>, start: usize) {
@@ -83,9 +92,17 @@ impl Player {
     pub fn status(&self) -> Status {
         self.status.lock().map(|s| s.clone()).unwrap_or_default()
     }
+    /// Output sample rate of the device.
+    pub fn rate(&self) -> u32 {
+        self.rate
+    }
+    /// The last ~2048 samples actually played, mono and before volume.
+    pub fn recent_mono(&self) -> Vec<f32> {
+        self.tap.lock().map(|t| t.iter().copied().collect()).unwrap_or_default()
+    }
 }
 
-fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, ready: Sender<Result<(), AudioError>>) {
+fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, tap: Tap, ready: Sender<Result<u32, AudioError>>) {
     let fail = |e: String| AudioError(e);
     let host = cpal::default_host();
     let Some(device) = host.default_output_device() else {
@@ -134,6 +151,15 @@ fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, ready: Sender<Result<()
             }
             out[n..].fill(0.0);
             cb.played.fetch_add((n / channels) as u64, Ordering::AcqRel);
+            // Never wait in the audio callback: skip the tap if the visualizer is reading it.
+            if let Ok(mut t) = tap.try_lock() {
+                let undo = if vol > 1e-3 { 1.0 / vol } else { 0.0 };
+                for frame in out[..n].chunks_exact(channels) {
+                    t.push_back(frame.iter().sum::<f32>() / channels as f32 * undo);
+                }
+                let extra = t.len().saturating_sub(TAP_LEN);
+                t.drain(..extra);
+            }
         },
         |e| log::warn!("audio output error: {e}"),
         None,
@@ -150,7 +176,7 @@ fn engine(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, ready: Sender<Result<()
         return;
     }
     log::info!("audio output: {} Hz, {channels} ch ({:?})", rate, config.sample_format());
-    let _ = ready.send(Ok(()));
+    let _ = ready.send(Ok(rate));
 
     let mut feeder: Option<Feeder> = None;
     let mut tracks: Vec<PathBuf> = Vec::new();
@@ -271,7 +297,8 @@ mod tests {
     #[ignore]
     fn plays_pauses_and_seeks_on_the_default_device() {
         let d = tempfile::tempdir().unwrap();
-        let p = wav(d.path(), "t.wav", 44_100, 2, 16, 44_100 * 3);
+        // Mono: the stereo fixture is +v / -v, which cancels out when the tap mixes to mono.
+        let p = wav(d.path(), "t.wav", 44_100, 1, 16, 44_100 * 3);
         let player = Player::start().expect("audio device");
         player.set_volume(0.05);
         player.play(vec![p], 0);
@@ -281,6 +308,9 @@ mod tests {
         assert!(s.playing);
         assert_eq!(s.track, Some(0));
         assert!((300..1500).contains(&s.position_ms), "position {}", s.position_ms);
+        let tap = player.recent_mono();
+        assert_eq!(tap.len(), 2048, "visualizer tap holds the last 2048 samples");
+        assert!(tap.iter().any(|v| v.abs() > 0.05), "tap carries the played signal (before volume)");
 
         player.pause();
         std::thread::sleep(Duration::from_millis(200));

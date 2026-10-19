@@ -50,6 +50,18 @@ impl PlayerHandle {
         PlayerEvent { available: true, playing: s.playing, song_id, position_ms: s.position_ms, volume: s.volume }
     }
 
+    pub fn rate(&self) -> Option<u32> {
+        self.player.as_ref().map(Player::rate)
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.player.as_ref().is_some_and(|p| p.status().playing)
+    }
+
+    pub fn recent_mono(&self) -> Vec<f32> {
+        self.player.as_ref().map(Player::recent_mono).unwrap_or_default()
+    }
+
     fn with_player(&self, f: impl FnOnce(&Player)) -> Result<(), String> {
         self.player.as_ref().map(f).ok_or_else(|| "no audio output device".to_string())
     }

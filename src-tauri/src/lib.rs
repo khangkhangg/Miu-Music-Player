@@ -59,6 +59,7 @@ pub fn run() {
             library::db::Db::open_in_memory().expect("in-memory database")
         }
     };
+    let visualizer_on: audio::visualizer::VisualizerOn = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(settings::visualizer_on(&db)));
     let db: library::service::SharedDb = std::sync::Arc::new(std::sync::Mutex::new(db));
     let library_watch = std::sync::Arc::new(library::service::LibraryWatch::default());
 
@@ -70,11 +71,13 @@ pub fn run() {
         .manage(db.clone())
         .manage(library_watch.clone())
         .manage(player.clone())
+        .manage(visualizer_on.clone())
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db, library_watch);
-            audio::service::start(app.handle().clone(), player);
+            audio::service::start(app.handle().clone(), player.clone());
+            audio::visualizer::start(app.handle().clone(), player, visualizer_on);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -94,6 +97,9 @@ pub fn run() {
             audio::service::player_volume,
             audio::service::player_skip,
             windows::open_main,
+            audio::visualizer::visualizer_settings,
+            audio::visualizer::set_visualizer_on,
+            audio::visualizer::set_visualizer_style,
             windows::mini_on_top,
             windows::set_mini_on_top,
             windows::set_mini_on_minimize,
