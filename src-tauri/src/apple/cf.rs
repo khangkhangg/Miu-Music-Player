@@ -51,6 +51,9 @@ impl CfRef {
     }
 }
 
+// SAFETY: CFRetain/CFRelease are thread-safe, so an owned reference may move between threads.
+unsafe impl Send for CfRef {}
+
 impl Drop for CfRef {
     fn drop(&mut self) {
         // SAFETY: we own exactly one retain on `ptr` (created or retained by us).
@@ -87,6 +90,7 @@ struct Fns {
     CFDictionaryCreate: unsafe extern "C" fn(Ref, *const Ref, *const Ref, isize, *const c_void, *const c_void) -> Ref,
     CFDictionaryGetCount: unsafe extern "C" fn(Ref) -> isize,
     CFDictionaryGetKeysAndValues: unsafe extern "C" fn(Ref, *mut Ref, *mut Ref),
+    CFRunLoopRun: unsafe extern "C" fn(),
 }
 
 struct TypeIds {
@@ -150,6 +154,7 @@ impl Cf {
             CFDictionaryCreate: sym!(lib, CFDictionaryCreate),
             CFDictionaryGetCount: sym!(lib, CFDictionaryGetCount),
             CFDictionaryGetKeysAndValues: sym!(lib, CFDictionaryGetKeysAndValues),
+            CFRunLoopRun: sym!(lib, CFRunLoopRun),
         };
         let type_id = |name: &str| -> Result<usize> {
             // SAFETY: `CF*GetTypeID` take no arguments and return the class id.
@@ -303,6 +308,18 @@ impl Cf {
         Ok(String::from_utf8_lossy(&buf).into_owned())
     }
 
+    /// Take an extra owner on a borrowed object (e.g. a device handed to a callback).
+    pub fn retain(&self, ptr: Ref) -> CfRef {
+        // SAFETY: `ptr` is a live CF object; the matching release happens in `CfRef::drop`.
+        CfRef { ptr: unsafe { (self.f.CFRetain)(ptr) }, release: self.f.CFRelease }
+    }
+
+    /// Run the current thread's CF run loop; returns only if the loop is stopped.
+    pub fn run_loop(&self) {
+        // SAFETY: no arguments; runs the calling thread's run loop.
+        unsafe { (self.f.CFRunLoopRun)() }
+    }
+
     pub fn retain_count(&self, ptr: Ref) -> isize {
         // SAFETY: `ptr` is a live CF object.
         unsafe { (self.f.CFGetRetainCount)(ptr) }
@@ -409,5 +426,22 @@ mod tests {
     #[ignore]
     fn null_pointer_is_an_error_not_a_crash() {
         assert!(cf().from_cf(std::ptr::null()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod retain_tests {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn retain_adds_one_owner_and_dropping_it_releases() {
+        let dlls = crate::apple::loader::load_from_system().expect("Apple DLLs");
+        let cf = Cf::new(dlls.core_foundation).unwrap();
+        let s = cf.to_cf(&CfValue::String("x".into())).unwrap();
+        let extra = cf.retain(s.as_ptr());
+        assert_eq!(cf.retain_count(s.as_ptr()), 2);
+        drop(extra);
+        assert_eq!(cf.retain_count(s.as_ptr()), 1);
     }
 }

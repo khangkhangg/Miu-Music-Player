@@ -179,3 +179,16 @@ Grappa session; the DLL does not create one by itself. Mechanism unpublished.
 5. `AFCConnectionOpen` first argument with `AMDeviceSecureStartService` on our DLL.
 6. CF run loop needed for notifications on Windows?
 7. Does iOS 12.5.8 require Grappa?
+
+## Device discovery (F1.3) — 2026-10-20, iPhone 5s iOS 12.5.8 over USB
+
+- `AMDeviceNotificationSubscribe(cb, 0, 0, ctx, &handle)` (5 args) returns 0 with the private-copy DLL. Callbacks
+  arrive on our subscribing thread while it runs `CFRunLoopRun()`; we never tested without the run loop
+  (answers open question 4; question 6 stays open). Confidence: high (works).
+- `am_device_notification_callback_info` read as packed `{ device*, u32 msg }`: msg 1 arrived for the plugged phone.
+- `AMDeviceCopyDeviceIdentifier` → 24+ char UDID string; `AMDeviceGetInterfaceType` → 1 for USB.
+- Trust check `AMDeviceConnect` → `AMDeviceIsPaired` → `AMDeviceValidatePairing` → `AMDeviceDisconnect` reports
+  trusted = true for this PC.
+- The first "connected" event came **~11 s** after subscribing (both in the test and in the app). Unknown whether
+  the delay is the notification itself or the trust check; measure in F1.4.
+- Not yet observed: unplug (msg 2) and re-plug while the app runs.

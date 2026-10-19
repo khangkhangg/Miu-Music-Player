@@ -25,3 +25,6 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .notice p { margin: 0; line-height: 1.5; }
 .notice-title { font-weight: 600; color: var(--danger); }
 .notice-detail { font-size: 12px; margin-top: 4px !important; }
+.device-card.ready .phone { stroke: var(--success); }
+.device-card.ready .device-detail { color: var(--success); }
+.device-card.untrusted .phone { stroke: var(--accent); }

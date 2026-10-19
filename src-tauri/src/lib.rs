@@ -1,4 +1,5 @@
 pub mod apple;
+mod device;
 mod library;
 mod util;
 
@@ -29,6 +30,12 @@ fn check_prereqs() -> apple::locate::PrereqReport {
     report
 }
 
+#[cfg(windows)]
+#[tauri::command]
+fn list_devices(registry: tauri::State<'_, device::service::SharedRegistry>) -> Vec<device::registry::Device> {
+    device::service::snapshot(&registry)
+}
+
 pub fn run() {
     let logs = util::paths::logs_dir_in(&util::paths::appdata_root());
     if let Err(e) = util::log::init(&logs, log::LevelFilter::Info) {
@@ -46,8 +53,14 @@ pub fn run() {
         Err(e) => log::error!("database unavailable at {}: {e}", db_path.display()),
     }
 
+    let registry = device::service::SharedRegistry::default();
     builder
-        .invoke_handler(tauri::generate_handler![app_info, check_prereqs])
+        .manage(registry.clone())
+        .setup(move |app| {
+            device::service::start(app.handle().clone(), registry);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![app_info, check_prereqs, list_devices])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");
 }
