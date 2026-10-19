@@ -1,0 +1,23 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font); background: var(--surface); color: var(--text); font-size: 13px; overflow: hidden; user-select: none; }
+.mini { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; height: 100%; }
+.mini-top { display: flex; align-items: flex-start; gap: 8px; }
+.mini-text { flex: 1; min-width: 0; }
+.mini-text p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-title { font-weight: 600; }
+.mini-artist { color: var(--text-muted); font-size: 12px; }
+.mini-bar { height: 4px; border-radius: 2px; background: var(--surface-muted); cursor: pointer; }
+.mini-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.mini-fill { height: 100%; width: 0; border-radius: 2px; background: var(--text-muted); }
+.mini-controls { display: flex; align-items: center; justify-content: space-between; }
+.mini-transport { display: flex; align-items: center; gap: 4px; }
+.icon-btn { font: inherit; background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: 6px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; }
+.icon-btn:hover { background: var(--surface-muted); color: var(--text); }
+.icon-btn:focus-visible, .mini-play:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.icon-btn svg, .mini-play svg { width: 14px; height: 14px; fill: currentColor; }
+.rate.on[data-act="like"] { color: var(--success); }
+.rate.on[data-act="dislike"] { color: var(--danger); }
+.mini-play { width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--text); color: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.mini-play .i-play, .mini-play.paused .i-pause { display: none; }
+.mini-play.paused .i-play { display: block; }

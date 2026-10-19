@@ -2,6 +2,8 @@ pub mod apple;
 pub mod audio;
 pub mod device;
 pub mod library;
+pub mod settings;
+mod windows;
 pub mod sync;
 pub mod util;
 
@@ -70,6 +72,7 @@ pub fn run() {
         .manage(player.clone())
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
+            windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db, library_watch);
             audio::service::start(app.handle().clone(), player);
             Ok(())
@@ -90,6 +93,8 @@ pub fn run() {
             audio::service::player_seek,
             audio::service::player_volume,
             audio::service::player_skip,
+            windows::open_main,
+            windows::set_mini_on_minimize,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");

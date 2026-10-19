@@ -36,3 +36,17 @@ test('chips show labels with counts and mark the active one', () => {
   assert.deepEqual(chips.map(c => c.active), [false, true, false, false]);
   assert.deepEqual(chips.map(c => c.id), ['all', 'liked', 'not-rated', 'disliked']);
 });
+
+import { applyRated } from '../../src/js/ratings.js';
+
+test('a rating announced by the other window updates this window\x27s copy', () => {
+  const byId = new Map([[1, { id: 1, rating: 0 }]]);
+  assert.equal(applyRated(byId, { id: 1, rating: 1 }), true);
+  assert.equal(byId.get(1).rating, 1);
+});
+
+test('an unchanged or unknown song is ignored', () => {
+  const byId = new Map([[1, { id: 1, rating: 1 }]]);
+  assert.equal(applyRated(byId, { id: 1, rating: 1 }), false);
+  assert.equal(applyRated(byId, { id: 9, rating: -1 }), false);
+});

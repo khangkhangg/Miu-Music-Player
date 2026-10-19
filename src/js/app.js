@@ -4,7 +4,7 @@ import { deviceCard } from './device.js';
 import { folderItems, librarySummary } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
 import { nowPlaying, seekTarget } from './player.js';
-import { nextRating, filterSongs, filterChips } from './ratings.js';
+import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 
 const ROW_HEIGHT = 36;
@@ -60,6 +60,7 @@ if (invoke) {
     });
   }
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
+  window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); });
   document.getElementById('np-play').addEventListener('click', () =>
     invoke(playerState?.playing ? 'player_pause' : 'player_resume'));
   document.getElementById('np-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));

@@ -65,10 +65,15 @@ pub fn list_songs(db: State<'_, SharedDb>) -> Result<Vec<crate::library::songs::
 
 /// `rating`: 1 liked, 0 not rated, -1 disliked.
 #[tauri::command]
-pub fn rate_song(id: i64, rating: i64, db: State<'_, SharedDb>) -> Result<(), String> {
-    let rating = crate::library::songs::Rating::from_value(rating).ok_or("rating must be -1, 0 or 1")?;
-    let d = db.lock().map_err(|e| e.to_string())?;
-    crate::library::songs::set_rating(&d, id, rating)
+pub fn rate_song(id: i64, rating: i64, app: AppHandle, db: State<'_, SharedDb>) -> Result<(), String> {
+    let value = crate::library::songs::Rating::from_value(rating).ok_or("rating must be -1, 0 or 1")?;
+    {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        crate::library::songs::set_rating(&d, id, value)?;
+    }
+    // Both windows (main and mini) keep their song lists in step.
+    let _ = app.emit("song-rated", serde_json::json!({ "id": id, "rating": rating }));
+    Ok(())
 }
 
 /// Move disliked songs' files to the Recycle Bin and remove them from the library.

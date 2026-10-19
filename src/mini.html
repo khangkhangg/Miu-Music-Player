@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Miu Music</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/mini.css">
+  <script type="module" src="js/mini.js"></script>
+</head>
+<body>
+  <div class="mini">
+    <div class="mini-top">
+      <div class="mini-text">
+        <p class="mini-title" id="mini-title" dir="auto">Nothing playing</p>
+        <p class="mini-artist" id="mini-artist" dir="auto">Double-click a song in Miu Music</p>
+      </div>
+      <button class="icon-btn" id="mini-open" type="button" aria-label="Open the full window" title="Open the full window">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5h-1.5V4.6L8.6 8.5 7.5 7.4l3.9-3.9H9zM2 4h5v1.5H3.5v7h7V9H12v5H2z"/></svg>
+      </button>
+    </div>
+    <div class="mini-bar" id="mini-bar" role="slider" aria-label="Position" tabindex="0"><div class="mini-fill" id="mini-fill"></div></div>
+    <div class="mini-controls">
+      <button class="icon-btn rate" id="mini-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>
+      </button>
+      <div class="mini-transport">
+        <button class="icon-btn" id="mini-prev" type="button" aria-label="Previous song">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg>
+        </button>
+        <button class="mini-play paused" id="mini-play" type="button" aria-label="Play">
+          <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
+          <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg>
+        </button>
+        <button class="icon-btn" id="mini-next" type="button" aria-label="Next song">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg>
+        </button>
+      </div>
+      <button class="icon-btn rate" id="mini-like" type="button" data-act="like" aria-label="Like" title="Like">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>
+      </button>
+    </div>
+  </div>
+</body>
+</html>

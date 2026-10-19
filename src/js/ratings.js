@@ -25,3 +25,11 @@ export function filterChips(list, active) {
   const counts = ratingCounts(list);
   return FILTERS.map(f => ({ id: f.id, label: `${f.name} ${counts[f.id]}`, active: f.id === active }));
 }
+
+/** Apply a `song-rated` event to this window's songs; returns whether anything changed. */
+export function applyRated(songsById, { id, rating }) {
+  const song = songsById.get(id);
+  if (!song || song.rating === rating) return false;
+  song.rating = rating;
+  return true;
+}

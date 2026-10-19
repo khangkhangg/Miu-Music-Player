@@ -16,6 +16,17 @@
         "height": 720,
         "minWidth": 720,
         "minHeight": 480
+      },
+      {
+        "label": "mini",
+        "url": "mini.html",
+        "title": "Miu Music",
+        "width": 340,
+        "height": 132,
+        "resizable": false,
+        "maximizable": false,
+        "visible": false,
+        "center": false
       }
     ],
     "security": {
@@ -25,6 +36,11 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ]
   }
 }

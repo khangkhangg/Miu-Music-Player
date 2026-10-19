@@ -1,0 +1,51 @@
+//! Main window ⇄ mini player (F7.4): minimizing the main window shows the mini player (setting
+//! `mini_on_minimize`); restoring it hides the mini player again. Closing the mini player hides it.
+
+use tauri::{AppHandle, Manager, State, WindowEvent};
+
+use crate::library::service::SharedDb;
+
+pub fn setup(app: &AppHandle, db: SharedDb) {
+    let (Some(main), Some(mini)) = (app.get_webview_window("main"), app.get_webview_window("mini")) else {
+        log::warn!("mini player window missing");
+        return;
+    };
+    let (main2, mini2) = (main.clone(), mini.clone());
+    main.on_window_event(move |event| {
+        if let WindowEvent::Resized(_) = event {
+            let minimized = main2.is_minimized().unwrap_or(false);
+            let wanted = db.lock().map(|d| crate::settings::mini_on_minimize(&d)).unwrap_or(true);
+            if minimized && wanted {
+                let _ = mini2.show();
+            } else if !minimized {
+                let _ = mini2.hide();
+            }
+        }
+    });
+    let mini3 = mini.clone();
+    mini.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = mini3.hide();
+        }
+    });
+}
+
+/// From the mini player: bring the full window back.
+#[tauri::command]
+pub fn open_main(app: AppHandle) -> Result<(), String> {
+    let main = app.get_webview_window("main").ok_or("main window missing")?;
+    main.unminimize().map_err(|e| e.to_string())?;
+    main.show().map_err(|e| e.to_string())?;
+    main.set_focus().map_err(|e| e.to_string())?;
+    if let Some(mini) = app.get_webview_window("mini") {
+        let _ = mini.hide();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_mini_on_minimize(on: bool, db: State<'_, SharedDb>) -> Result<(), String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    crate::settings::set_mini_on_minimize(&d, on).map_err(|e| e.to_string())
+}
