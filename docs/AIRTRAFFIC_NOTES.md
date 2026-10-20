@@ -415,3 +415,12 @@ Two ways forward with option A:
    a host add a file straight to the device playlist (`IITUserPlaylist.AddFile`) and delete device
    tracks one by one, leaving everything else alone. Needs one setting change in iTunes by the user;
    to verify with one test song before relying on it.
+
+### 2026-10-20 — first song onto the phone through iTunes (manual management)
+Backup first: `%APPDATA%\MiuMusic\backups\e51e30a5\20261020-040321` (69 songs).
+With "Manually manage music" on, `devicePlaylist.AddFile(path)` returns nothing for the phone.
+What works is iTunes' own drag-and-drop path:
+1. `iTunes.LibraryPlaylist.AddFile(path)` → IITOperationStatus; wait while `InProgress`; take the track.
+2. `phoneSource.Playlists.Item(1).AddTrack(track)` → true; the phone's library went 69 → 70.
+Track on phone: "Ai Rồi Cũng Sẽ Khác" (Hà Nhi), kind "MPEG audio file". The 69 3uTools songs stayed.
+Side effect: the song is now also in the PC's iTunes library (68 → 69).
