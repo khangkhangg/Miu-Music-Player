@@ -272,5 +272,7 @@
   "page.albumYear": "Album · {year}",
   "page.artist": "Artist",
   "page.facts": "{songs} · {time} · {liked} liked",
-  "page.play": "Play {title}"
+  "page.play": "Play {title}",
+  "player.mini": "Mini",
+  "player.miniTitle": "Switch to the mini player"
 }

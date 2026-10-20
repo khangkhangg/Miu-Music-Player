@@ -128,3 +128,14 @@ pub fn export_diagnostics(path: String, device: String) -> Result<(), String> {
     let version = format!("Miu Music {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS);
     crate::util::diagnostics::export(&app_data, &version, &device, std::path::Path::new(&path)).map_err(|e| e.to_string())
 }
+
+/// From the main window: switch to the mini player (shown even if "open on minimise" is off).
+#[tauri::command]
+pub fn open_mini(app: AppHandle) -> Result<(), String> {
+    let mini = app.get_webview_window("mini").ok_or("mini player window missing")?;
+    mini.show().map_err(|e| e.to_string())?;
+    if let Some(main) = app.get_webview_window("main") {
+        main.minimize().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

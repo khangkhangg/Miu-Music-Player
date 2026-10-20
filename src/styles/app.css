@@ -1,6 +1,14 @@
 /* Miu Music — redesign (2026-10-20): three columns (library, content, now playing), thin type,
    one yellow accent. Colours come from tokens.css. */
 * { box-sizing: border-box; }
+/* Thin, rounded scrollbars that sit on the panel colour instead of the Windows default. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 22%, transparent); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 40%, transparent); }
+::-webkit-scrollbar-thumb:active { background-color: var(--accent); }
+::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+::-webkit-scrollbar-corner { background: transparent; }
 html, body { margin: 0; height: 100%; }
 body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; font-weight: 400; overflow: hidden; }
 button, input, select { font: inherit; }
@@ -43,7 +51,12 @@ button, input, select { font: inherit; }
 .icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: var(--radius); min-width: 24px; height: 24px; line-height: 1; padding: 0 4px; display: inline-grid; place-items: center; }
 .icon-btn:hover { background: var(--surface-muted); color: var(--text); }
 
-.device-card { margin: auto 16px 0; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-card); display: flex; flex-direction: column; gap: 10px; }
+.side-tools { margin: auto 16px 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tool-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--text-muted); font-size: 11px; cursor: pointer; }
+.tool-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.tool-btn:hover { color: var(--text); background: var(--surface-muted); }
+.tool-btn[aria-expanded="true"] { color: var(--on-accent); background: var(--accent); }
+.device-card { margin: 0 16px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-card); display: flex; flex-direction: column; gap: 10px; }
 .device-head { display: flex; gap: 12px; align-items: center; }
 .device-text { min-width: 0; }
 .device-card p { margin: 0; }
@@ -232,10 +245,6 @@ button.primary svg { width: 12px; height: 12px; fill: currentColor; }
 .np-artist { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent-ink); min-height: 1em; }
 .np-format { font-size: 11px; min-height: 1em; }
 .np-column.idle .np-controls, .np-column.idle .np-times { opacity: 0.45; pointer-events: none; }
-.np-tools { display: flex; align-items: center; gap: 8px; padding: 16px 24px 0; }
-.eq-toggle { font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius); background: none; color: var(--text-muted); padding: 4px 9px; cursor: pointer; }
-.eq-toggle[aria-expanded="true"] { color: var(--accent-ink); border-color: var(--accent-ink); }
-.np-volume { flex: 1; min-width: 0; accent-color: var(--accent); }
 .up-next { padding: 22px 24px 16px; display: flex; flex-direction: column; gap: 10px; }
 .up-next ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .up-next li { display: flex; align-items: center; gap: 12px; font-size: 13px; }
@@ -248,7 +257,7 @@ button.primary svg { width: 12px; height: 12px; fill: currentColor; }
 .up-next .time { font-size: 11px; color: var(--text-muted); }
 
 /* Floating panels (EQ, Output), next to the now-playing column */
-.eq-panel { position: fixed; right: 336px; bottom: 16px; z-index: 5; width: min(640px, calc(100vw - 600px)); min-width: 420px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 12px 14px; }
+.eq-panel { position: fixed; left: 244px; bottom: 16px; z-index: 5; width: min(640px, calc(100vw - 600px)); min-width: 420px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 12px 14px; }
 .eq-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
 .eq-head select, .eq-head input[type="text"] { font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .eq-switch { display: flex; align-items: center; gap: 4px; font-size: 12px; }

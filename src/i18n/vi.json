@@ -272,5 +272,7 @@
   "page.albumYear": "Album · {year}",
   "page.artist": "Nghệ sĩ",
   "page.facts": "{songs} · {time} · {liked} đã thích",
-  "page.play": "Phát {title}"
+  "page.play": "Phát {title}",
+  "player.mini": "Mini",
+  "player.miniTitle": "Chuyển sang trình phát mini"
 }

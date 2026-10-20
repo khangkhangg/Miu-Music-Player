@@ -113,8 +113,7 @@ if (invoke) {
   document.getElementById('delete-all').addEventListener('click', () => confirmDelete(shown.filter(x => x.rating === -1)));
   setupEq();
   setupOutput();
-  document.getElementById('np-volume').addEventListener('input', e =>
-    invoke('player_volume', { volume: Number(e.target.value) / 100 }));
+  document.getElementById('open-mini').addEventListener('click', () => invoke('open_mini'));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
   document.getElementById('add-folder').addEventListener('click', pickFolder);
   const search = document.getElementById('search');

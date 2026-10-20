@@ -37,6 +37,22 @@
       <ul class="folder-list" id="folder-list"></ul>
       <p class="folder-error" id="folder-error" role="alert" hidden></p>
 
+      <div class="side-tools">
+        <button class="tool-btn" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path"
+          data-i18n-attr="title:output.openTitle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+          <span data-i18n="output.open">Output</span>
+        </button>
+        <button class="tool-btn" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v6M5 14v6M12 4v10M12 18v2M19 4v2M19 10v10"/><path d="M3 12h4M10 16h4M17 8h4"/></svg>
+          <span data-i18n="eq.open">EQ</span>
+        </button>
+        <button class="tool-btn" id="open-mini" type="button" title="Switch to the mini player" data-i18n-attr="title:player.miniTitle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12" y="12" width="7" height="6" rx="1"/></svg>
+          <span data-i18n="player.mini">Mini</span>
+        </button>
+      </div>
+
       <div class="device-card empty" id="device-card" aria-live="polite">
         <div class="device-head">
           <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="34" r="2"/></svg>
@@ -251,12 +267,6 @@
         <p class="np-title" id="np-title" dir="auto" data-i18n="player.nothing">Nothing playing</p>
         <p class="np-artist" id="np-artist" dir="auto"></p>
         <p class="np-format muted" id="np-format"></p>
-      </div>
-      <div class="np-tools">
-        <button class="eq-toggle" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path"
-          data-i18n="output.open" data-i18n-attr="title:output.openTitle">Output</button>
-        <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel" data-i18n="eq.open">EQ</button>
-        <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume" data-i18n-attr="aria-label:player.volume">
       </div>
       <div class="up-next">
         <span class="stat-label" data-i18n="player.upNext">UP NEXT</span>
