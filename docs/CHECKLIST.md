@@ -121,7 +121,7 @@ forged (CLAUDE.md rules; the spec's legal note). Option A lets Apple's iTunes do
 signing: Miu only drives iTunes through its documented COM automation interface.
 - [x] **S.1 COM probe** — *Machine test (#[ignore]):* connect to `iTunes.Application`, list sources, find the iPhone source. Read-only.
   2026-10-20: COM works by CLSID (packaged server, not in HKCR). With the 5s on USB iTunes lists it: 'khang’s iPhone', kind 2, 29.8 GB (23.3 free), 69 tracks, UpdateIPod available.
-- [ ] **S.1b Sync safeguards** — *Test first:* read the phone's tracks from a backup; find phone songs with no PC copy (size, or title
+- [x] **S.1b Sync safeguards** — *Test first:* read the phone's tracks from a backup; find phone songs with no PC copy (size, or title
   and length within 2 s) and copy them off read-only; before a sync flag phone songs missing from iTunes' view and IDs with a leading
   zero byte; after a sync list songs added and removed. Tool: `sync-guard before [--itunes <view.json>]` / `after`
   (`tools/itunes-view.ps1` writes the view until S.2's COM client exists). Built 2026-10-20; first run on the 5s: 65 phone-only
