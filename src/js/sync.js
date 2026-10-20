@@ -47,11 +47,13 @@ export function stageText(s) {
 export function syncResult(r) {
   const lines = [t('sync.done', { added: r.added, removed: r.removed })];
   if (r.adopted > 0) lines.push(t('sync.adopted', { n: r.adopted }));
+  if (r.goneFromPhone > 0) lines.push(t('sync.goneFromPhone', { n: r.goneFromPhone }));
+  if (r.manualManagementHint) lines.push(t('sync.manualHint'));
   if (r.failed.length) lines.push(t('sync.failedSongs', { n: r.failed.length, reason: r.failed[0][1] }));
   for (const s of r.unexpectedRemoved) lines.push(t('sync.lost', { title: s.title }));
   lines.push(...r.warnings);
   if (!r.confirmed) lines.push(t('sync.unconfirmed'));
-  const warn = r.failed.length > 0 || r.unexpectedRemoved.length > 0 || r.warnings.length > 0 || !r.confirmed;
+  const warn = r.manualManagementHint || r.failed.length > 0 || r.unexpectedRemoved.length > 0 || r.warnings.length > 0 || !r.confirmed;
   return { tone: warn ? 'warn' : 'ok', lines };
 }
 
@@ -59,4 +61,19 @@ export function syncResult(r) {
 export function syncStopped(err) {
   if (err?.kind === 'blocked') return { title: t('sync.blocked'), lines: err.reasons };
   return { title: t('sync.failed'), lines: [err?.reason ?? String(err)] };
+}
+
+/** The "Manually manage music" guide shows until the phone has synced once (S.4). */
+export function showsGuide(preview) {
+  return !preview?.lastRun;
+}
+
+/** "Last sync: 10 min ago · 3 songs · 2 failed" (S.5); empty before the first sync. */
+export function lastSyncLabel(run, nowSec) {
+  if (!run) return '';
+  const age = Math.max(0, nowSec - run.finishedAt);
+  const when = age < 60 ? t('sync.justNow') : age < 3600 ? t('sync.minAgo', { n: Math.round(age / 60) }) : age < 86_400 ? t('sync.hAgo', { n: Math.round(age / 3600) }) : t('sync.dAgo', { n: Math.round(age / 86_400) });
+  const parts = [t('sync.last', { when }), t('sync.songs', { n: run.done })];
+  if (run.failed > 0) parts.push(t('sync.failedCount', { n: run.failed }));
+  return parts.join(' · ');
 }

@@ -4,7 +4,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::library::service::SharedDb;
-use crate::sync::plan::{check_space, plan, Plan};
+use crate::sync::plan::{check_space, history, plan, Plan, RunSummary};
 
 /// Room left on the phone after a sync, so iOS keeps working comfortably.
 const MARGIN_BYTES: u64 = 200_000_000;
@@ -22,6 +22,8 @@ pub struct SyncPreview {
     plan: Plan,
     /// Set when the plan does not fit in `free_bytes`.
     shortage: Option<Shortage>,
+    /// The phone's most recent sync; `None` before the first (the guide shows then, S.4).
+    last_run: Option<RunSummary>,
 }
 
 #[tauri::command]
@@ -29,7 +31,8 @@ pub fn sync_preview(udid: String, free_bytes: Option<u64>, db: State<'_, SharedD
     let d = db.lock().map_err(|e| e.to_string())?;
     let p = plan(&d, &udid, &crate::settings::conversion_policy(&d)).map_err(|e| e.to_string())?;
     let shortage = free_bytes.and_then(|free| check_space(&p, free, MARGIN_BYTES).err()).map(|s| Shortage { need: s.need, available: s.available });
-    Ok(SyncPreview { plan: p, shortage })
+    let last_run = history(&d, &udid).map_err(|e| e.to_string())?.into_iter().next();
+    Ok(SyncPreview { plan: p, shortage, last_run })
 }
 
 // ---- Sync through iTunes (S.3) ----

@@ -360,5 +360,20 @@
   "sync.unconfirmed": "The iPhone has not shown every change yet.",
   "sync.blocked": "Sync stopped before changing anything",
   "sync.failed": "Sync failed",
-  "sync.syncing": "Syncing…"
+  "sync.syncing": "Syncing…",
+  "sync.goneFromPhone.one": "{n} song deleted on the iPhone was sent again.",
+  "sync.goneFromPhone.other": "{n} songs deleted on the iPhone were sent again.",
+  "sync.manualHint": "iTunes refused every song. Turn on “Manually manage music and videos” for this iPhone in iTunes, then sync again.",
+  "sync.justNow": "just now",
+  "sync.minAgo": "{n} min ago",
+  "sync.hAgo": "{n} h ago",
+  "sync.dAgo": "{n} d ago",
+  "sync.last": "Last sync: {when}",
+  "sync.songs.one": "{n} song",
+  "sync.songs.other": "{n} songs",
+  "sync.failedCount": "{n} failed",
+  "sync.guideTitle": "Before the first sync",
+  "sync.guide1": "Open iTunes and click the iPhone button near the top left.",
+  "sync.guide2": "In Summary, under Options, tick “Manually manage music and videos”, then click Apply.",
+  "sync.guide3": "Keep iTunes open while Miu syncs. Songs already on the iPhone stay."
 }

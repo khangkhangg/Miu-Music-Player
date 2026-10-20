@@ -11,7 +11,7 @@ import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 import { t, startInLanguage } from './i18n.js';
-import { planSummary, stageText, syncResult, syncStopped } from './sync.js';
+import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
@@ -513,6 +513,10 @@ function showSyncPreview() {
   if (!phone) return;
   invoke('sync_preview', { udid: phone.udid, freeBytes: phone.info?.freeBytes ?? null }).then(p => {
     document.getElementById('sync-plan').textContent = planSummary(p.plan);
+    document.getElementById('sync-guide').hidden = !showsGuide(p);
+    const last = document.getElementById('sync-last');
+    last.textContent = lastSyncLabel(p.lastRun, Math.floor(Date.now() / 1000));
+    last.hidden = !p.lastRun;
     const short = document.getElementById('sync-shortage');
     short.hidden = !p.shortage;
     if (p.shortage) short.textContent = t('sync.noSpace', { need: formatBytes(p.shortage.need), available: formatBytes(p.shortage.available) });

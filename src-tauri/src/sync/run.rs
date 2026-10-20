@@ -14,7 +14,7 @@ use crate::library::convert::Policy;
 use crate::library::db::Db;
 use crate::sync::guard::{diff, phone_only, precheck, Concern, CopyReport, PcSong, PhoneTrack};
 use crate::sync::itunes::{adopt, apply, sendable_path, Convert, ITunes};
-use crate::sync::plan::{plan, record_run, Step};
+use crate::sync::plan::{plan, record_run, Step, StepResult};
 
 /// The phone's files, as a sync needs them.
 pub trait PhoneSide {
@@ -55,6 +55,10 @@ pub struct Report {
     pub failed: Vec<(i64, String)>,
     /// Phone songs that disappeared without Miu asking.
     pub unexpected_removed: Vec<PhoneTrack>,
+    /// Songs Miu had sent (or adopted) that were no longer on the phone, so they went again (S.5).
+    pub gone_from_phone: usize,
+    /// iTunes refused every new song: most likely "Manually manage music" is off for this phone (S.4).
+    pub manual_management_hint: bool,
     /// Worth knowing, not worth stopping for (a copy of the song is kept).
     pub warnings: Vec<String>,
     /// The phone showed every change before the wait ran out.
@@ -111,9 +115,11 @@ pub fn run_sync(
     }
 
     // 3. Adopt, plan, apply.
+    let on_phone: HashSet<i64> = before.iter().map(|t| t.sync_id).collect();
+    let gone_from_phone = forget_missing(db, udid, &on_phone).map_err(failed)?;
     let adopted = adopt(db, udid, &device, now_unix).map_err(failed)?;
     let p = plan(db, udid, policy).map_err(|e| SyncError::Failed(e.to_string()))?;
-    let mut report = Report { adopted, confirmed: true, warnings, ..Default::default() };
+    let mut report = Report { adopted, gone_from_phone, confirmed: true, warnings, ..Default::default() };
     if p.steps.is_empty() {
         return Ok(report);
     }
@@ -141,6 +147,10 @@ pub fn run_sync(
         }
     }
 
+    let sends: Vec<&StepResult> = p.steps.iter().zip(&results).filter(|(s, _)| !matches!(s, Step::Remove { .. })).map(|(_, r)| r).collect();
+    report.manual_management_hint =
+        !sends.is_empty() && sends.iter().all(|r| matches!(&r.outcome, Err(e) if e.starts_with("iTunes ")));
+
     // 4. Let iTunes apply it, and wait until the phone shows it.
     if report.added + report.removed > 0 {
         progress(Stage::UpdateDevice);
@@ -166,6 +176,20 @@ pub fn run_sync(
     report.unexpected_removed = diff(&before, &after).removed.into_iter().filter(|t| !vanish.contains(&t.sync_id)).collect();
     report.run_id = Some(record_run(db, udid, &p, &results, now_unix).map_err(|e| SyncError::Failed(e.to_string()))?);
     Ok(report)
+}
+
+/// Forget songs Miu sent (or adopted) that are no longer on the phone, so the plan sends them again.
+fn forget_missing(db: &Db, udid: &str, on_phone: &HashSet<i64>) -> Result<usize, String> {
+    let e = |e: rusqlite::Error| e.to_string();
+    let mut stmt = db.conn().prepare("SELECT song_id, device_pid FROM synced WHERE udid = ?1 AND device_pid IS NOT NULL").map_err(e)?;
+    let rows: Vec<(i64, i64)> = stmt.query_map([udid], |r| Ok((r.get(0)?, r.get(1)?))).map_err(e)?.collect::<rusqlite::Result<_>>().map_err(e)?;
+    let mut gone = 0;
+    for (song, pid) in rows.into_iter().filter(|(_, pid)| !on_phone.contains(pid)) {
+        log::info!("song {song} (device id {pid}) is no longer on the phone; it will be sent again");
+        db.conn().execute("DELETE FROM synced WHERE udid = ?1 AND song_id = ?2", rusqlite::params![udid, song]).map_err(e)?;
+        gone += 1;
+    }
+    Ok(gone)
 }
 
 fn pc_songs(db: &Db) -> Result<Vec<PcSong>, String> {
@@ -199,6 +223,8 @@ mod tests {
         /// Peeks after the device sync before new tracks get their files (size 0 until then).
         files_after_peeks: usize,
         copy_fails: bool,
+        /// iTunes refuses every new song (as when it syncs automatically instead of manually).
+        refuses_adds: bool,
         next_id: i64,
         log: Vec<String>,
         backups: usize,
@@ -251,6 +277,9 @@ mod tests {
         }
         fn add(&self, path: &Path) -> Result<i64, String> {
             let mut w = self.0.borrow_mut();
+            if w.refuses_adds {
+                return Err("iTunes AddTrack failed: Exception occurred. (0x80020009)".into());
+            }
             w.next_id += 1;
             let id = 0x7000_0000_0000_0000 + w.next_id;
             w.log.push(format!("add {}", path.display()));
@@ -379,6 +408,35 @@ mod tests {
         let r = run_sync(&db, PHONE, &Policy::default(), &f, &f, Some(&convert), &opts(), &|_| {}, &mut |_| {}, 100).unwrap();
         assert_eq!((r.added, r.failed.len()), (2, 0));
         assert!(f.0.borrow().log.iter().any(|l| l.starts_with(r"add C:\cache\")), "{:?}", f.0.borrow().log);
+    }
+
+    #[test]
+    fn when_itunes_refuses_every_new_song_the_report_points_at_manual_management() {
+        let (db, f) = setup();
+        f.0.borrow_mut().refuses_adds = true;
+        let r = sync(&db, &f).0.unwrap();
+        assert_eq!((r.added, r.failed.len()), (0, 1));
+        assert!(r.manual_management_hint, "all adds refused");
+        assert!(!f.0.borrow().log.iter().any(|l| l == "UpdateIPod"), "nothing to apply");
+    }
+
+    #[test]
+    fn a_song_deleted_on_the_phone_is_sent_again() {
+        let (db, f) = setup();
+        let first = sync(&db, &f).0.unwrap();
+        assert_eq!(first.added, 1);
+        // The listener deletes the new song on the iPhone.
+        let sent_id = 0x7000_0000_0000_0001;
+        f.0.borrow_mut().phone.retain(|t| t.sync_id != sent_id);
+        let again = sync(&db, &f).0.unwrap();
+        assert_eq!(again.gone_from_phone, 1);
+        assert_eq!(again.added, 1, "sent again");
+        let adopted_gone = {
+            // An adopted 3uTools song deleted on the phone is liked and missing too: it goes as well.
+            f.0.borrow_mut().phone.retain(|t| t.title != "Áo Mới Cà Mau");
+            sync(&db, &f).0.unwrap()
+        };
+        assert_eq!((adopted_gone.gone_from_phone, adopted_gone.added), (1, 1));
     }
 
     #[test]

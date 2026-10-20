@@ -360,5 +360,20 @@
   "sync.unconfirmed": "iPhone chưa hiện đủ mọi thay đổi.",
   "sync.blocked": "Đã dừng đồng bộ, chưa thay đổi gì",
   "sync.failed": "Đồng bộ thất bại",
-  "sync.syncing": "Đang đồng bộ…"
+  "sync.syncing": "Đang đồng bộ…",
+  "sync.goneFromPhone.one": "{n} bài đã bị xoá trên iPhone được gửi lại.",
+  "sync.goneFromPhone.other": "{n} bài đã bị xoá trên iPhone được gửi lại.",
+  "sync.manualHint": "iTunes từ chối mọi bài. Hãy bật “Quản lý nhạc và video thủ công” cho iPhone này trong iTunes rồi đồng bộ lại.",
+  "sync.justNow": "vừa xong",
+  "sync.minAgo": "{n} phút trước",
+  "sync.hAgo": "{n} giờ trước",
+  "sync.dAgo": "{n} ngày trước",
+  "sync.last": "Lần đồng bộ gần nhất: {when}",
+  "sync.songs.one": "{n} bài",
+  "sync.songs.other": "{n} bài",
+  "sync.failedCount": "{n} lỗi",
+  "sync.guideTitle": "Trước lần đồng bộ đầu tiên",
+  "sync.guide1": "Mở iTunes và bấm nút iPhone ở góc trên bên trái.",
+  "sync.guide2": "Trong Tóm tắt, mục Tuỳ chọn, đánh dấu “Quản lý nhạc và video thủ công” rồi bấm Áp dụng.",
+  "sync.guide3": "Giữ iTunes mở trong lúc Miu đồng bộ. Các bài đã có trên iPhone vẫn được giữ."
 }

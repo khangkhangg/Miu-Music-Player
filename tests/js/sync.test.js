@@ -67,3 +67,26 @@ test('a stopped sync says nothing changed, and why', () => {
   assert.deepEqual(syncStopped({ kind: 'failed', reason: 'cannot start iTunes' }), { title: 'Sync failed', lines: ['cannot start iTunes'] });
   assert.deepEqual(syncStopped('boom'), { title: 'Sync failed', lines: ['boom'] });
 });
+
+import { showsGuide, lastSyncLabel } from '../../src/js/sync.js';
+
+test('the manual-management guide shows until a phone has synced once', () => {
+  assert.equal(showsGuide({ lastRun: null }), true);
+  assert.equal(showsGuide({ lastRun: { id: 1, finishedAt: 100, done: 51, failed: 0 } }), false);
+});
+
+test('the last sync reads as when and how it went', () => {
+  const now = 1_000_000;
+  assert.equal(lastSyncLabel({ finishedAt: now - 30, done: 51, failed: 0 }, now), 'Last sync: just now · 51 songs');
+  assert.equal(lastSyncLabel({ finishedAt: now - 600, done: 3, failed: 2 }, now), 'Last sync: 10 min ago · 3 songs · 2 failed');
+  assert.equal(lastSyncLabel({ finishedAt: now - 7_200, done: 1, failed: 0 }, now), 'Last sync: 2 h ago · 1 song');
+  assert.equal(lastSyncLabel(null, now), '');
+});
+
+test('a sync says when songs went again and when iTunes refused everything', () => {
+  const r = syncResult({ added: 1, removed: 0, adopted: 0, failed: [], unexpectedRemoved: [], warnings: [], confirmed: true, goneFromPhone: 1, manualManagementHint: false });
+  assert.ok(r.lines.includes('1 song deleted on the iPhone was sent again.'), r.lines);
+  const refused = syncResult({ added: 0, removed: 0, adopted: 0, failed: [[1, 'iTunes AddTrack failed']], unexpectedRemoved: [], warnings: [], confirmed: true, goneFromPhone: 0, manualManagementHint: true });
+  assert.equal(refused.tone, 'warn');
+  assert.ok(refused.lines.some((l) => l.includes('Manually manage music')), refused.lines);
+});
