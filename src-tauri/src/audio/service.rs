@@ -101,12 +101,23 @@ impl PlayerHandle {
         }
     }
 
-    /// Saved shuffle and repeat, applied at start-up.
-    pub fn set_order(&self, shuffle: bool, repeat: Repeat) {
-        self.with(|p| {
-            p.set_shuffle(shuffle);
-            p.set_repeat(repeat);
+    /// Like `new`, but the device is opened on another thread: the app window does not wait for
+    /// it. Until then the player reports "unavailable" and commands answer "no audio output device".
+    pub fn new_deferred(device: Option<String>, exclusive: bool, shuffle: bool, repeat: Repeat) -> Arc<Self> {
+        let handle = Arc::new(Self { player: Mutex::new(None), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()) });
+        let h = handle.clone();
+        std::thread::spawn(move || {
+            if let Some(p) = open(device.as_deref(), exclusive) {
+                p.set_shuffle(shuffle);
+                p.set_repeat(repeat);
+                if let Ok(mut slot) = h.player.lock() {
+                    if slot.is_none() {
+                        *slot = Some(p);
+                    }
+                }
+            }
         });
+        handle
     }
 
     pub fn set_eq(&self, settings: crate::audio::eq::EqSettings) {

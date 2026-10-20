@@ -27,11 +27,18 @@ pub fn setup(app: &AppHandle, db: SharedDb) {
         }
     });
     let mini3 = mini.clone();
-    mini.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { api, .. } = event {
+    let app2 = app.clone();
+    mini.on_window_event(move |event| match event {
+        WindowEvent::CloseRequested { api, .. } => {
             api.prevent_close();
             let _ = mini3.hide();
         }
+        // The title bar's maximise button means "the full window, please".
+        WindowEvent::Resized(_) if mini3.is_maximized().unwrap_or(false) => {
+            let _ = mini3.unmaximize();
+            let _ = open_main(app2.clone());
+        }
+        _ => {}
     });
 }
 

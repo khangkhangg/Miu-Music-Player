@@ -26,14 +26,30 @@ fn folder_list(db: &SharedDb) -> Vec<WatchedFolder> {
     db.lock().ok().and_then(|d| folders::list_folders(&d).ok()).unwrap_or_default()
 }
 
-fn rescan(db: &SharedDb, ids: &[i64]) {
-    for f in folder_list(db).into_iter().filter(|f| ids.contains(&f.id)) {
+/// Background work for the progress bar: `phase` is "scan" or "fingerprint".
+#[derive(Clone, serde::Serialize)]
+pub struct Progress {
+    phase: &'static str,
+    done: usize,
+    total: usize,
+}
+
+fn progress(app: &AppHandle, phase: &'static str, done: usize, total: usize) {
+    let _ = app.emit("library-progress", Progress { phase, done, total });
+}
+
+fn rescan(app: &AppHandle, db: &SharedDb, ids: &[i64]) {
+    let folders: Vec<WatchedFolder> = folder_list(db).into_iter().filter(|f| ids.contains(&f.id)).collect();
+    let total = folders.len();
+    for (i, f) in folders.into_iter().enumerate() {
+        progress(app, "scan", i, total);
         let Ok(d) = db.lock() else { return };
         match rescan_folder(&d, f.id, &f.path, now_unix()) {
             Ok(diff) => log::info!("rescanned {}: +{} ~{} -{}", f.path, diff.added, diff.updated, diff.removed),
             Err(e) => log::warn!("rescan of {} failed: {e}", f.path),
         }
     }
+    progress(app, "scan", total, total);
 }
 
 static HASHING: AtomicBool = AtomicBool::new(false);
@@ -47,7 +63,9 @@ fn hash_in_background(app: &AppHandle, db: &SharedDb) {
     let (app, db) = (app.clone(), db.clone());
     std::thread::spawn(move || {
         let mut done = 0;
+        let total = db.lock().ok().and_then(|d| crate::library::duplicates::count_pending(&d).ok()).unwrap_or(0);
         loop {
+            progress(&app, "fingerprint", done, total.max(done));
             let todo = match db.lock() {
                 Ok(d) => pending_hashes(&d, 25).unwrap_or_default(),
                 Err(_) => break,
@@ -63,6 +81,7 @@ fn hash_in_background(app: &AppHandle, db: &SharedDb) {
             done += hashed.len();
         }
         HASHING.store(false, Ordering::Release);
+        progress(&app, "fingerprint", done, done);
         if done > 0 {
             log::info!("fingerprinted {done} songs");
             let _ = app.emit("library-changed", folder_list(&db));
@@ -75,7 +94,7 @@ fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &LibraryWatch) {
     let folders: Vec<(i64, String)> = folder_list(db).into_iter().map(|f| (f.id, f.path)).collect();
     let (app2, db2) = (app.clone(), db.clone());
     let watcher = FolderWatcher::start(folders, Duration::from_millis(800), move |ids| {
-        rescan(&db2, &ids);
+        rescan(&app2, &db2, &ids);
         let _ = app2.emit("library-changed", folder_list(&db2));
         hash_in_background(&app2, &db2);
     });
@@ -89,7 +108,7 @@ fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &LibraryWatch) {
 pub fn start(app: AppHandle, db: SharedDb, watch: Arc<LibraryWatch>) {
     std::thread::spawn(move || {
         let ids: Vec<i64> = folder_list(&db).iter().map(|f| f.id).collect();
-        rescan(&db, &ids);
+        rescan(&app, &db, &ids);
         restart_watch(&app, &db, &watch);
         let _ = app.emit("library-changed", folder_list(&db));
         hash_in_background(&app, &db);
@@ -144,7 +163,7 @@ pub fn add_folder(
         folders::add_folder(&d, &path, now_unix()).map_err(|e| e.to_string())?
     };
     log::info!("watching {}", added.path);
-    rescan(&db, &[added.id]);
+    rescan(&app, &db, &[added.id]);
     restart_watch(&app, &db, &watch);
     hash_in_background(&app, &db);
     Ok(folder_list(&db))
@@ -172,7 +191,7 @@ pub fn set_folder_encoding(id: i64, encoding: Option<String>, app: AppHandle, db
         let d = db.lock().map_err(|e| e.to_string())?;
         folders::set_tag_encoding(&d, id, encoding.as_deref().filter(|e| !e.is_empty()))?;
     }
-    rescan(&db, &[id]);
+    rescan(&app, &db, &[id]);
     let list = folder_list(&db);
     let _ = app.emit("library-changed", &list);
     Ok(list)

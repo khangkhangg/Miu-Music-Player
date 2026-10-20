@@ -278,5 +278,8 @@
   "player.shuffle": "Phát ngẫu nhiên",
   "player.repeatOff": "Lặp lại: tắt",
   "player.repeatAll": "Lặp lại: tất cả",
-  "player.repeatOne": "Lặp lại: bài này"
+  "player.repeatOne": "Lặp lại: bài này",
+  "work.scan": "Đang kiểm tra thư mục: {done} / {total}",
+  "work.fingerprint": "Đang lấy dấu vân âm thanh: {done} / {total}",
+  "boot.loading": "Đang tải nhạc của bạn…"
 }

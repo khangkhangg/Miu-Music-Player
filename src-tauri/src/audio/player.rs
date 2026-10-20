@@ -94,6 +94,8 @@ impl Shared {
 /// The most recent samples the device played (mono, before volume), for the visualizer.
 type Tap = Arc<Mutex<VecDeque<f32>>>;
 const TAP_LEN: usize = 2048;
+/// How much of the queue the "Up next" list shows (it scrolls).
+const UP_NEXT: usize = 100;
 
 /// Equalizer settings and a generation number that goes up with every change, so a renderer
 /// created later (after the device is reopened) still picks up the current settings.
@@ -545,7 +547,7 @@ fn engine(
             s.device_bits = out.as_ref().map_or(0, |o| o.bits);
             s.shuffle = shuffle;
             s.repeat = repeat;
-            s.up_next = here.map(|(t, _)| order.upcoming(t, 4)).unwrap_or_default();
+            s.up_next = here.map(|(t, _)| order.upcoming(t, UP_NEXT)).unwrap_or_default();
             let name = out.as_ref().map_or(wanted.unwrap_or(""), |o| o.name.as_str());
             if s.device_name != name {
                 s.device_name = name.to_string();
@@ -789,7 +791,7 @@ mod order_machine_tests {
         player.skip(1);
         std::thread::sleep(Duration::from_millis(250));
         assert_eq!(player.status().track, Some(1), "Next moves on even with repeat one");
-        assert_eq!(player.status().up_next, vec![2, 3, 4, 5]);
+        assert_eq!(player.status().up_next, vec![2, 3, 4, 5], "the rest of the queue");
         player.set_shuffle(true);
         std::thread::sleep(Duration::from_millis(100));
         let s = player.status();

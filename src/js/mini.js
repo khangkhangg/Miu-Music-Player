@@ -1,6 +1,6 @@
 // Mini player window (F7.4). Logic lives in the tested modules; this is DOM glue.
 import { resolveTheme } from './theme.js';
-import { nowPlaying, seekTarget, pinButton } from './player.js';
+import { nowPlaying, seekTarget } from './player.js';
 import { nextRating, applyRated } from './ratings.js';
 import { fromBytes, geometry } from './visualizer.js';
 import { t, startInLanguage } from './i18n.js';
@@ -21,17 +21,6 @@ listen('settings-changed', e => useSettings(e.payload));
 
 let songsById = new Map();
 let state = null;
-let onTop = true;
-
-function showPin(on) {
-  onTop = on;
-  const p = pinButton(on);
-  const b = $('mini-pin');
-  b.classList.toggle('on', p.pressed);
-  b.setAttribute('aria-pressed', String(p.pressed));
-  b.setAttribute('aria-label', p.label);
-  b.title = p.label;
-}
 
 function loadSongs() {
   invoke('list_songs').then(list => {
@@ -49,9 +38,9 @@ function showArt(song) {
   const img = $('mini-art');
   const has = Boolean(song?.hasArtwork);
   img.hidden = !has;
-  $('mini-art-empty').hidden = has;
+  $('mini-art-empty').toggleAttribute('hidden', has);
   if (has) {
-    img.onerror = () => { img.hidden = true; $('mini-art-empty').hidden = false; };
+    img.onerror = () => { img.hidden = true; $('mini-art-empty').removeAttribute('hidden'); };
     img.src = window.__TAURI__.core.convertFileSrc(`${song.id}-240`, 'miuart');
   }
 }
@@ -89,10 +78,6 @@ $('mini-prev').addEventListener('click', () => invoke('player_skip', { by: -1 })
 $('mini-next').addEventListener('click', () => invoke('player_skip', { by: 1 }));
 $('mini-like').addEventListener('click', () => rate('like'));
 $('mini-dislike').addEventListener('click', () => rate('dislike'));
-$('mini-pin').addEventListener('click', () => invoke('set_mini_on_top', { on: !onTop }));
-listen('mini-on-top', e => showPin(e.payload));
-invoke('mini_on_top').then(showPin);
-$('mini-open').addEventListener('click', () => invoke('open_main'));
 $('mini-bar').addEventListener('click', e => {
   const rect = e.currentTarget.getBoundingClientRect();
   const ms = seekTarget((e.clientX - rect.left) / rect.width, songsById.get(state?.songId)?.durationMs);

@@ -278,5 +278,8 @@
   "player.shuffle": "Shuffle",
   "player.repeatOff": "Repeat: off",
   "player.repeatAll": "Repeat: all songs",
-  "player.repeatOne": "Repeat: this song"
+  "player.repeatOne": "Repeat: this song",
+  "work.scan": "Checking folders: {done} of {total}",
+  "work.fingerprint": "Fingerprinting songs: {done} of {total}",
+  "boot.loading": "Loading your music…"
 }

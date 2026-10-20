@@ -15,16 +15,22 @@
         "width": 1280,
         "height": 800,
         "minWidth": 1000,
-        "minHeight": 600
+        "minHeight": 600,
+        "backgroundColor": "#1c1c22"
       },
       {
         "label": "mini",
+        "backgroundColor": "#24242c",
         "url": "mini.html",
         "title": "Miu Music",
         "width": 380,
         "height": 200,
-        "resizable": false,
-        "maximizable": false,
+        "minWidth": 380,
+        "minHeight": 200,
+        "maxWidth": 380,
+        "maxHeight": 200,
+        "resizable": true,
+        "maximizable": true,
         "visible": false,
         "center": false
       }

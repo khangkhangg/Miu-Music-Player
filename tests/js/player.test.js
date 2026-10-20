@@ -32,13 +32,6 @@ test('a click on the progress bar becomes a seek position', () => {
   assert.equal(seekTarget(0.5, null), null);
 });
 
-import { pinButton } from '../../src/js/player.js';
-
-test('the pin says what clicking will do', () => {
-  assert.deepEqual(pinButton(true), { pressed: true, label: 'Stop keeping on top' });
-  assert.deepEqual(pinButton(false), { pressed: false, label: 'Keep on top of other windows' });
-});
-
 import { nextRepeat, repeatButton } from '../../src/js/player.js';
 
 test('the repeat button cycles off → all → one → off', () => {

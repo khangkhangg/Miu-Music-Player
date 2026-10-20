@@ -22,11 +22,6 @@ export function seekTarget(fraction, durationMs) {
   return Math.round(Math.min(1, Math.max(0, fraction)) * durationMs);
 }
 
-/** Mini player pin (F7.5): state and the label for what a click will do. */
-export function pinButton(onTop) {
-  return { pressed: Boolean(onTop), label: t(onTop ? 'mini.pinOn' : 'mini.pinOff') };
-}
-
 const REPEATS = ['off', 'all', 'one'];
 
 /** Repeat mode after a click: off → all → one → off. */

@@ -14,6 +14,7 @@ import { t, startInLanguage } from './i18n.js';
 import { planSummary } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
+import { workState } from './progress.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
 import { groupAlbums, groupArtists, libraryStats, splitTitle } from './library.js';
@@ -42,9 +43,24 @@ function applyTheme() {
 applyTheme();
 media.addEventListener('change', applyTheme);
 
+/** Loading screen progress; at 100 it fades away. */
+function boot(percent) {
+  const el = document.getElementById('boot');
+  if (!el || el.classList.contains('done')) return;
+  document.getElementById('boot-fill').style.width = `${percent}%`;
+  el.setAttribute('aria-valuenow', String(percent));
+  if (percent >= 100) {
+    el.classList.add('done');
+    setTimeout(() => el.remove(), 400);
+  }
+}
+
 const invoke = window.__TAURI__?.core?.invoke;
 if (invoke) {
+  boot(15);
   const languageSetting = await startInLanguage(invoke);
+  boot(35);
+  window.__TAURI__.event.listen('library-progress', e => showWork(e.payload));
   setupSettings(languageSetting);
   setupWizard();
   invoke('app_info').then(info => {
@@ -54,8 +70,8 @@ if (invoke) {
   window.__TAURI__.event.listen('devices', e => showDevices(e.payload));
   invoke('list_devices').then(showDevices);
 
-  invoke('list_folders').then(showFolders);
-  loadSongs();
+  invoke('list_folders').then(f => { showFolders(f); boot(60); });
+  loadSongs().then(() => boot(100), () => boot(100));
   window.__TAURI__.event.listen('library-changed', e => {
     showFolders(e.payload);
     loadSongs();
@@ -75,7 +91,7 @@ if (invoke) {
       const row = e.target.closest('.song-row');
       if (!row) return;
       selection = select(selection, shown.map(x => x.id), Number(row.dataset.index), { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
-      renderSongs();
+      markSelection(); // in place: rebuilding the rows here would swallow a double-click
       updateEditButton();
       return;
     }
@@ -97,8 +113,15 @@ if (invoke) {
   document.getElementById('np-repeat').addEventListener('click', () => invoke('player_repeat', { repeat: nextRepeat(playerState?.repeat) }));
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
   window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); showSyncPreview(); });
-  document.getElementById('np-play').addEventListener('click', () =>
-    invoke(playerState?.playing ? 'player_pause' : 'player_resume'));
+  document.getElementById('np-play').addEventListener('click', () => {
+    if (playerState?.songId != null) {
+      invoke(playerState.playing ? 'player_pause' : 'player_resume');
+    } else if (shown.length) {
+      // Nothing queued yet: play the list on screen (from a random song when shuffle is on).
+      const start = playerState?.shuffle ? Math.floor(Math.random() * shown.length) : 0;
+      playList(shown.map(s => s.id), start);
+    }
+  });
   document.getElementById('np-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));
   document.getElementById('np-next').addEventListener('click', () => invoke('player_skip', { by: 1 }));
   document.getElementById('np-bar').addEventListener('click', e => {
@@ -138,7 +161,7 @@ function addFolder(path) {
 }
 
 function loadSongs() {
-  invoke('list_songs').then(list => {
+  return invoke('list_songs').then(list => {
     rawSongs = sortSongs(list, SORT_LOCALE);
     songsById = new Map(list.map(s => [s.id, s]));
     refreshList();
@@ -310,6 +333,12 @@ function cell(text, cls) {
   span.dir = 'auto'; // RTL titles (Arabic, Hebrew) render right to left
   if (cls) span.className = cls;
   return span;
+}
+
+function markSelection() {
+  for (const row of document.querySelectorAll('#song-spacer .song-row')) {
+    row.classList.toggle('selected', selection.selected.has(shown[Number(row.dataset.index)]?.id));
+  }
 }
 
 /** Render only the rows in view (plus overscan) inside the tall spacer. */
@@ -1081,3 +1110,11 @@ document.getElementById('track-list')?.addEventListener('click', e => {
   rate(Number(btn.closest('.track').dataset.id), btn.dataset.act);
 }, true);
 window.addEventListener('resize', () => { if (view === 'albums' || view === 'artists') renderTiles(); });
+
+/** Thin bar while folders are checked or songs fingerprinted in the background. */
+function showWork(p) {
+  const w = workState(p);
+  document.getElementById('work').hidden = !w.show;
+  document.getElementById('work-fill').style.width = `${w.percent}%`;
+  document.getElementById('work-text').textContent = w.text;
+}

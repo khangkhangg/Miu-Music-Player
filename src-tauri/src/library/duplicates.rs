@@ -16,6 +16,11 @@ pub fn pending_hashes(db: &Db, limit: usize) -> rusqlite::Result<Vec<(i64, PathB
     rows.collect()
 }
 
+/// How many songs still need a fingerprint (for the progress bar).
+pub fn count_pending(db: &Db) -> rusqlite::Result<usize> {
+    db.conn().query_row("SELECT count(*) FROM songs WHERE audio_hash IS NULL", [], |r| r.get::<_, i64>(0)).map(|n| n as usize)
+}
+
 /// Store a fingerprint; `None` marks the file unreadable so it is not tried again until it changes.
 pub fn store_hash(db: &Db, id: i64, hash: Option<&str>) -> rusqlite::Result<()> {
     db.conn().execute("UPDATE songs SET audio_hash = ?1 WHERE id = ?2", rusqlite::params![hash.unwrap_or(""), id])?;
@@ -162,5 +167,17 @@ mod tests {
         let group = |name: &str| songs.iter().find(|s| s.path.ends_with(name)).unwrap().duplicate_group;
         let first = id_of(&db, "a.wav").min(id_of(&db, "b.wav"));
         assert_eq!((group("a.wav"), group("b.wav"), group("c.wav")), (Some(first), Some(first), None));
+    }
+
+    #[test]
+    fn the_songs_left_to_fingerprint_can_be_counted() {
+        let d = tempfile::tempdir().unwrap();
+        for i in 0..3 {
+            wav(d.path(), &format!("{i}.wav"), 8_000, 1, 16, 80 + i);
+        }
+        let db = library(d.path());
+        assert_eq!(count_pending(&db).unwrap(), 3);
+        fill_audio_hashes(&db, 2).unwrap();
+        assert_eq!(count_pending(&db).unwrap(), 1);
     }
 }
