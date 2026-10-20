@@ -429,3 +429,20 @@ not play; a fresh read-only backup (`20261020-041040`) still has **69** songs in
 MediaLibrary. iTunes queued the change but the phone has not committed it — the sync session that
 applies manual changes has not completed. Next: let iTunes run its sync (Sync button /
 `UpdateIPod`) and watch the phone's syslog for the outcome.
+
+### 2026-10-20 — `UpdateIPod` result: song added, but one 3uTools song deleted
+`phone.UpdateIPod()` over COM, with the phone's syslog recorded (`src-tauri/src/bin/phone-log.rs`,
+capture in `research/captures/`). iTunes ran an ordinary legacy sync: `RequestingSync` with
+`ManualSync = 1`, Grappa handled by iTunes, "Step 1–4 of 4", then medialibraryd applied
+`Sync_00000000.plist`: **tracks 1 add, 68 updates, 0 deletes** — then an explicit
+`MLDRemoveTracksOperation` for pid 8519413647570239665 ("Deleting 1 assets due to automated
+action", file `F23/CWXN.mp3` removed). The new song's asset was sent and matched
+(`F05/KHRQ.mp3`, err null). iTunes also tried to re-send "Ai Đưa Em Về" (ATError 16, "error
+recoverable, keeping track" — still on the phone).
+Read-only backup after: `20261020-041711`, still 69 songs: **+ "Ai Rồi Cũng Sẽ Khác" (KHRQ.mp3),
+− "Áo Mới Cà Mau" (CWXN.mp3)**. No copy of the removed song was found on this PC or in Miu's library.
+iTunes' device view showed 70 before the sync and 69 after, so iTunes itself dropped one track
+it could not reconcile (cause unknown — confidence low).
+Conclusion: an iTunes sync is **not** guaranteed to leave the 3uTools songs alone even with manual
+management. Before S.2/S.3 rely on this path: always back up first, diff the phone's track list
+before/after every sync (pid + title), and understand why CWXN was dropped.
