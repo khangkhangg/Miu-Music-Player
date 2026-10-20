@@ -96,7 +96,7 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F3.4 Conversion policy + Hi-res for iPhone** — *Test first:* table test format/bit depth/rate → action
   (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected. Ticked on tests 2026-10-20: no UI yet (the
   sync engine uses it in Phase 4, the setting appears in F5.5). 88.2/176.4 kHz sources go to 44.1, not 48.
-- [ ] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.
+- [x] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.
   Built 2026-10-20 (`library::transcode`): ffmpeg args per action (ALAC 16 → s16p, 24 → s32p + 24 bits; AAC 256k; `-f ipod`, tags
   mapped, artwork re-added by lofty), cache in `%LOCALAPPDATA%\MiuMusic\cache` keyed by audio hash + action, `.tags` key for re-tags,
   failed encodes leave nothing. Machine test: 24/96 FLAC → ALAC 24/48 with tags and cover. `convert-liked`: 51 liked FLACs → ALAC
@@ -130,19 +130,19 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   zero byte; after a sync list songs added and removed. Tool: `sync-guard before` / `after` (iTunes' view read over COM since S.2).
   Built 2026-10-20; first run on the 5s: 65 phone-only songs copied to `backups\e51e30a5\media` (770 MB), iTunes' view matches all
   69, `after` with no sync reports no change.
-- [ ] **S.2 Mirror liked songs through iTunes (manual management)** — *Test first:* against a fake iTunes, the plan's steps become
+- [x] **S.2 Mirror liked songs through iTunes (manual management)** — *Test first:* against a fake iTunes, the plan's steps become
   adds (library AddFile, then device AddTrack), removals (device track Delete; already gone counts as done), and replace / tag
   update as remove + add; songs needing conversion fail with a clear reason until ffmpeg is set up; liked songs already on the phone
   (3uTools) are adopted (migration 12) — not sent twice, never removed by Miu. Real iTunes: `apple::itunes_com` (late-bound COM,
   persistent ID = phone sync_id). Built 2026-10-20; machine test reads the 5s's 69 tracks with IDs matching the phone. Nothing sent yet.
-- [ ] **S.3 Guarded sync from the Sync button** — *Test first (fakes for phone and iTunes):* backup → copy off phone-only songs →
+- [x] **S.3 Guarded sync from the Sync button** — *Test first (fakes for phone and iTunes):* backup → copy off phone-only songs →
   stop if iTunes' view misses a phone song (nothing changed) → adopt → plan → apply through iTunes → `UpdateIPod` only when something
   changed → wait until the phone shows the changes (unconfirmed after 5 min is reported) → backup, diff (unplanned removals reported) →
   record the run. Leading-zero IDs only warn (a copy is kept). `sync_now` runs on its own DB connection with `sync-progress` events.
   Built 2026-10-20. Conversion is in (F3.5): liked FLACs go as cached ALAC copies; a first run sends the 51 liked FLACs (~1.4 GB).
 - [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).
 - [ ] **S.5 Verify** — reuse F4.5 (pull the device DB, compare per track).
-- [ ] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync.
+- [x] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync. Verified 2026-10-20: 54 songs (3 MP3, 51 ALAC) play with titles and covers.
 
 ## Phase 5 – UI
 - [x] **F5.1 Device card** — *Test first (JS):* storage bar percentages and labels from device info.
