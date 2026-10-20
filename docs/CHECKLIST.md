@@ -195,7 +195,8 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
   Verified in the app 2026-10-20 (download with progress, remove, auto-download newest episodes).
 - [x] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
   Verified in the app 2026-10-20 (Vietnam and US charts, search, subscribe; subscribed ones marked).
-- [ ] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
+- [x] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
+  Verified in the app 2026-10-20 (play, resume, skip 15/30, now playing and mini player show the episode).
 - [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
 
 ## Phase 6 – Packaging
