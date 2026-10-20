@@ -59,3 +59,20 @@ test('titles split in two for the light / bold display', () => {
   assert.deepEqual(splitTitle('Dạ'), ['', 'Dạ']);
   assert.deepEqual(splitTitle('夜に駆ける'), ['', '夜に駆ける'], 'no spaces: one line');
 });
+
+import { syncRuleFor, hasSyncRule } from '../../src/js/library.js';
+
+test('an artist or album page names the sync rule it would turn on', () => {
+  assert.deepEqual(syncRuleFor({ kind: 'artist', title: 'Hà Nhi', artist: '' }), { kind: 'artist', artist: 'Hà Nhi', album: null });
+  assert.deepEqual(syncRuleFor({ kind: 'album', title: 'Tình ca', artist: 'Khánh Ly' }), { kind: 'album', artist: 'Khánh Ly', album: 'Tình ca' });
+  assert.equal(syncRuleFor({ kind: 'album', title: 'Tình ca', artist: '' }), null, 'albums without an artist cannot be matched');
+  assert.equal(syncRuleFor(null), null);
+});
+
+test('a page shows whether its rule is on', () => {
+  const rules = [{ kind: 'album', artist: 'Khánh Ly', album: 'Tình ca' }, { kind: 'artist', artist: 'Hà Nhi', album: null }];
+  assert.equal(hasSyncRule(rules, { kind: 'artist', artist: 'Hà Nhi', album: null }), true);
+  assert.equal(hasSyncRule(rules, { kind: 'album', artist: 'Khánh Ly', album: 'Tình ca' }), true);
+  assert.equal(hasSyncRule(rules, { kind: 'artist', artist: 'Khánh Ly', album: null }), false);
+  assert.equal(hasSyncRule(rules, null), false);
+});

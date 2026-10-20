@@ -53,3 +53,18 @@ test('skip back 15 s and forward 30 s stay inside the episode', () => {
   assert.equal(skipTarget(3_590_000, 30_000, 3_600_000), 3_599_000, 'not past the end');
   assert.equal(skipTarget(10_000, 30_000, null), 40_000, 'length unknown');
 });
+
+import { playButtonAction } from '../../src/js/player.js';
+
+test('the play button pauses or resumes whatever is loaded, a podcast episode too', () => {
+  assert.equal(playButtonAction({ songId: 4, playing: true }, 10), 'pause');
+  assert.equal(playButtonAction({ songId: 4, playing: false }, 10), 'resume');
+  assert.equal(playButtonAction({ songId: null, episodeId: 7, playing: true }, 10), 'pause');
+  assert.equal(playButtonAction({ songId: null, episodeId: 7, playing: false }, 10), 'resume');
+});
+
+test('with nothing loaded, the play button plays the list on screen', () => {
+  assert.equal(playButtonAction(null, 10), 'playList');
+  assert.equal(playButtonAction({ songId: null, episodeId: null, playing: false }, 10), 'playList');
+  assert.equal(playButtonAction(null, 0), 'none');
+});

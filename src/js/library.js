@@ -66,3 +66,14 @@ export function splitTitle(title) {
   const cut = Math.ceil(words.length / 2);
   return [words.slice(0, cut).join(' '), words.slice(cut).join(' ')];
 }
+
+/** The "always sync" rule an artist or album page stands for, or null when it can't have one. */
+export function syncRuleFor(page) {
+  if (page?.kind === 'artist' && page.title) return { kind: 'artist', artist: page.title, album: null };
+  if (page?.kind === 'album' && page.title && page.artist) return { kind: 'album', artist: page.artist, album: page.title };
+  return null;
+}
+
+export function hasSyncRule(rules, rule) {
+  return Boolean(rule) && rules.some((r) => r.kind === rule.kind && r.artist === rule.artist && (r.album ?? null) === (rule.album ?? null));
+}

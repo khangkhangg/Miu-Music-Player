@@ -113,6 +113,13 @@ pub const MIGRATIONS: &[&str] = &[
     "ALTER TABLE episodes ADD COLUMN played_at INTEGER;
      ALTER TABLE podcasts ADD COLUMN auto_download INTEGER NOT NULL DEFAULT 0;
      ALTER TABLE podcasts ADD COLUMN keep_latest INTEGER NOT NULL DEFAULT 3;",
+    // 11: "always sync" artists and albums; album is empty for artist rules
+    "CREATE TABLE sync_rules (
+        kind TEXT NOT NULL CHECK (kind IN ('artist', 'album')),
+        artist TEXT NOT NULL,
+        album TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (kind, artist, album)
+     ) STRICT;",
 ];
 
 #[derive(Debug, thiserror::Error)]

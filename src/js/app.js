@@ -3,7 +3,7 @@ import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
 import { folderItems, librarySummary, encodingOptions } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
-import { nowPlaying, seekTarget, nextRepeat, repeatButton, skipTarget } from './player.js';
+import { nowPlaying, seekTarget, nextRepeat, repeatButton, skipTarget, playButtonAction } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
@@ -19,7 +19,7 @@ import { episodeMeta, episodeState, markSubscribed } from './podcasts.js';
 import { language } from './i18n.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
-import { groupAlbums, groupArtists, libraryStats, splitTitle } from './library.js';
+import { groupAlbums, groupArtists, libraryStats, splitTitle, syncRuleFor, hasSyncRule } from './library.js';
 import { formatDuration } from './songs.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
@@ -116,9 +116,10 @@ if (invoke) {
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
   window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); showSyncPreview(); });
   document.getElementById('np-play').addEventListener('click', () => {
-    if (playerState?.songId != null) {
-      invoke(playerState.playing ? 'player_pause' : 'player_resume');
-    } else if (shown.length) {
+    const action = playButtonAction(playerState, shown.length);
+    if (action === 'pause' || action === 'resume') {
+      invoke(`player_${action}`);
+    } else if (action === 'playList') {
       // Nothing queued yet: play the list on screen (from a random song when shuffle is on).
       const start = playerState?.shuffle ? Math.floor(Math.random() * shown.length) : 0;
       playList(shown.map(s => s.id), start);
@@ -886,6 +887,13 @@ function setupSettings(languageSetting) {
   go('nav-settings', () => showView('settings'));
   $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));
   $('album-play').addEventListener('click', () => { if (page) playList(page.songs.map(x => x.id), 0); });
+  invoke('sync_rules').then(r => { syncRules = r; renderSyncRule(); }).catch(() => {});
+  $('album-sync').addEventListener('click', () => {
+    const rule = syncRuleFor(page);
+    if (!rule) return;
+    invoke('set_sync_rule', { rule, on: !hasSyncRule(syncRules, rule) })
+      .then(r => { syncRules = r; renderSyncRule(); if (page) openPage(page.kind, { ...page, name: page.title }, false); });
+  });
   $('album-edit').addEventListener('click', () => {
     if (!page) return;
     selection = { selected: new Set(page.songs.map(x => x.id)), anchor: null };
@@ -1050,6 +1058,7 @@ function openPage(kind, item, scroll = true) {
   $('hero-artist').textContent = page.artist;
   $('hero-kicker').textContent = artist ? t('page.artist') : (page.year ? t('page.albumYear', { year: page.year }) : t('page.album'));
   $('album-back-label').textContent = t(artist ? 'nav.artists' : 'nav.albums');
+  renderSyncRule();
   const cover = $('hero-cover');
   cover.replaceChildren(thumb(page.coverId != null ? { id: page.coverId, hasArtwork: true } : null, 'hero-art', 320));
   const bg = $('hero-bg');
@@ -1457,4 +1466,16 @@ function episodeInfo(id) {
     if (playerState?.episodeId === id) { showPlayer(playerState); renderNowArt(); }
   }).catch(() => {});
   return episodes.get(id);
+}
+
+// ---- Always sync an artist or album ----
+let syncRules = [];
+
+function renderSyncRule() {
+  const button = document.getElementById('album-sync');
+  const rule = syncRuleFor(page);
+  button.hidden = !rule;
+  const on = hasSyncRule(syncRules, rule);
+  button.setAttribute('aria-pressed', String(on));
+  document.getElementById('album-sync-label').textContent = t(on ? 'album.alwaysSyncOn' : 'album.alwaysSync');
 }

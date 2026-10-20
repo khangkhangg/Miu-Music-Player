@@ -41,3 +41,9 @@ export function skipTarget(position, delta, duration) {
   const to = Math.max(0, position + delta);
   return duration ? Math.min(to, duration - 1000) : to;
 }
+
+/** What the big play button does: pause/resume the loaded song or episode, else play the list on screen. */
+export function playButtonAction(state, shownCount) {
+  if (state?.songId != null || state?.episodeId != null) return state.playing ? 'pause' : 'resume';
+  return shownCount > 0 ? 'playList' : 'none';
+}

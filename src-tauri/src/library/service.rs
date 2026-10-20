@@ -49,6 +49,13 @@ fn rescan(app: &AppHandle, db: &SharedDb, ids: &[i64]) {
             Err(e) => log::warn!("rescan of {} failed: {e}", f.path),
         }
     }
+    if let Ok(d) = db.lock() {
+        match crate::library::sync_rules::apply_rules(&d) {
+            Ok(liked) if !liked.is_empty() => log::info!("always-sync rules liked {} new songs", liked.len()),
+            Ok(_) => {}
+            Err(e) => log::warn!("applying always-sync rules failed: {e}"),
+        }
+    }
     progress(app, "scan", total, total);
 }
 
@@ -132,6 +139,32 @@ pub fn rate_song(id: i64, rating: i64, app: AppHandle, db: State<'_, SharedDb>) 
     // Both windows (main and mini) keep their song lists in step.
     let _ = app.emit("song-rated", serde_json::json!({ "id": id, "rating": rating }));
     Ok(())
+}
+
+/// The "always sync" artists and albums.
+#[tauri::command]
+pub fn sync_rules(db: State<'_, SharedDb>) -> Result<Vec<crate::library::sync_rules::SyncRule>, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    crate::library::sync_rules::list_rules(&d)
+}
+
+/// Turn "always sync" on (likes every not-rated song of it now and later) or off for an artist or album.
+#[tauri::command]
+pub fn set_sync_rule(
+    rule: crate::library::sync_rules::SyncRule,
+    on: bool,
+    app: AppHandle,
+    db: State<'_, SharedDb>,
+) -> Result<Vec<crate::library::sync_rules::SyncRule>, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    if on {
+        for id in crate::library::sync_rules::add_rule(&d, &rule)? {
+            let _ = app.emit("song-rated", serde_json::json!({ "id": id, "rating": 1 }));
+        }
+    } else {
+        crate::library::sync_rules::remove_rule(&d, &rule)?;
+    }
+    crate::library::sync_rules::list_rules(&d)
 }
 
 /// Move disliked songs' files to the Recycle Bin and remove them from the library.
@@ -225,7 +258,10 @@ pub fn song_tags(ids: Vec<i64>, db: State<'_, SharedDb>) -> Result<Vec<SongTags>
 fn save(edits: &[crate::library::edit::Edit], app: &AppHandle, db: &SharedDb, last: &LastEdit) -> Result<crate::library::edit::EditReport, String> {
     let report = {
         let d = db.lock().map_err(|e| e.to_string())?;
-        crate::library::edit::edit_songs(&d, edits)?
+        let report = crate::library::edit::edit_songs(&d, edits)?;
+        // Edited tags can put a song under an "always sync" artist or album.
+        crate::library::sync_rules::apply_rules(&d)?;
+        report
     };
     *last.0.lock().map_err(|e| e.to_string())? = report.undo.clone();
     let _ = app.emit("library-changed", folder_list(db));

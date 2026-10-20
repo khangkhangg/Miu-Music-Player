@@ -151,6 +151,9 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   2026-10-20: device opened at each file's own rate (Bit-perfect shown on the LG at 44.1/48 kHz); other apps silent
   while held, released on switching back. Gapless only between files at the same rate in exclusive mode.
 - [x] **F7.2 Ratings + filter chips** — *Test first:* rating transitions and counts; filters return the right songs.
+- [x] **F7.2b Always sync an artist or album** — *Test first:* a rule likes every not-rated song of the artist
+  (or album + album artist, as the Albums view groups them) now and after later scans or tag edits; disliked songs stay
+  disliked; removing the rule keeps existing likes. Verified in the app 2026-10-20.
 - [x] **F7.3 Disliked view + delete** — *Test first:* delete moves the file to Recycle Bin (temp-dir stub of the
   trash API), removes it from the library and queues device removal; undo dislike restores "not rated".
 - [x] **F7.4 Mini player window** — *Test first:* open-on-minimize setting decides mini vs taskbar.
@@ -197,6 +200,7 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
   Verified in the app 2026-10-20 (Vietnam and US charts, search, subscribe; subscribed ones marked).
 - [x] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
   Verified in the app 2026-10-20 (play, resume, skip 15/30, now playing and mini player show the episode).
+  Fix 2026-10-20: the play button pauses a playing episode instead of starting all songs (verified in the app).
 - [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
   Skipped 2026-10-20 at the user's request.
 

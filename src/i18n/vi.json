@@ -340,5 +340,8 @@
   "player.fwd30": "Tới 30 giây",
   "podcast.play": "Phát",
   "podcast.resume": "Nghe tiếp từ {at}",
-  "podcast.downloadPlay": "Tải và phát"
+  "podcast.downloadPlay": "Tải và phát",
+  "album.alwaysSync": "Luôn đồng bộ",
+  "album.alwaysSyncOn": "Đang luôn đồng bộ",
+  "album.alwaysSyncHint": "Thích mọi bài ở đây, cả bài mới sau này, để đồng bộ sang iPhone"
 }

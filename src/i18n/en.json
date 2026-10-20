@@ -340,5 +340,8 @@
   "player.fwd30": "Forward 30 seconds",
   "podcast.play": "Play",
   "podcast.resume": "Resume at {at}",
-  "podcast.downloadPlay": "Download & play"
+  "podcast.downloadPlay": "Download & play",
+  "album.alwaysSync": "Always sync",
+  "album.alwaysSyncOn": "Always syncing",
+  "album.alwaysSyncHint": "Like every song here, and new ones later, so they sync to the iPhone"
 }

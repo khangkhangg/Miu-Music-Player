@@ -101,6 +101,8 @@ pub fn run() {
             library::service::list_folders,
             library::service::list_songs,
             library::service::rate_song,
+            library::service::sync_rules,
+            library::service::set_sync_rule,
             library::service::delete_songs,
             library::service::add_folder,
             library::service::remove_folder,
