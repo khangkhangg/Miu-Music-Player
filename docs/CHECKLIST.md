@@ -191,7 +191,8 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
   Verified in the app 2026-10-20 (subscribe by address, artwork, episodes, check for new episodes).
 - [x] **P.2 OPML import / export** — *Test first:* an OPML file from another app subscribes to every feed; export round-trips.
   Verified in the app 2026-10-20 (import from another app with summary; export re-imports).
-- [ ] **P.3 Offline downloads** — *Test first:* resumable download (Range), auto-download newest N per show, cleanup of played episodes after X days.
+- [x] **P.3 Offline downloads** — *Test first:* resumable download (Range), auto-download newest N per show, cleanup of played episodes after X days.
+  Verified in the app 2026-10-20 (download with progress, remove, auto-download newest episodes).
 - [ ] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
 - [ ] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
 - [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
