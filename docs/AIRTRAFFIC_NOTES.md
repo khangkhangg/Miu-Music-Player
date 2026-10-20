@@ -387,3 +387,16 @@ Lessons:
 
 Remaining paths for Grappa (decision pending): install standalone x64 iTunes from apple.com (registers CoreFP the
 supported way), investigate `ATHostConnectionCreateWithLibrary`, or Phase 2 gate → fallbacks.
+
+## 2026-10-20 — Sync spec review and option A probe
+
+The user's spec (static analysis of iTunes 12139.11001.62009.0) confirms two obstacles for our own
+ATC engine: Grappa (session authentication) and the `.cig` signature on each `Sync_XXXXXXXX.plist`
+plan, computed inside iTunes.exe by an obfuscated routine that no DLL exports. We do not lift,
+emulate or forge either (CLAUDE.md, the spec's legal note). Chosen path: **option A**, drive iTunes.
+
+Probe (read-only, no sync): the Store build declares a packaged COM ExeServer
+`iTunes.Application` (CLSID `DC0C2640-1415-4644-875C-6F4D769839BA`) in its AppxManifest; it is not
+in HKCR, so create it by CLSID. Result: version 12.13.11.1, library 68 tracks, sources Library /
+Internet Radio / iTunes Store. iPhone **not plugged in** during the probe, so whether it appears
+as an `IITIPodSource` (kind 2) is still open (checklist S.1).

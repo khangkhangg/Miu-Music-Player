@@ -114,6 +114,19 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [ ] **F4.6 Sync history** — *Test first:* each run stored with per-track status; re-run of unchanged library → empty plan.
   Logic built 2026-10-20 (synced / sync_runs / sync_items, migration 8).
 
+## Phase 4b – Sync through iTunes (spec option A)
+Decided 2026-10-20 from the user's sync spec (static analysis of iTunes 12139): our own ATC engine
+(option B) stays blocked by Grappa and the `.cig` plan signature, which must not be lifted or
+forged (CLAUDE.md rules; the spec's legal note). Option A lets Apple's iTunes do authentication and
+signing: Miu only drives iTunes through its documented COM automation interface.
+- [ ] **S.1 COM probe** — *Machine test (#[ignore]):* connect to `iTunes.Application`, list sources, find the iPhone source. Read-only.
+  2026-10-20: COM works by CLSID (packaged server, not in HKCR): iTunes 12.13.11.1, 68 tracks. iPhone not plugged in yet — does it show as a source?
+- [ ] **S.2 Mirror liked songs into an iTunes playlist "Miu Music"** — *Test first:* against a fake iTunes, the playlist ends up holding exactly the liked set (adds, removes, no duplicates, converted copies for FLAC etc.).
+- [ ] **S.3 Start the device sync** — *Test first:* sync is only requested after the playlist matches; errors map to F5.6 messages. *Machine test:* `UpdateIPod` (or equivalent) syncs the iPhone.
+- [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).
+- [ ] **S.5 Verify** — reuse F4.5 (pull the device DB, compare per track).
+- [ ] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync.
+
 ## Phase 5 – UI
 - [x] **F5.1 Device card** — *Test first (JS):* storage bar percentages and labels from device info.
   Done by F1.3/F1.4 (device.test.js), verified then.
@@ -171,6 +184,15 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   Built 2026-10-20, tests green, **waiting for your check in the app**: preview list in the editor; Undo in the toast after saving.
 - [ ] **F9.5 Watcher + sync + cache** — *Test first:* own writes don't trigger rescans; edited liked song appears as "update" in the sync plan.
   Built 2026-10-20: our own writes refresh the row so the rescan finds nothing; an edited liked song plans an update (tested). Cache part waits for F3.5.
+
+## Phase 7 – Podcasts
+Added 2026-10-20. Default Discover charts: Vietnam and US.
+- [ ] **P.1 Feeds and subscriptions** — *Test first:* RSS fixtures (iTunes tags, Vietnamese titles, missing fields) parse into a show and episodes; subscribing stores them; refreshing adds new episodes only.
+- [ ] **P.2 OPML import / export** — *Test first:* an OPML file from another app subscribes to every feed; export round-trips.
+- [ ] **P.3 Offline downloads** — *Test first:* resumable download (Range), auto-download newest N per show, cleanup of played episodes after X days.
+- [ ] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
+- [ ] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
+- [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
