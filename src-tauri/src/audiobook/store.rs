@@ -66,9 +66,12 @@ pub fn chapters_of(db: &Db, book_id: i64) -> rusqlite::Result<Vec<EpisodeRow>> {
     rows.collect()
 }
 
-/// The first unfinished chapter and where in it the listener is; `None` when every one is done.
+/// Where listening goes on, and where in that chapter: the first unfinished chapter after the
+/// furthest finished one (so jumping ahead is remembered), else the first unfinished one;
+/// `None` when every chapter is done.
 pub fn resume_point(chapters: &[EpisodeRow]) -> Option<(i64, i64)> {
-    chapters.iter().find(|c| !c.played).map(|c| (c.id, c.position_ms))
+    let after = chapters.iter().rposition(|c| c.played).map_or(0, |i| i + 1);
+    chapters[after..].iter().chain(chapters[..after].iter()).find(|c| !c.played).map(|c| (c.id, c.position_ms))
 }
 
 /// Chapters on this PC from `start` on, in order, until the first one that is not.
@@ -188,6 +191,11 @@ mod tests {
         let b = &list_books(&db).unwrap()[0];
         assert_eq!(b.finished, 1);
         assert_eq!((b.resume_chapter, b.resume_title.as_deref(), b.resume_ms), (Some(ch[1].id), Some("Chapter 2"), 95_000));
+        podcasts::set_progress(&db, ch[0].id, 0, false, 3).unwrap();
+        podcasts::set_progress(&db, ch[1].id, 0, true, 3).unwrap();
+        podcasts::set_progress(&db, ch[2].id, 30_000, false, 3).unwrap();
+        let ch = chapters_of(&db, id).unwrap();
+        assert_eq!(resume_point(&ch), Some((ch[2].id, 30_000)), "jumped ahead: go on after the furthest finished chapter, not back to 1");
         for c in &ch {
             podcasts::set_progress(&db, c.id, 0, true, 4).unwrap();
         }

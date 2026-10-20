@@ -228,6 +228,22 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
 - [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
   Skipped 2026-10-20 at the user's request.
 
+## Phase 8 – Audiobooks (LibriVox)
+Added 2026-10-20. LibriVox only: free public-domain recordings with a public JSON API. Audible, Libby/OverDrive, Storytel,
+Google Play Books, Spotify and Kobo have no public download API and sell DRM files, so they stay out.
+A book is a `podcasts` row with kind 'audiobook' (migration 14); its chapters are episodes, read from the book's RSS feed,
+so downloads, progress, the now-playing column and the mini player are the podcast ones. Books are not refreshed or cleaned up.
+- [ ] **A.1 Find books** — *Test first:* saved LibriVox answers (title and author search, recent books, not found) parse into
+  books; search merges title and author matches; browse lists newest first, by language. Machine test (`#[ignore]`) hits the real API.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: Audiobooks → Find on LibriVox (language list, search).
+  LibriVox has no Vietnamese recordings yet (checked 2026-10-20): choosing Vietnamese says so.
+- [ ] **A.2 Add to library, offline** — *Test first:* a book and its chapters are stored in reading order, adding again keeps progress,
+  books are not podcasts, removing takes the chapters; a passing server error is retried, a 404 is not.
+  Built 2026-10-20, **waiting for your check**: Add to library downloads every chapter with progress; Remove download; Remove from library.
+- [ ] **A.3 Listen** — *Test first:* resume after the furthest finished chapter; chapters play in order whatever shuffle and repeat say;
+  the play queue is the downloaded chapters from the chosen one on.
+  Built 2026-10-20, **waiting for your check**: Start / Resume, skip back 15 / forward 30, on to the next chapter, now playing and mini player.
+
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
   2026-10-20: path resolution tested (next to the app, or `src-tauri/binaries` from `target/<profile>`); `externalBin` + licence

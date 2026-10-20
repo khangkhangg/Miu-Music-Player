@@ -136,6 +136,17 @@ use std::sync::{Arc, Mutex};
 pub struct Downloads {
     queue: Mutex<VecDeque<i64>>,
     running: AtomicBool,
+    /// The episode downloading now.
+    current: Mutex<Option<i64>>,
+}
+
+impl Downloads {
+    /// Episodes asked for and not on disk yet: the one in progress, then the queue.
+    pub fn pending(&self) -> Vec<i64> {
+        let mut ids: Vec<i64> = self.current.lock().ok().and_then(|c| *c).into_iter().collect();
+        ids.extend(self.queue.lock().map(|q| q.iter().copied().collect::<Vec<_>>()).unwrap_or_default());
+        ids
+    }
 }
 
 pub type SharedDownloads = Arc<Downloads>;
@@ -161,7 +172,11 @@ pub fn enqueue(app: &tauri::AppHandle, db: &SharedDb, downloads: &SharedDownload
     let (app, db, downloads) = (app.clone(), db.clone(), downloads.clone());
     std::thread::spawn(move || {
         loop {
-            let Some(id) = downloads.queue.lock().ok().and_then(|mut q| q.pop_front()) else { break };
+            let next = downloads.queue.lock().ok().and_then(|mut q| q.pop_front());
+            if let Ok(mut c) = downloads.current.lock() {
+                *c = next;
+            }
+            let Some(id) = next else { break };
             let Some(ep) = db.lock().ok().and_then(|d| store::episode(&d, id).ok().flatten()) else { continue };
             if ep.download_path.is_some() {
                 continue;
@@ -169,7 +184,7 @@ pub fn enqueue(app: &tauri::AppHandle, db: &SharedDb, downloads: &SharedDownload
             let ext = crate::podcast::download::extension_for(&ep.audio_url, ep.audio_type.as_deref());
             let dest = podcasts_dir().join(ep.podcast_id.to_string()).join(format!("{id}.{ext}"));
             let title = ep.title.clone();
-            let result = crate::podcast::download::download(&ep.audio_url, &dest, |done, total| {
+            let result = crate::podcast::download::download_retrying(&ep.audio_url, &dest, 3, std::time::Duration::from_secs(5), |done, total| {
                 let _ = app.emit("library-progress", serde_json::json!({ "phase": "download", "done": done, "total": total.unwrap_or(0), "title": title }));
             });
             match result {
@@ -184,6 +199,9 @@ pub fn enqueue(app: &tauri::AppHandle, db: &SharedDb, downloads: &SharedDownload
                 }
             }
             let _ = app.emit("library-progress", serde_json::json!({ "phase": "download", "done": 0, "total": 0 }));
+            if let Ok(mut c) = downloads.current.lock() {
+                *c = None;
+            }
             let _ = app.emit("podcasts-changed", id);
         }
         downloads.running.store(false, Ordering::Release);
@@ -254,6 +272,12 @@ pub fn start(app: tauri::AppHandle, db: SharedDb, downloads: SharedDownloads) {
 #[tauri::command]
 pub fn podcast_download(id: i64, app: tauri::AppHandle, db: State<'_, SharedDb>, downloads: State<'_, SharedDownloads>) {
     enqueue(&app, &db, &downloads, &[id]);
+}
+
+/// Episodes downloading or waiting to (so the UI can say so after a restart of the view).
+#[tauri::command]
+pub fn podcast_pending_downloads(downloads: State<'_, SharedDownloads>) -> Vec<i64> {
+    downloads.pending()
 }
 
 #[tauri::command]
@@ -360,4 +384,18 @@ pub fn podcast_now(id: i64, db: State<'_, SharedDb>) -> Result<NowEpisode, Strin
             |r| Ok(NowEpisode { title: r.get(0)?, show: r.get(1)?, artwork_url: r.get(2)?, duration_ms: r.get(3)? }),
         )
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pending_downloads_are_the_one_in_progress_then_the_queue() {
+        let d = Downloads::default();
+        assert!(d.pending().is_empty());
+        d.queue.lock().unwrap().extend([7, 8]);
+        *d.current.lock().unwrap() = Some(6);
+        assert_eq!(d.pending(), [6, 7, 8]);
+    }
 }

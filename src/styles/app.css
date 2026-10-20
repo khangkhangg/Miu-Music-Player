@@ -273,6 +273,7 @@ div.tile { cursor: default; }
 
 /* Audiobooks */
 .book-language { padding: 0; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.book-language select { min-width: 150px; }
 .book-about { padding: 8px 28px 14px; margin: 0; font-size: 11px; }
 .episode.current .episode-title { color: var(--accent-ink); font-weight: 600; }
 

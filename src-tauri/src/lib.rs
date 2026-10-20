@@ -129,6 +129,7 @@ pub fn run() {
             podcast::service::podcast_export_opml,
             podcast::service::podcast_download,
             podcast::service::podcast_delete_download,
+            podcast::service::podcast_pending_downloads,
             podcast::service::podcast_set_played,
             podcast::service::podcast_set_options,
             podcast::service::podcast_chart,

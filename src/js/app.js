@@ -1707,7 +1707,8 @@ function openBookPage(id, scroll = true) {
     : t(`book.${action}`);
   $('book-remove-download').hidden = !b.downloaded;
   $('book-facts').textContent = [bookProgress(b), lengthLabel(b.durationMs)].filter(Boolean).join(' · ');
-  return invoke('audiobook_chapters', { id }).then(chapters => {
+  return Promise.all([invoke('audiobook_chapters', { id }), invoke('podcast_pending_downloads').catch(() => [])]).then(([chapters, pending]) => {
+    for (const p of pending) pendingDownloads.add(p);
     $('chapter-list').replaceChildren(...chapters.map((c, i) => {
       const li = document.createElement('li');
       li.className = ['episode', c.played ? 'played' : '', c.id === b.resumeChapter ? 'current' : ''].filter(Boolean).join(' ');

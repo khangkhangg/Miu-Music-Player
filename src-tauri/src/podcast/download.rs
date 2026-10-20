@@ -90,6 +90,22 @@ pub fn download(url: &str, dest: &Path, progress: impl Fn(u64, Option<u64>)) -> 
     Ok(done)
 }
 
+/// `download`, tried up to `tries` times when the server fails or the connection drops (a book's
+/// many chapters often meet a passing error); "not found" and other 4xx answers are final.
+pub fn download_retrying(url: &str, dest: &Path, tries: u32, pause: Duration, progress: impl Fn(u64, Option<u64>)) -> Result<u64, String> {
+    let mut attempt = 1;
+    loop {
+        match download(url, dest, &progress) {
+            Err(e) if attempt < tries && !e.starts_with("the server answered 4") => {
+                log::info!("download of {url} failed ({e}), trying again");
+                std::thread::sleep(pause * attempt);
+                attempt += 1;
+            }
+            other => return other,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,6 +192,53 @@ mod tests {
         std::fs::write(part_path(&dest), vec![9u8; 500]).unwrap(); // stale partial file
         download(&url, &dest, |_, _| {}).unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), audio());
+    }
+
+    /// Answers `first` to the first request, then serves `audio()`. Counts requests.
+    fn flaky(first: u16, requests: usize) -> (String, Arc<Mutex<usize>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/ch.mp3", listener.local_addr().unwrap());
+        let count = Arc::new(Mutex::new(0));
+        let c = count.clone();
+        std::thread::spawn(move || {
+            for (n, stream) in listener.incoming().take(requests).enumerate() {
+                let mut stream = stream.unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                        break;
+                    }
+                }
+                *c.lock().unwrap() += 1;
+                if n == 0 {
+                    let _ = stream.write_all(format!("HTTP/1.1 {first} Oops\r\nContent-Length: 0\r\n\r\n").as_bytes());
+                } else {
+                    let body = audio();
+                    let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len()).as_bytes());
+                    let _ = stream.write_all(&body);
+                }
+            }
+        });
+        (url, count)
+    }
+
+    #[test]
+    fn a_passing_server_error_is_tried_again() {
+        let d = tempfile::tempdir().unwrap();
+        let (url, count) = flaky(500, 2);
+        let dest = d.path().join("2.mp3");
+        download_retrying(&url, &dest, 3, Duration::ZERO, |_, _| {}).unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), audio());
+        assert_eq!(*count.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn a_missing_file_is_not_tried_again() {
+        let d = tempfile::tempdir().unwrap();
+        let (url, count) = flaky(404, 2);
+        assert!(download_retrying(&url, &d.path().join("2.mp3"), 3, Duration::ZERO, |_, _| {}).is_err());
+        assert_eq!(*count.lock().unwrap(), 1);
     }
 
     #[test]
