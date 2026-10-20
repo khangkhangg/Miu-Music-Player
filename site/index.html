@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Miu Music: a light, beautiful music player for Windows</title>
+<meta name="description" content="Miu Music is a small, bit-perfect music player for Windows that puts the songs you like straight into your iPhone's Music app. Free.">
+<meta property="og:title" content="Miu Music">
+<meta property="og:description" content="A light, beautiful music player for Windows. Like a song, and it lands in your iPhone's Music app.">
+<link rel="icon" href="miu-cat.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #111219;
+    --bg-2: #171822;
+    --card: #1d1f2b;
+    --card-2: #242636;
+    --line: #2c2f42;
+    --text: #f2f1ee;
+    --muted: #a5a6b4;
+    --accent: #f2c12e;
+    --accent-ink: #1a1400;
+    --coral: #ff7a45;
+    --pink: #e2337a;
+    --ring: linear-gradient(135deg, #ffd23f 0%, #ff7a45 50%, #e2337a 100%);
+    --radius: 18px;
+    --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  img, svg { display: block; }
+  .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+
+  /* Nav */
+  .nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  .nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  .brand img { width: 32px; height: 32px; }
+  .brand b { font-weight: 700; }
+  .nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+  .nav-links a { text-decoration: none; color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+  .lang { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+  .lang button { border: 0; background: none; color: var(--muted); font: 600 12px var(--font); padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+  /* Hero */
+  .hero { position: relative; overflow: hidden; padding: 88px 0 40px; }
+  .hero::before { content: ""; position: absolute; inset: -30% -10% auto; height: 620px; background: radial-gradient(closest-side, rgba(255, 122, 69, 0.22), transparent 70%), radial-gradient(closest-side at 70% 40%, rgba(226, 51, 122, 0.18), transparent 70%); pointer-events: none; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+  .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px 5px 6px; margin: 0 0 22px; }
+  .kicker span { background: var(--ring); color: #1b1300; font-weight: 700; font-size: 11px; border-radius: 999px; padding: 2px 8px; }
+  h1 { font-size: clamp(38px, 5.4vw, 64px); line-height: 1.04; letter-spacing: -0.03em; margin: 0 0 20px; font-weight: 700; }
+  h1 em { font-style: normal; background: var(--ring); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: 19px; color: var(--muted); margin: 0 0 32px; max-width: 34em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; border-radius: 12px; padding: 14px 22px; font-size: 16px; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .btn svg { width: 18px; height: 18px; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 10px 30px rgba(242, 193, 46, 0.25); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(242, 193, 46, 0.35); }
+  .btn-ghost { border: 1px solid var(--line); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--muted); }
+  .fine { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+
+  /* App preview, drawn in CSS */
+  .shot { position: relative; border-radius: 16px; background: #1c1c22; border: 1px solid #2d2e3a; box-shadow: 0 40px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03); overflow: hidden; aspect-ratio: 16 / 10.5; display: grid; grid-template-columns: 27% 1fr 30%; font-size: 10px; }
+  .shot-bar { position: absolute; top: 0; left: 0; right: 0; height: 22px; display: flex; justify-content: flex-end; gap: 14px; padding: 6px 12px; color: #6d6e7c; }
+  .shot-side, .shot-np { background: #16161c; padding: 30px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .shot-brand { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 11px; margin-bottom: 6px; }
+  .shot-brand img { width: 16px; height: 16px; }
+  .shot-nav { display: flex; flex-direction: column; gap: 6px; color: #9d9eac; }
+  .shot-nav .on { color: var(--accent); }
+  .shot-phone { margin-top: auto; background: #20212b; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .shot-phone b { font-size: 11px; }
+  .shot-meter { height: 3px; background: #33343f; border-radius: 3px; overflow: hidden; }
+  .shot-meter i { display: block; width: 16%; height: 100%; background: var(--accent); }
+  .shot-sync { background: var(--accent); color: var(--accent-ink); text-align: center; border-radius: 6px; padding: 5px; font-weight: 700; }
+  .shot-main { padding: 30px 14px 12px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .shot-main h4 { margin: 0 0 4px; font-size: 15px; }
+  .row { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; color: #c9c9d3; }
+  .row.on { background: #262734; color: #fff; }
+  .row i { width: 22px; height: 22px; border-radius: 4px; display: block; }
+  .row small { color: #7e7f8d; }
+  .row .fmt { color: #8a8b99; font-size: 9px; }
+  .heart { color: var(--accent); }
+  .shot-art { aspect-ratio: 1; border-radius: 10px; background: radial-gradient(circle at 30% 30%, #ffd23f, #ff7a45 45%, #e2337a 80%); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4); }
+  .shot-np b { font-size: 12px; text-align: center; }
+  .shot-np small { text-align: center; color: #9d9eac; }
+  .shot-progress { height: 3px; background: #33343f; border-radius: 3px; }
+  .shot-progress i { display: block; width: 42%; height: 100%; background: var(--accent); border-radius: 3px; }
+  .shot-ctrl { display: flex; justify-content: center; gap: 14px; align-items: center; color: #c9c9d3; }
+  .shot-play { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: var(--accent-ink); }
+  .shot-path { margin-top: auto; font-size: 9px; color: #7fd18b; text-align: center; }
+
+  /* Sections */
+  section { padding: 88px 0; }
+  .section-head { max-width: 640px; margin: 0 0 44px; }
+  .eyebrow, .section-head .eyebrow { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 12px; }
+  h2 { font-size: clamp(28px, 3.6vw, 42px); line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 14px; }
+  .section-head p { color: var(--muted); margin: 0; font-size: 17px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+  .card h3 { margin: 14px 0 8px; font-size: 18px; letter-spacing: -0.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .card.wide { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .tag { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--muted); }
+  .sample { font-size: 22px; line-height: 1.5; color: var(--text); }
+  .sample small { display: block; font-size: 13px; color: var(--muted); }
+
+  .alt { background: var(--bg-2); border-block: 1px solid var(--line); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
+  .step { position: relative; padding: 26px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+  .step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ring); color: #1b1300; font-weight: 800; margin-bottom: 14px; }
+  .step h3 { margin: 0 0 8px; font-size: 18px; }
+  .step p { margin: 0; color: var(--muted); font-size: 15px; }
+  .safe { margin-top: 16px; display: flex; gap: 16px; align-items: flex-start; background: color-mix(in srgb, #7fd18b 8%, var(--card)); border: 1px solid color-mix(in srgb, #7fd18b 30%, var(--line)); border-radius: var(--radius); padding: 22px 26px; }
+  .safe svg { width: 26px; height: 26px; flex: none; stroke: #7fd18b; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; margin-top: 2px; }
+  .safe p { margin: 0; color: var(--muted); }
+  .safe b { color: var(--text); }
+
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; }
+  summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--accent); font-weight: 700; }
+  details[open] summary::after { content: "–"; }
+  details p { color: var(--muted); margin: 10px 0 0; font-size: 15px; }
+
+  .final { text-align: center; }
+  .final .wrap { display: flex; flex-direction: column; align-items: center; }
+  .final img { width: 96px; height: 96px; margin-bottom: 20px; }
+  .final .cta { justify-content: center; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0; color: var(--muted); font-size: 13px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+  [data-lang] { display: none; }
+  html[lang="en"] [data-lang="en"], html[lang="vi"] [data-lang="vi"] { display: revert; }
+
+  @media (max-width: 900px) {
+    .hero .wrap { grid-template-columns: 1fr; gap: 40px; }
+    .hero { padding-top: 56px; }
+    .grid, .steps { grid-template-columns: 1fr; }
+    .card.wide { grid-column: auto; grid-template-columns: 1fr; }
+    .faq { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+    .lang { margin-left: auto; }
+    section { padding: 64px 0; }
+  }
+  @media (max-width: 520px) {
+    .shot { grid-template-columns: 1fr 1.25fr; aspect-ratio: auto; min-height: 300px; }
+    .shot-main { display: none; }
+    .btn { width: 100%; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } }
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="miu-cat.svg" alt="" width="32" height="32"><span>Miu <b>Music</b></span></a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#features"><span data-lang="en">Features</span><span data-lang="vi">Tính năng</span></a>
+      <a href="#iphone"><span data-lang="en">iPhone sync</span><span data-lang="vi">Đồng bộ iPhone</span></a>
+      <a href="#faq"><span data-lang="en">FAQ</span><span data-lang="vi">Hỏi đáp</span></a>
+    </nav>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-set-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-set-lang="vi" aria-pressed="false">VI</button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="kicker"><span data-lang="en">NEW</span><span data-lang="vi">MỚI</span>
+          <span data-lang="en" style="background:none;color:inherit;font-weight:400;padding:0">Liked songs sync to your iPhone</span>
+          <span data-lang="vi" style="background:none;color:inherit;font-weight:400;padding:0">Bài đã thích tự vào iPhone</span></p>
+        <h1 data-lang="en">Your music, <em>beautifully light.</em></h1>
+        <h1 data-lang="vi">Âm nhạc của bạn, <em>nhẹ và đẹp.</em></h1>
+        <p class="lead" data-lang="en">A tiny Windows player that sounds bit-perfect and puts the songs you love straight into your iPhone's Music app. No iTunes juggling, no 3uTools.</p>
+        <p class="lead" data-lang="vi">Trình phát nhạc nhỏ gọn cho Windows, âm thanh nguyên bản bit-perfect, và đưa những bài bạn thích thẳng vào ứng dụng Nhạc trên iPhone. Không cần loay hoay với iTunes hay 3uTools.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/khangkhangg/Miu-Music-Player/releases/latest">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.5v7H3zm8.5-1.1L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg>
+            <span data-lang="en">Download for Windows</span><span data-lang="vi">Tải cho Windows</span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/khangkhangg/Miu-Music-Player">GitHub</a>
+        </div>
+        <p class="fine" data-lang="en">Free · Windows 10 and 11 · English and Tiếng Việt</p>
+        <p class="fine" data-lang="vi">Miễn phí · Windows 10 và 11 · Tiếng Việt và English</p>
+      </div>
+
+      <div class="shot" role="img" aria-label="Miu Music's window: library, song list and now playing">
+        <div class="shot-bar">–&nbsp;&nbsp;▢&nbsp;&nbsp;✕</div>
+        <div class="shot-side">
+          <div class="shot-brand"><img src="miu-cat.svg" alt="">Miu Music</div>
+          <div class="shot-nav"><span class="on">♪ Songs</span><span>Albums</span><span>Artists</span><span>Podcasts</span><span>Liked</span></div>
+          <div class="shot-phone">
+            <b>khang’s iPhone</b><span style="color:#9d9eac">iPhone 5s · iOS 12.5.8</span>
+            <div class="shot-meter"><i></i></div>
+            <span style="color:#9d9eac">Last sync: just now · 51 songs</span>
+            <div class="shot-sync">Sync</div>
+          </div>
+        </div>
+        <div class="shot-main">
+          <h4>Songs</h4>
+          <div class="row on"><i style="background:linear-gradient(135deg,#ffd23f,#e2337a)"></i><span>Diễm Xưa<br><small>Khánh Ly</small></span><span class="fmt">FLAC · 24/96</span><span class="heart">♥</span></div>
+          <div class="row"><i style="background:#3a5a7a"></i><span>Mùa Thu Cho Em<br><small>Ngọc Lan</small></span><span class="fmt">FLAC · 16/44.1</span><span class="heart">♥</span></div>
+          <div class="row"><i style="background:#6d4c7a"></i><span>Ai Rồi Cũng Sẽ Khác<br><small>Hà Nhi</small></span><span class="fmt">MP3 · 320</span><span class="heart">♥</span></div>
+          <div class="row"><i style="background:#7a5c3a"></i><span>Hạ Trắng<br><small>Trịnh Công Sơn</small></span><span class="fmt">ALAC · 16/44.1</span><span></span></div>
+          <div class="row"><i style="background:#3a7a66"></i><span>情是那么笨<br><small>劉德華</small></span><span class="fmt">FLAC · 16/44.1</span><span class="heart">♥</span></div>
+          <div class="row"><i style="background:#5a3a3a"></i><span>Bông Cỏ Mây<br><small>Như Quỳnh</small></span><span class="fmt">MP3 · 256</span><span></span></div>
+        </div>
+        <div class="shot-np">
+          <div class="shot-art"></div>
+          <b>Diễm Xưa</b><small>Khánh Ly</small>
+          <div class="shot-progress"><i></i></div>
+          <div class="shot-ctrl"><span>⏮</span><span class="shot-play">❚❚</span><span>⏭</span></div>
+          <div class="shot-path">● Bit-perfect · 24-bit / 96 kHz</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow" data-lang="en">Features</p><p class="eyebrow" data-lang="vi">Tính năng</p>
+        <h2 data-lang="en">Small enough to forget it's running. Good enough to notice.</h2>
+        <h2 data-lang="vi">Nhẹ đến mức quên là nó đang chạy. Hay đến mức bạn nhận ra ngay.</h2>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></div>
+          <h3 data-lang="en">Bit-perfect sound</h3><h3 data-lang="vi">Âm thanh bit-perfect</h3>
+          <p data-lang="en">Its own audio engine with WASAPI exclusive mode. FLAC, ALAC, WAV and hi-res play exactly as recorded, and the window shows the signal path.</p>
+          <p data-lang="vi">Bộ máy âm thanh riêng với chế độ WASAPI độc quyền. FLAC, ALAC, WAV và hi-res phát đúng như bản gốc, kèm đường đi tín hiệu hiển thị rõ ràng.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></div>
+          <h3 data-lang="en">Like it, and it's on your iPhone</h3><h3 data-lang="vi">Thích là có trên iPhone</h3>
+          <p data-lang="en">Thumbs up as you listen. Liked songs go to the iPhone's own Music app; songs you skip stay off. Mark a whole artist or album "Always sync".</p>
+          <p data-lang="vi">Bấm thích khi đang nghe. Bài đã thích vào thẳng ứng dụng Nhạc của iPhone; bài không thích thì không. Có thể chọn “Luôn đồng bộ” cho cả nghệ sĩ hay album.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h11l-3-3M20 17H9l3 3"/></svg></div>
+          <h3 data-lang="en">Converts for you</h3><h3 data-lang="vi">Tự chuyển định dạng</h3>
+          <p data-lang="en">FLAC and other formats the iPhone can't play become Apple Lossless automatically, with tags and covers kept. Converted once, reused every sync.</p>
+          <p data-lang="vi">FLAC và các định dạng iPhone không phát được sẽ tự chuyển sang Apple Lossless, giữ nguyên thông tin và ảnh bìa. Chuyển một lần, dùng lại mỗi lần đồng bộ.</p>
+        </div>
+        <div class="card wide">
+          <div>
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 5v2a7 7 0 0 1-4.5 6.5M6 9.5a7 7 0 0 0 5 4M13 20l4-9 4 9M14.5 17h5"/></svg></div>
+            <h3 data-lang="en">Made for Vietnamese music</h3><h3 data-lang="vi">Sinh ra cho nhạc Việt</h3>
+            <p data-lang="en">Old files with broken accents are repaired automatically. Search without accents, sort in true Vietnamese order (Ă after A, Đ after D), and use the app in Tiếng Việt.</p>
+            <p data-lang="vi">File cũ bị lỗi dấu được tự sửa. Tìm kiếm không cần gõ dấu, sắp xếp đúng thứ tự tiếng Việt (Ă sau A, Đ sau D), và giao diện tiếng Việt đầy đủ.</p>
+            <div class="tags"><span class="tag">VNI / TCVN3</span><span class="tag">Unicode</span><span class="tag">中文</span><span class="tag">日本語</span></div>
+          </div>
+          <p class="sample">"diem xua" → Diễm Xưa<small data-lang="en">Typing without accents still finds the song.</small><small data-lang="vi">Gõ không dấu vẫn tìm ra bài.</small></p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+          <h3 data-lang="en">Podcasts, offline</h3><h3 data-lang="vi">Podcast, nghe offline</h3>
+          <p data-lang="en">Top charts for Vietnam and the US, search, OPML import, downloads for offline listening, and resume where you stopped.</p>
+          <p data-lang="vi">Bảng xếp hạng Việt Nam và Mỹ, tìm kiếm, nhập OPML, tải về nghe offline và nghe tiếp từ chỗ đã dừng.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/></svg></div>
+          <h3 data-lang="en">10-band EQ</h3><h3 data-lang="vi">EQ 10 dải</h3>
+          <p data-lang="en">Presets and your own curves, with a clipping guard. The EQ shapes what you hear on the PC; the files on your iPhone stay untouched.</p>
+          <p data-lang="vi">Có sẵn mẫu và tự chỉnh, có chống méo tiếng. EQ chỉ áp dụng khi nghe trên máy tính; file trên iPhone giữ nguyên.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M10 10l2-2 2 2"/></svg></div>
+          <h3 data-lang="en">Mini player and taskbar controls</h3><h3 data-lang="vi">Trình phát mini và điều khiển trên thanh tác vụ</h3>
+          <p data-lang="en">A small always-on-top player with a visualizer, plus play, pause and skip right on the taskbar preview.</p>
+          <p data-lang="vi">Trình phát nhỏ luôn nổi trên cùng với hiệu ứng sóng nhạc, cùng nút phát, dừng, chuyển bài ngay trên ô xem trước của thanh tác vụ.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="iphone" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow" data-lang="en">iPhone sync</p><p class="eyebrow" data-lang="vi">Đồng bộ iPhone</p>
+        <h2 data-lang="en">One button. Your liked songs, in the Music app.</h2>
+        <h2 data-lang="vi">Một nút bấm. Bài đã thích nằm trong ứng dụng Nhạc.</h2>
+        <p data-lang="en">Miu works with Apple's own software, so songs arrive the proper way: in the built-in Music app, with titles, artists and covers.</p>
+        <p data-lang="vi">Miu dùng phần mềm chính thức của Apple, nên bài hát vào đúng cách: trong ứng dụng Nhạc có sẵn, đủ tên bài, nghệ sĩ và ảnh bìa.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h3 data-lang="en">Like what you hear</h3><h3 data-lang="vi">Thích bài đang nghe</h3>
+          <p data-lang="en">Add your music folders and press thumbs up on the songs you want with you.</p>
+          <p data-lang="vi">Thêm thư mục nhạc và bấm thích những bài bạn muốn mang theo.</p>
+        </div>
+        <div class="step">
+          <h3 data-lang="en">Plug in your iPhone</h3><h3 data-lang="vi">Cắm iPhone vào máy</h3>
+          <p data-lang="en">Miu shows the phone, its free space and exactly what the next sync will add.</p>
+          <p data-lang="vi">Miu hiện iPhone, dung lượng trống và những gì sẽ được thêm ở lần đồng bộ tới.</p>
+        </div>
+        <div class="step">
+          <h3 data-lang="en">Press Sync</h3><h3 data-lang="vi">Bấm Đồng bộ</h3>
+          <p data-lang="en">New songs arrive, songs you un-like leave, and everything else on the phone stays put.</p>
+          <p data-lang="vi">Bài mới được thêm, bài bỏ thích được gỡ, mọi thứ khác trên iPhone vẫn giữ nguyên.</p>
+        </div>
+      </div>
+      <div class="safe">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+        <p data-lang="en"><b>Your existing songs are safe.</b> Before every sync Miu backs up the phone's music library and keeps a copy of every song that exists only on the phone. After the sync it checks that nothing went missing.</p>
+        <p data-lang="vi"><b>Bài hát sẵn có luôn an toàn.</b> Trước mỗi lần đồng bộ, Miu sao lưu thư viện nhạc của iPhone và giữ bản sao của những bài chỉ có trên điện thoại. Sau khi đồng bộ, Miu kiểm tra để chắc không mất bài nào.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow" data-lang="en">FAQ</p><p class="eyebrow" data-lang="vi">Hỏi đáp</p>
+        <h2 data-lang="en">Good questions.</h2><h2 data-lang="vi">Câu hỏi thường gặp.</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary><span data-lang="en">Is it free?</span><span data-lang="vi">Có miễn phí không?</span></summary>
+          <p data-lang="en">Yes. No account, no ads, no subscription.</p>
+          <p data-lang="vi">Có. Không cần tài khoản, không quảng cáo, không thuê bao.</p>
+        </details>
+        <details>
+          <summary><span data-lang="en">What do I need for iPhone sync?</span><span data-lang="vi">Cần gì để đồng bộ iPhone?</span></summary>
+          <p data-lang="en">Windows 10 or 11 with iTunes installed, a USB cable, and "Manually manage music and videos" turned on for your iPhone in iTunes. Miu shows you how the first time.</p>
+          <p data-lang="vi">Windows 10 hoặc 11 có cài iTunes, cáp USB, và bật “Quản lý nhạc và video thủ công” cho iPhone trong iTunes. Miu hướng dẫn ở lần đầu.</p>
+        </details>
+        <details>
+          <summary><span data-lang="en">Which iPhones work?</span><span data-lang="vi">iPhone nào dùng được?</span></summary>
+          <p data-lang="en">Any iPhone that iTunes for Windows can sync. Miu is tested daily on an iPhone 5s with iOS 12, so older phones are welcome.</p>
+          <p data-lang="vi">Mọi iPhone mà iTunes cho Windows đồng bộ được. Miu được thử hằng ngày trên iPhone 5s chạy iOS 12, nên máy cũ vẫn dùng tốt.</p>
+        </details>
+        <details>
+          <summary><span data-lang="en">Will it delete songs I added with 3uTools or iTunes?</span><span data-lang="vi">Có xoá bài đã chép bằng 3uTools hay iTunes không?</span></summary>
+          <p data-lang="en">No. Miu only ever removes songs it put there itself. Liked songs that are already on the phone are recognised, not copied twice.</p>
+          <p data-lang="vi">Không. Miu chỉ gỡ những bài do chính Miu chép vào. Bài đã thích mà có sẵn trên điện thoại sẽ được nhận ra, không chép hai lần.</p>
+        </details>
+        <details>
+          <summary><span data-lang="en">Windows says the download is unrecognised.</span><span data-lang="vi">Windows báo tệp tải về không rõ nguồn.</span></summary>
+          <p data-lang="en">The installer isn't code-signed yet, so SmartScreen may warn. Choose "More info", then "Run anyway".</p>
+          <p data-lang="vi">Bộ cài chưa được ký số nên SmartScreen có thể cảnh báo. Chọn “Thông tin thêm”, rồi “Vẫn chạy”.</p>
+        </details>
+        <details>
+          <summary><span data-lang="en">Does EQ change the files on my phone?</span><span data-lang="vi">EQ có làm thay đổi file trên iPhone không?</span></summary>
+          <p data-lang="en">No. EQ only shapes playback on your PC. The phone gets the original sound.</p>
+          <p data-lang="vi">Không. EQ chỉ áp dụng khi phát trên máy tính. iPhone nhận âm thanh gốc.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final alt">
+    <div class="wrap">
+      <img src="miu-cat.svg" alt="" width="96" height="96">
+      <h2 data-lang="en">Give your music a lighter home.</h2>
+      <h2 data-lang="vi">Cho âm nhạc của bạn một ngôi nhà nhẹ nhàng hơn.</h2>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/khangkhangg/Miu-Music-Player/releases/latest">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.5v7H3zm8.5-1.1L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg>
+          <span data-lang="en">Download for Windows</span><span data-lang="vi">Tải cho Windows</span>
+        </a>
+      </div>
+      <p class="fine" data-lang="en">Free · Windows 10 and 11</p><p class="fine" data-lang="vi">Miễn phí · Windows 10 và 11</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Miu Music</span>
+    <span data-lang="en">Not affiliated with Apple. iPhone and iTunes are trademarks of Apple Inc.</span>
+    <span data-lang="vi">Không liên kết với Apple. iPhone và iTunes là thương hiệu của Apple Inc.</span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    function set(lang) {
+      root.lang = lang;
+      document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.setLang === lang)); });
+      try { localStorage.setItem('miu-lang', lang); } catch (e) {}
+    }
+    var saved = null;
+    try { saved = localStorage.getItem('miu-lang'); } catch (e) {}
+    var guess = (navigator.language || '').toLowerCase().indexOf('vi') === 0 ? 'vi' : 'en';
+    set(saved === 'vi' || saved === 'en' ? saved : guess);
+    document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.addEventListener('click', function () { set(b.dataset.setLang); }); });
+  })();
+</script>
+</body>
+</html>

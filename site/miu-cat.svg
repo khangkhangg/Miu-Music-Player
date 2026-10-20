@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ring" x1="0.15" y1="0.1" x2="0.85" y2="0.95">
+      <stop offset="0" stop-color="#ffd23f"/>
+      <stop offset="0.5" stop-color="#ff7a45"/>
+      <stop offset="1" stop-color="#e2337a"/>
+    </linearGradient>
+    <radialGradient id="disc" cx="0.42" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#2b2f45"/>
+      <stop offset="1" stop-color="#121420"/>
+    </radialGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff8e8"/>
+      <stop offset="1" stop-color="#f6e3c0"/>
+    </linearGradient>
+  </defs>
+  <!-- round badge: gradient ring around a dark disc -->
+  <circle cx="512" cy="512" r="500" fill="url(#ring)"/>
+  <circle cx="512" cy="512" r="420" fill="url(#disc)"/>
+  <!-- headphone band -->
+  <path d="M262 560 C262 330 380 236 512 236 C644 236 762 330 762 560" fill="none" stroke="url(#ring)" stroke-width="44" stroke-linecap="round"/>
+  <!-- cat head with ears -->
+  <path d="M318 400 L332 250 L440 336 C486 324 538 324 584 336 L692 250 L706 400 C738 446 752 494 752 548 C752 686 646 772 512 772 C378 772 272 686 272 548 C272 494 286 446 318 400 Z" fill="url(#fur)"/>
+  <!-- inner ears -->
+  <path d="M352 372 L360 300 L414 344 Z" fill="#ff9a7a"/>
+  <path d="M672 372 L664 300 L610 344 Z" fill="#ff9a7a"/>
+  <!-- ear cups -->
+  <rect x="228" y="500" width="92" height="170" rx="40" fill="url(#ring)"/>
+  <rect x="704" y="500" width="92" height="170" rx="40" fill="url(#ring)"/>
+  <!-- closed, happy eyes -->
+  <path d="M410 530 Q440 500 470 530" fill="none" stroke="#1b1d2b" stroke-width="26" stroke-linecap="round"/>
+  <path d="M554 530 Q584 500 614 530" fill="none" stroke="#1b1d2b" stroke-width="26" stroke-linecap="round"/>
+  <!-- nose (a small play triangle) and mouth -->
+  <path d="M492 584 L536 604 L492 624 Z" fill="#e2337a" stroke="#e2337a" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M470 652 Q492 674 512 652 Q532 674 554 652" fill="none" stroke="#1b1d2b" stroke-width="16" stroke-linecap="round"/>
+</svg>
