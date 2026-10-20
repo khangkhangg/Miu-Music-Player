@@ -48,6 +48,8 @@ use crate::sync::guard::{copy_off, phone_tracks, CopyReport, PhoneTrack};
 use crate::sync::run::{run_sync, Options, PhoneSide, Report, SyncError};
 
 static SYNCING: AtomicBool = AtomicBool::new(false);
+/// Converted copies kept between syncs; older ones are converted again if needed (F3.5).
+const CACHE_LIMIT_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// The phone's files over AFC; backups and copies go under `root\<udid8>\`.
 struct RealPhone {
@@ -139,6 +141,11 @@ fn sync_blocking(udid: &str, app: &AppHandle) -> Result<Report, SyncStop> {
         },
         crate::util::time::now_unix(),
     );
+    match cache.trim(CACHE_LIMIT_BYTES) {
+        Ok(freed) if freed > 0 => log::info!("conversion cache trimmed by {} MB", freed / 1_048_576),
+        Ok(_) => {}
+        Err(e) => log::warn!("trimming the conversion cache failed: {e}"),
+    }
     match report {
         Ok(r) => {
             log::info!("sync done: +{} −{} adopted {} failed {} lost {}", r.added, r.removed, r.adopted, r.failed.len(), r.unexpected_removed.len());

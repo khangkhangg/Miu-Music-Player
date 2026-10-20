@@ -56,6 +56,34 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// Delete the least recently used copies until the cache holds at most `max_bytes`.
+    /// Returns the bytes freed. A trimmed song is simply converted again when it is next needed.
+    pub fn trim(&self, max_bytes: u64) -> Result<u64, String> {
+        let Ok(entries) = std::fs::read_dir(&self.dir) else { return Ok(0) };
+        let mut copies: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "m4a") && !p.to_string_lossy().ends_with(".partial.m4a"))
+            .filter_map(|p| {
+                let m = std::fs::metadata(&p).ok()?;
+                Some((m.modified().ok()?, m.len(), p))
+            })
+            .collect();
+        copies.sort();
+        let mut total: u64 = copies.iter().map(|c| c.1).sum();
+        let mut freed = 0;
+        for (_, len, path) in copies {
+            if total <= max_bytes {
+                break;
+            }
+            std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+            let _ = std::fs::remove_file(path.with_extension("tags"));
+            total -= len;
+            freed += len;
+        }
+        Ok(freed)
+    }
+
     /// The converted copy of `src`. `audio_key` identifies the audio (the song's audio hash),
     /// `tags_key` its current tags: a new `tags_key` re-tags the copy without re-encoding.
     pub fn converted(&self, t: &dyn Transcoder, src: &Path, audio_key: &str, tags_key: &str, action: Action) -> Result<PathBuf, String> {
@@ -73,6 +101,8 @@ impl Cache {
             }
             std::fs::rename(&partial, &file).map_err(io)?;
         } else if std::fs::read_to_string(&tags_file).ok().as_deref() == Some(tags_key) {
+            // Recently used copies are the last to be trimmed.
+            let _ = std::fs::File::options().write(true).open(&file).and_then(|f| f.set_modified(std::time::SystemTime::now()));
             return Ok(file);
         } else {
             t.retag(src, &file)?;
@@ -227,6 +257,43 @@ mod tests {
         let c = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", Action::Alac { bits: 24, rate: 48_000 }).unwrap();
         assert_eq!(*t.encodes.borrow(), 3);
         assert!(a != b && a != c && b != c);
+    }
+
+    fn age(path: &Path, secs_ago: u64) {
+        let t = std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago);
+        std::fs::File::options().write(true).open(path).unwrap().set_modified(t).unwrap();
+    }
+
+    #[test]
+    fn trimming_removes_the_least_recently_used_copies_down_to_the_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache { dir: dir.path().to_path_buf() };
+        let t = Fake::default();
+        let old = cache.converted(&t, Path::new("a.flac"), "old", "t", ALAC).unwrap();
+        let mid = cache.converted(&t, Path::new("b.flac"), "mid", "t", ALAC).unwrap();
+        let new = cache.converted(&t, Path::new("c.flac"), "new", "t", ALAC).unwrap();
+        age(&old, 300);
+        age(&mid, 200);
+        age(&new, 100);
+        let each = std::fs::metadata(&new).unwrap().len();
+        let freed = cache.trim(each * 2).unwrap();
+        assert_eq!(freed, std::fs::metadata(&mid).unwrap().len());
+        assert!(!old.exists() && !dir.path().join(format!("{}.tags", old.file_stem().unwrap().to_string_lossy())).exists());
+        assert!(mid.exists() && new.exists(), "oldest goes first");
+    }
+
+    #[test]
+    fn a_cache_hit_counts_as_recent_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache { dir: dir.path().to_path_buf() };
+        let t = Fake::default();
+        let a = cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC).unwrap();
+        let b = cache.converted(&t, Path::new("b.flac"), "b", "t", ALAC).unwrap();
+        age(&a, 300);
+        age(&b, 100);
+        cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC).unwrap();
+        cache.trim(std::fs::metadata(&a).unwrap().len()).unwrap();
+        assert!(a.exists() && !b.exists(), "a was just used");
     }
 
     #[test]
