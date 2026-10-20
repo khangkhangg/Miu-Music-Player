@@ -149,8 +149,11 @@ pub fn run_sync(
         report.confirmed = false;
         for _ in 0..options.max_polls {
             sleep(options.poll_every);
-            let now: HashSet<i64> = phone.peek().map_err(failed)?.iter().map(|t| t.sync_id).collect();
-            if appear.is_subset(&now) && vanish.is_disjoint(&now) {
+            let tracks = phone.peek().map_err(failed)?;
+            let now: HashSet<i64> = tracks.iter().map(|t| t.sync_id).collect();
+            // The entry shows up first; the file follows (size 0 until then, seen on the 5s).
+            let with_file: HashSet<i64> = tracks.iter().filter(|t| t.size > 0).map(|t| t.sync_id).collect();
+            if appear.is_subset(&with_file) && vanish.is_disjoint(&now) {
                 report.confirmed = true;
                 break;
             }
@@ -193,6 +196,8 @@ mod tests {
         /// The device sync also deletes this sync_id.
         drops_on_sync: Option<i64>,
         sync_never_lands: bool,
+        /// Peeks after the device sync before new tracks get their files (size 0 until then).
+        files_after_peeks: usize,
         copy_fails: bool,
         next_id: i64,
         log: Vec<String>,
@@ -213,7 +218,16 @@ mod tests {
             Ok(w.phone.clone())
         }
         fn peek(&self) -> Result<Vec<PhoneTrack>, String> {
-            Ok(self.0.borrow().phone.clone())
+            let mut w = self.0.borrow_mut();
+            if w.files_after_peeks > 0 {
+                w.files_after_peeks -= 1;
+                if w.files_after_peeks == 0 {
+                    for t in w.phone.iter_mut().filter(|t| t.size == 0) {
+                        t.size = 1;
+                    }
+                }
+            }
+            Ok(w.phone.clone())
         }
         fn copy_off(&self, tracks: &[&PhoneTrack]) -> Result<CopyReport, String> {
             let mut w = self.0.borrow_mut();
@@ -259,7 +273,13 @@ mod tests {
             let (adds, removes) = (std::mem::take(&mut w.pending_add), std::mem::take(&mut w.pending_remove));
             let drop = w.drops_on_sync;
             w.phone.retain(|p| !removes.contains(&p.sync_id) && Some(p.sync_id) != drop);
-            w.phone.extend(adds);
+            let empty = w.files_after_peeks > 0;
+            w.phone.extend(adds.into_iter().map(|mut t| {
+                if empty {
+                    t.size = 0;
+                }
+                t
+            }));
             Ok(())
         }
     }
@@ -369,6 +389,21 @@ mod tests {
         assert_eq!(r.added, 1);
         assert_eq!(r.warnings.len(), 1);
         assert!(r.warnings[0].contains("Bông Cỏ Mây"), "{:?}", r.warnings);
+    }
+
+    #[test]
+    fn a_sync_is_confirmed_only_once_the_files_have_arrived() {
+        let (db, f) = setup();
+        f.0.borrow_mut().files_after_peeks = 3;
+        let polls = RefCell::new(0);
+        let r = run_sync(&db, PHONE, &Policy::default(), &f, &f, None, &opts(), &|_| *polls.borrow_mut() += 1, &mut |_| {}, 100).unwrap();
+        assert!(r.confirmed);
+        assert_eq!(*polls.borrow(), 3, "kept waiting while the new track had no file");
+
+        let (db, f) = setup();
+        f.0.borrow_mut().files_after_peeks = 10;
+        let r = run_sync(&db, PHONE, &Policy::default(), &f, &f, None, &opts(), &|_| {}, &mut |_| {}, 100).unwrap();
+        assert!(!r.confirmed, "entries without files after the last poll are not confirmed");
     }
 
     #[test]

@@ -491,3 +491,13 @@ properties**: called as `DISPATCH_METHOD` they fail with `DISP_E_MEMBERNOTFOUND`
 tracks on the 5s, IDs unique and equal to the phone's `item_store.sync_id` (e.g. Bông Cỏ Mây
 -941274682976370203). `Duration` is in whole seconds. `add` finds the new device track by diffing
 the device track IDs before and after `AddTrack` (confidence medium until the first real add).
+
+### 2026-10-20 — first real syncs from the Sync button
+Run 1 (05:02, before conversion was wired in): 3 liked MP3s sent; 51 FLACs failed "needs converting".
+Run 2 (05:26): 51 FLACs sent as cached ALAC 16/44.1 copies. Apply ≈ 0.2 s per song (iTunes only
+queues), `UpdateIPod` returned at once. Phone: 69 → 123 songs, nothing removed, `sync-guard after`
+clean, Miu's `synced` table holds all 54 (no orphans).
+**Observed:** the phone's MediaLibrary gets the track entries first with `file_size = 0` and empty
+`location`; files follow while iTunes keeps copying (30 without a file at +30 s, 6 at +90 s, 0 at
++2 min). Run 2 was reported "confirmed" too early because the wait only checked the IDs; fixed the
+same day: a new track counts as arrived only once its file size is above 0.
