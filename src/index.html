@@ -50,6 +50,23 @@
         <p class="notice-detail muted"></p>
         <button class="primary notice-action" id="prereq-action" type="button" data-i18n="error.drivers-missing.action">Open Microsoft Store</button>
       </div>
+      <section class="wizard" id="wizard" aria-labelledby="wizard-title" hidden>
+        <div class="wizard-head">
+          <h2 id="wizard-title" data-i18n="wizard.title">Welcome to Miu Music</h2>
+          <button class="eq-btn" id="wizard-close" type="button" data-i18n="wizard.close">Hide</button>
+        </div>
+        <ol class="wizard-steps">
+          <li data-step="drivers"><span class="wizard-mark" aria-hidden="true"></span>
+            <div><strong data-i18n="wizard.drivers">Install Apple's drivers</strong><p class="muted" data-i18n="wizard.driversBody">Free from the Microsoft Store (the Apple Devices app).</p></div>
+            <button class="eq-btn" id="wizard-drivers" type="button" data-i18n="error.drivers-missing.action">Open Microsoft Store</button></li>
+          <li data-step="phone"><span class="wizard-mark" aria-hidden="true"></span>
+            <div><strong data-i18n="wizard.phone">Plug in your iPhone</strong><p class="muted" id="wizard-phone-body" data-i18n="wizard.phoneBody">Use a USB cable. You can also skip this and just play music.</p></div>
+            <button class="eq-btn" id="wizard-skip" type="button" data-i18n="wizard.skip">Skip</button></li>
+          <li data-step="folders"><span class="wizard-mark" aria-hidden="true"></span>
+            <div><strong data-i18n="wizard.folders">Add your music folders</strong><p class="muted" data-i18n="wizard.foldersBody">Miu watches them and keeps up with new songs.</p></div>
+            <button class="eq-btn" id="wizard-folder" type="button" data-i18n="folders.addButton">Add folder</button></li>
+        </ol>
+      </section>
       <div class="empty-state" id="empty-state">
         <h1 data-i18n="empty.title">Add your music</h1>
         <p class="muted" data-i18n="empty.body">Choose one or more folders to watch, or drop them here. Miu keeps up with new and removed songs.</p>

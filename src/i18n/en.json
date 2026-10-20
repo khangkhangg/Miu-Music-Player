@@ -236,5 +236,14 @@
   "error.output-busy.action": "Choose output",
   "error.unknown.title": "Something went wrong",
   "error.unknown.body": "Miu ran into a problem it does not know how to explain. The details below help when reporting it.",
-  "error.unknown.action": "Copy details"
+  "error.unknown.action": "Copy details",
+  "wizard.title": "Welcome to Miu Music",
+  "wizard.close": "Hide",
+  "wizard.drivers": "Install Apple’s drivers",
+  "wizard.driversBody": "Free from the Microsoft Store (the Apple Devices app).",
+  "wizard.phone": "Plug in your iPhone",
+  "wizard.phoneBody": "Use a USB cable. You can also skip this and just play music.",
+  "wizard.skip": "Skip",
+  "wizard.folders": "Add your music folders",
+  "wizard.foldersBody": "Miu watches them and keeps up with new songs."
 }

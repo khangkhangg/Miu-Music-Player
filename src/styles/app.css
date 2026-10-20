@@ -148,6 +148,19 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .setting.check { justify-content: flex-start; }
 .setting select { font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); max-width: 60%; }
 .setting-note { font-size: 12px; margin: 6px 0 0; }
+.wizard { margin: 16px 20px 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface-muted); }
+.wizard[hidden] { display: none; }
+.wizard-head { display: flex; justify-content: space-between; align-items: center; }
+.wizard h2 { font-size: 16px; margin: 0; }
+.wizard-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.wizard-steps li { display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.wizard-steps p { margin: 2px 0 0; font-size: 12px; }
+.wizard-mark { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); }
+.wizard-steps li[data-state="current"] .wizard-mark { border-color: var(--accent); }
+.wizard-steps li[data-state="done"] .wizard-mark { background: var(--success); border-color: var(--success); }
+.wizard-steps li[data-state="skipped"] .wizard-mark { border-style: dashed; }
+.wizard-steps li:not([data-state="current"]) button { display: none; }
+.wizard-steps li[data-state="todo"] { opacity: 0.6; }
 .disliked-banner { display: flex; align-items: center; gap: 12px; margin: 0 20px 10px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--danger); background: var(--surface-muted); font-size: 12px; }
 .disliked-banner[hidden], .delete-result[hidden] { display: none; }
 .disliked-banner p { margin: 0; flex: 1; line-height: 1.5; }

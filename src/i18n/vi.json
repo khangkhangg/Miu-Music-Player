@@ -236,5 +236,14 @@
   "error.output-busy.action": "Chọn đầu ra",
   "error.unknown.title": "Đã có lỗi xảy ra",
   "error.unknown.body": "Miu gặp một sự cố chưa biết cách giải thích. Thông tin chi tiết bên dưới giúp ích khi báo lỗi.",
-  "error.unknown.action": "Sao chép chi tiết"
+  "error.unknown.action": "Sao chép chi tiết",
+  "wizard.title": "Chào mừng đến với Miu Music",
+  "wizard.close": "Ẩn",
+  "wizard.drivers": "Cài trình điều khiển của Apple",
+  "wizard.driversBody": "Miễn phí trên Microsoft Store (ứng dụng Apple Devices).",
+  "wizard.phone": "Cắm iPhone vào máy tính",
+  "wizard.phoneBody": "Dùng cáp USB. Bạn cũng có thể bỏ qua bước này và chỉ nghe nhạc.",
+  "wizard.skip": "Bỏ qua",
+  "wizard.folders": "Thêm thư mục nhạc",
+  "wizard.foldersBody": "Miu theo dõi các thư mục này và tự cập nhật bài hát mới."
 }

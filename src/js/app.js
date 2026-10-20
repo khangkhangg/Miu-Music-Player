@@ -13,6 +13,7 @@ import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './o
 import { t, startInLanguage } from './i18n.js';
 import { planSummary } from './sync.js';
 import { errorState } from './errors.js';
+import { wizard } from './wizard.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
 import {
@@ -43,6 +44,7 @@ const invoke = window.__TAURI__?.core?.invoke;
 if (invoke) {
   const languageSetting = await startInLanguage(invoke);
   setupSettings(languageSetting);
+  setupWizard();
   invoke('app_info').then(info => {
     document.getElementById('app-version').textContent = `${info.name} ${info.version}`;
   });
@@ -368,6 +370,8 @@ function showFolders(folders) {
   }));
   const summary = librarySummary(folders);
   hasSongs = Boolean(summary);
+  wizardState.folders = (folders ?? []).length;
+  renderWizard();
   showView(view);
   document.getElementById('library-summary-text').textContent = summary ?? '';
 }
@@ -386,6 +390,9 @@ function showDevices(devices) {
   }
   lastDevices = devices;
   showSyncPreview();
+  const phone = (devices ?? [])[0];
+  wizardState.phone = !phone ? 'none' : phone.trusted ? 'ready' : 'untrusted';
+  renderWizard();
 }
 
 // ---- Sync preview (F5.3): what a sync would change on the connected phone ----
@@ -405,6 +412,8 @@ function showSyncPreview() {
 }
 
 function showPrereqNotice(report) {
+  wizardState.driversReady = Boolean(report?.ready);
+  renderWizard();
   const message = prereqMessage(report);
   const notice = document.getElementById('prereq-notice');
   notice.hidden = !message;
@@ -802,4 +811,29 @@ function setupSettings(languageSetting) {
   window.__TAURI__.event.listen('settings-changed', ev => showSettings(ev.payload));
   window.__TAURI__.event.listen('mini-on-top', reload);
   reload();
+}
+
+// ---- First-run wizard (F6.2) ----
+const remembered = key => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
+const remember = key => { try { localStorage.setItem(key, '1'); } catch { /* private storage off: ask again next time */ } };
+const wizardState = {
+  driversReady: true, phone: 'none', folders: 0,
+  skippedPhone: remembered('wizard.skippedPhone'), dismissed: remembered('wizard.dismissed'),
+};
+
+function setupWizard() {
+  const $ = id => document.getElementById(id);
+  $('wizard-close').addEventListener('click', () => { wizardState.dismissed = true; remember('wizard.dismissed'); renderWizard(); });
+  $('wizard-skip').addEventListener('click', () => { wizardState.skippedPhone = true; remember('wizard.skippedPhone'); renderWizard(); });
+  $('wizard-drivers').addEventListener('click', () => invoke('open_store_page'));
+  $('wizard-folder').addEventListener('click', pickFolder);
+}
+
+function renderWizard() {
+  const w = wizard(wizardState);
+  const box = document.getElementById('wizard');
+  if (!box) return;
+  box.hidden = !w.show;
+  for (const step of w.steps) box.querySelector(`[data-step="${step.id}"]`).dataset.state = step.state;
+  document.getElementById('wizard-phone-body').textContent = t(w.hint === 'trust' ? 'device.trust' : 'wizard.phoneBody');
 }
