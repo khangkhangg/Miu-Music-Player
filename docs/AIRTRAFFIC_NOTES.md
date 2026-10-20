@@ -424,3 +424,8 @@ What works is iTunes' own drag-and-drop path:
 2. `phoneSource.Playlists.Item(1).AddTrack(track)` → true; the phone's library went 69 → 70.
 Track on phone: "Ai Rồi Cũng Sẽ Khác" (Hà Nhi), kind "MPEG audio file". The 69 3uTools songs stayed.
 Side effect: the song is now also in the PC's iTunes library (68 → 69).
+Follow-up (same day): the song shows in iTunes' view of the phone (70 tracks, full size) but does
+not play; a fresh read-only backup (`20261020-041040`) still has **69** songs in the phone's
+MediaLibrary. iTunes queued the change but the phone has not committed it — the sync session that
+applies manual changes has not completed. Next: let iTunes run its sync (Sync button /
+`UpdateIPod`) and watch the phone's syslog for the outcome.
