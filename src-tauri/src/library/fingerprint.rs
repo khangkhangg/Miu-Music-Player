@@ -23,6 +23,13 @@ impl Fnv {
     }
 }
 
+/// Stable 64-bit hash of `bytes` as 16 hex digits (stored, so it must never change).
+pub fn fnv64(bytes: &[u8]) -> String {
+    let mut h = Fnv::new();
+    h.write(bytes);
+    format!("{:016x}", h.0)
+}
+
 /// Hash of the first 30 s of decoded audio at 16-bit precision, with its rate and channel
 /// count, as 16 hex digits.
 pub fn audio_hash(path: &Path) -> Result<String, String> {

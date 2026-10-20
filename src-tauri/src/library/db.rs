@@ -51,6 +51,30 @@ pub const MIGRATIONS: &[&str] = &[
      CREATE INDEX songs_audio_hash ON songs(audio_hash);",
     // 7: per-folder legacy tag encoding override (F8.1); NULL = detect
     "ALTER TABLE watched_folders ADD COLUMN tag_encoding TEXT;",
+    // 8: sync state per phone (F4): what Miu sent, and the history of runs
+    "CREATE TABLE synced (
+         udid TEXT NOT NULL,
+         song_id INTEGER NOT NULL,
+         device_pid INTEGER,
+         meta_hash TEXT NOT NULL,
+         audio_hash TEXT,
+         bytes INTEGER NOT NULL DEFAULT 0,
+         synced_at INTEGER NOT NULL,
+         PRIMARY KEY (udid, song_id)
+     ) STRICT;
+     CREATE TABLE sync_runs (
+         id INTEGER PRIMARY KEY,
+         udid TEXT NOT NULL,
+         finished_at INTEGER NOT NULL,
+         done INTEGER NOT NULL,
+         failed INTEGER NOT NULL
+     ) STRICT;
+     CREATE TABLE sync_items (
+         run_id INTEGER NOT NULL REFERENCES sync_runs(id) ON DELETE CASCADE,
+         song_id INTEGER NOT NULL,
+         kind TEXT NOT NULL,
+         error TEXT
+     ) STRICT;",
 ];
 
 #[derive(Debug, thiserror::Error)]
