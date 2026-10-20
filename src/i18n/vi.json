@@ -300,5 +300,12 @@
   "podcast.episodesLabel": "Số tập",
   "podcast.newLabel": "Chưa nghe",
   "podcast.facts": "{n} tập · {unplayed} chưa nghe",
-  "podcast.downloadSoon": "Sắp có tải về"
+  "podcast.downloadSoon": "Sắp có tải về",
+  "work.import": "Đang thêm podcast: {done} / {total}",
+  "podcast.import": "Nhập OPML…",
+  "podcast.export": "Xuất OPML…",
+  "podcast.opmlFiles": "Danh sách podcast (OPML)",
+  "podcast.imported": "Đã thêm {added} podcast ({already} đã có sẵn).",
+  "podcast.importFailed": "{n} không tải được: {list}",
+  "podcast.exported": "Đã lưu {n} podcast vào {path}"
 }

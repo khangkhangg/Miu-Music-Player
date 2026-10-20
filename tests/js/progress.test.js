@@ -12,3 +12,7 @@ test('finished or empty work hides the bar', () => {
   assert.equal(workState({ phase: 'fingerprint', done: 0, total: 0 }).show, false);
   assert.equal(workState(null).show, false);
 });
+
+test('importing podcasts has its own label', () => {
+  assert.equal(workState({ phase: 'import', done: 2, total: 5 }).text, 'Adding podcasts: 2 of 5');
+});

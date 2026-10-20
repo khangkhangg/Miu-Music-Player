@@ -1143,6 +1143,28 @@ function setupPodcasts() {
       .catch(err => { $('podcast-error').textContent = t('podcast.failed', { reason: String(err) }); })
       .finally(() => { $('podcast-add-btn').disabled = false; });
   });
+  const opmlFilter = [{ name: t('podcast.opmlFiles'), extensions: ['opml', 'xml'] }];
+  $('podcast-import').addEventListener('click', async () => {
+    const path = await window.__TAURI__.dialog.open({ multiple: false, filters: opmlFilter });
+    if (!path) return;
+    $('podcast-error').textContent = '';
+    $('podcast-import').disabled = true;
+    invoke('podcast_import_opml', { path })
+      .then(({ report, shows: list }) => {
+        renderShows(list);
+        const failed = report.failed.length ? ` ${t('podcast.importFailed', { n: report.failed.length, list: report.failed.map(([url]) => url).join(', ') })}` : '';
+        $('podcast-error').textContent = t('podcast.imported', { added: report.added, already: report.already }) + failed;
+      })
+      .catch(err => { $('podcast-error').textContent = t('podcast.failed', { reason: String(err) }); })
+      .finally(() => { $('podcast-import').disabled = false; });
+  });
+  $('podcast-export').addEventListener('click', async () => {
+    const path = await window.__TAURI__.dialog.save({ defaultPath: 'MiuMusic-podcasts.opml', filters: opmlFilter }); // i18n-ignore: file name
+    if (!path) return;
+    invoke('podcast_export_opml', { path })
+      .then(n => { $('podcast-error').textContent = t('podcast.exported', { n, path }); })
+      .catch(err => { $('podcast-error').textContent = String(err); });
+  });
   $('show-back').addEventListener('click', () => showView('podcasts'));
   $('show-refresh').addEventListener('click', () => {
     if (!openShow) return;

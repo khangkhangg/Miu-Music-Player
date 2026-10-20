@@ -110,6 +110,8 @@ pub fn run() {
             podcast::service::podcast_list,
             podcast::service::podcast_episodes,
             podcast::service::podcast_unsubscribe,
+            podcast::service::podcast_import_opml,
+            podcast::service::podcast_export_opml,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

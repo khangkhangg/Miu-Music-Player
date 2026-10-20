@@ -2115,6 +2115,7 @@ dependencies = [
  "log",
  "notify",
  "object",
+ "quick-xml 0.41.0",
  "regex",
  "rss",
  "rtrb",

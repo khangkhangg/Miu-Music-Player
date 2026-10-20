@@ -300,5 +300,12 @@
   "podcast.episodesLabel": "Episodes",
   "podcast.newLabel": "Unplayed",
   "podcast.facts": "{n} episodes · {unplayed} unplayed",
-  "podcast.downloadSoon": "Download comes next"
+  "podcast.downloadSoon": "Download comes next",
+  "work.import": "Adding podcasts: {done} of {total}",
+  "podcast.import": "Import OPML…",
+  "podcast.export": "Export OPML…",
+  "podcast.opmlFiles": "Podcast lists (OPML)",
+  "podcast.imported": "Added {added} podcasts ({already} already here).",
+  "podcast.importFailed": "{n} could not be loaded: {list}",
+  "podcast.exported": "Saved {n} podcasts to {path}"
 }

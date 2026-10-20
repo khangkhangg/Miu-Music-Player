@@ -1,7 +1,7 @@
 // Background work (scanning folders, fingerprinting songs) shown as a thin progress bar.
 import { t } from './i18n.js';
 
-const LABELS = { scan: 'work.scan', fingerprint: 'work.fingerprint' };
+const LABELS = { scan: 'work.scan', fingerprint: 'work.fingerprint', import: 'work.import' };
 
 /** Whether to show the bar, how full it is, and what it says. */
 export function workState(p) {
