@@ -1,6 +1,7 @@
 pub mod convert;
 pub mod db;
 pub mod duplicates;
+pub mod edit;
 pub mod delete;
 pub mod fingerprint;
 pub mod folders;

@@ -177,3 +177,53 @@ pub fn set_folder_encoding(id: i64, encoding: Option<String>, app: AppHandle, db
     let _ = app.emit("library-changed", &list);
     Ok(list)
 }
+
+/// The undo edits of the last save (F9.4), so "Undo" can put the tags back.
+#[derive(Default)]
+pub struct LastEdit(Mutex<Vec<crate::library::edit::Edit>>);
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SongTags {
+    id: i64,
+    path: String,
+    tags: crate::library::tags::TrackTags,
+}
+
+/// Current tags of the given songs, read from their files (for the editor).
+#[tauri::command]
+pub fn song_tags(ids: Vec<i64>, db: State<'_, SharedDb>) -> Result<Vec<SongTags>, String> {
+    let found = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        crate::library::songs::paths_for(&d, &ids).map_err(|e| e.to_string())?
+    };
+    Ok(found
+        .into_iter()
+        .map(|(id, p)| SongTags { id, tags: crate::library::tags::read_tags(&p).unwrap_or_default(), path: p.to_string_lossy().into_owned() })
+        .collect())
+}
+
+fn save(edits: &[crate::library::edit::Edit], app: &AppHandle, db: &SharedDb, last: &LastEdit) -> Result<crate::library::edit::EditReport, String> {
+    let report = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        crate::library::edit::edit_songs(&d, edits)?
+    };
+    *last.0.lock().map_err(|e| e.to_string())? = report.undo.clone();
+    let _ = app.emit("library-changed", folder_list(db));
+    Ok(report)
+}
+
+/// Write tag edits into the files (F9.1–F9.4); the previous tags are kept for `undo_edit`.
+#[tauri::command]
+pub fn save_edits(edits: Vec<crate::library::edit::Edit>, app: AppHandle, db: State<'_, SharedDb>, last: State<'_, LastEdit>) -> Result<crate::library::edit::EditReport, String> {
+    save(&edits, &app, &db, &last)
+}
+
+/// Put back the tags from before the last save.
+#[tauri::command]
+pub fn undo_edit(app: AppHandle, db: State<'_, SharedDb>, last: State<'_, LastEdit>) -> Result<crate::library::edit::EditReport, String> {
+    let undo = std::mem::take(&mut *last.0.lock().map_err(|e| e.to_string())?);
+    let report = save(&undo, &app, &db, &last)?;
+    last.0.lock().map_err(|e| e.to_string())?.clear(); // undo is not itself undoable
+    Ok(report)
+}

@@ -31,7 +31,8 @@ pub struct ScanDiff {
 }
 
 pub fn is_audio_path(path: &Path) -> bool {
-    path.extension()
+    let own_temp = path.file_name().is_some_and(|n| n.to_string_lossy().contains(crate::library::edit::TEMP_MARK));
+    !own_temp && path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| AUDIO_EXTENSIONS.iter().any(|a| a.eq_ignore_ascii_case(e)))
 }
@@ -152,6 +153,18 @@ fn store_tags(tx: &rusqlite::Transaction<'_>, id: i64, t: &TrackTags) -> rusqlit
         ],
     )?;
     Ok(())
+}
+
+/// Bring one song's row up to date with its file after Miu itself wrote it (F9.5): size, time and
+/// tags are taken from disk now, so the watcher's rescan finds nothing to do. The audio is
+/// unchanged, so its fingerprint is kept.
+pub fn refresh_song(db: &Db, id: i64, path: &Path) -> rusqlite::Result<()> {
+    let meta = std::fs::metadata(path).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
+    let tx = db.conn().unchecked_transaction()?;
+    tx.execute("UPDATE songs SET size = ?1, mtime = ?2 WHERE id = ?3", rusqlite::params![meta.len() as i64, mtime, id])?;
+    store_tags(&tx, id, &read_tags_with(path, None).unwrap_or_default())?;
+    tx.commit()
 }
 
 pub fn rescan_folder(db: &Db, folder_id: i64, root: &str, now_unix: u64) -> rusqlite::Result<ScanDiff> {
@@ -455,5 +468,16 @@ mod unicode_path_tests {
         assert_eq!(found[0].1, p, "stored path round-trips exactly");
         assert_eq!(decode_all(&found[0].1).unwrap().frames(), 8_000, "plays");
         assert!(audio_hash(&found[0].1).is_ok(), "fingerprints");
+    }
+}
+
+#[cfg(test)]
+mod temp_file_tests {
+    use super::*;
+
+    #[test]
+    fn mius_own_temp_files_are_never_songs() {
+        assert!(!is_audio_path(Path::new(r"D:\M\.Diễm xưa.miu-tmp.mp3")));
+        assert!(is_audio_path(Path::new(r"D:\M\Diễm xưa.mp3")));
     }
 }

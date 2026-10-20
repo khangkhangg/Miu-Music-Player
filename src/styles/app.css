@@ -114,6 +114,25 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .duplicates-note { margin: 0 20px 10px; font-size: 12px; }
 .duplicates-note[hidden] { display: none; }
+.song-spacer .song-row.selected { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.editor { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); color: var(--text); padding: 18px 20px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25); }
+.editor::backdrop { background: rgba(0, 0, 0, 0.35); }
+.editor h2 { font-size: 17px; margin: 0 0 12px; }
+.editor h3 { font-size: 13px; margin: 14px 0 6px; color: var(--text-muted); }
+.editor-fields { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; font-size: 13px; }
+.editor input[type="text"], .editor select { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); min-width: 0; }
+.editor-fields input.touched { border-color: var(--accent); }
+.editor-tools { margin-top: 12px; font-size: 13px; }
+.editor-tools summary { cursor: pointer; color: var(--text-muted); }
+.tool-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.tool-help { font-size: 12px; flex-basis: 100%; }
+.editor-preview { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow: auto; font-size: 12px; }
+.editor-preview li { padding: 2px 0; }
+.editor-preview .from { color: var(--text-muted); text-decoration: line-through; }
+.editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.toast { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; background: var(--text); color: var(--surface); padding: 8px 14px; border-radius: var(--radius); font-size: 13px; z-index: 10; }
+.toast[hidden], #edit-tags[hidden] { display: none; }
+.toast .eq-btn { color: var(--surface); border-color: currentColor; }
 .disliked-banner { display: flex; align-items: center; gap: 12px; margin: 0 20px 10px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--danger); background: var(--surface-muted); font-size: 12px; }
 .disliked-banner[hidden], .delete-result[hidden] { display: none; }
 .disliked-banner p { margin: 0; flex: 1; line-height: 1.5; }

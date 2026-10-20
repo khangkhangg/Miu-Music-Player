@@ -51,6 +51,7 @@
         <header class="view-header">
           <h1 data-i18n="nav.songs">Songs</h1>
           <span class="muted" id="library-summary-text"></span>
+          <button class="eq-btn" id="edit-tags" type="button" hidden></button>
           <input class="search" id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search" autocomplete="off" spellcheck="false" dir="auto"
             data-i18n-attr="placeholder:search.placeholder;aria-label:search.label">
         </header>
@@ -137,6 +138,56 @@
           <dt data-i18n="output.path">Signal path</dt><dd id="out-path"></dd>
         </dl>
       </section>
+      <dialog class="editor" id="editor" aria-labelledby="editor-heading">
+        <form method="dialog" id="editor-form">
+          <h2 id="editor-heading"></h2>
+          <div class="editor-fields" id="editor-fields"></div>
+          <details class="editor-tools" id="editor-tools">
+            <summary data-i18n="editor.tools">Bulk tools</summary>
+            <div class="tool-row">
+              <label for="tool-pattern" data-i18n="editor.fromFilename">Fill from file name</label>
+              <input id="tool-pattern" type="text" value="%track% - %artist% - %title%" spellcheck="false" aria-describedby="tool-pattern-help">
+              <button class="eq-btn" id="tool-pattern-go" type="button" data-i18n="editor.apply">Apply</button>
+              <span class="muted tool-help" id="tool-pattern-help" data-i18n="editor.patternHelp">Use %title%, %artist%, %album%, %track% and %year%.</span>
+            </div>
+            <div class="tool-row">
+              <button class="eq-btn" id="tool-number" type="button" data-i18n="editor.autoNumber">Number tracks in list order</button>
+            </div>
+            <div class="tool-row">
+              <label for="tool-find" data-i18n="editor.find">Find</label>
+              <input id="tool-find" type="text">
+              <label for="tool-replace" data-i18n="editor.replace">Replace with</label>
+              <input id="tool-replace" type="text">
+              <select id="tool-find-field" aria-label="Field" data-i18n-attr="aria-label:editor.field"></select>
+              <label class="eq-switch"><input type="checkbox" id="tool-case-sensitive"><span data-i18n="editor.matchCase">Match case</span></label>
+              <button class="eq-btn" id="tool-find-go" type="button" data-i18n="editor.replaceAll">Replace</button>
+            </div>
+            <div class="tool-row">
+              <label for="tool-case" data-i18n="editor.case">Change case</label>
+              <select id="tool-case">
+                <option value="title" data-i18n="editor.caseTitle">Each Word Capitalised</option>
+                <option value="sentence" data-i18n="editor.caseSentence">First word capitalised</option>
+                <option value="upper" data-i18n="editor.caseUpper">UPPER CASE</option>
+                <option value="lower" data-i18n="editor.caseLower">lower case</option>
+              </select>
+              <select id="tool-case-field" aria-label="Field" data-i18n-attr="aria-label:editor.field"></select>
+              <button class="eq-btn" id="tool-case-go" type="button" data-i18n="editor.apply">Apply</button>
+            </div>
+            <p class="eq-error" id="tool-message" role="status"></p>
+          </details>
+          <h3 data-i18n="editor.preview">Preview</h3>
+          <ul class="editor-preview" id="editor-preview"></ul>
+          <p class="eq-error" id="editor-error" role="alert"></p>
+          <div class="editor-actions">
+            <button class="eq-btn" id="editor-cancel" type="button" data-i18n="editor.cancel">Cancel</button>
+            <button class="primary" id="editor-save" type="button" data-i18n="editor.save">Save to files</button>
+          </div>
+        </form>
+      </dialog>
+      <div class="toast" id="toast" role="status" hidden>
+        <span id="toast-text"></span>
+        <button class="eq-btn" id="toast-undo" type="button" data-i18n="editor.undo">Undo</button>
+      </div>
       <footer class="status muted">
         <span id="app-version"></span>
         <select class="language" id="language" aria-label="Language" data-i18n-attr="aria-label:language.label">

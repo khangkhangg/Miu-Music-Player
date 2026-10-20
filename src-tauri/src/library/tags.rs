@@ -140,6 +140,52 @@ pub(crate) mod fixtures {
         p
     }
 
+    fn mp4_box(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut v = ((payload.len() + 8) as u32).to_be_bytes().to_vec();
+        v.extend(kind);
+        v.extend(payload);
+        v
+    }
+
+    fn full_box(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+        let mut p = vec![0u8; 4]; // version + flags
+        p.extend(body);
+        mp4_box(kind, &p)
+    }
+
+    /// A minimal AAC M4A (1 s, 44.1 kHz stereo, no samples) that tag readers and writers accept.
+    pub fn silent_m4a(dir: &Path, name: &str) -> PathBuf {
+        let ftyp = mp4_box(b"ftyp", b"M4A \0\0\0\0M4A mp42isom");
+        let mut mvhd = vec![0u8; 96];
+        mvhd[8..12].copy_from_slice(&44_100u32.to_be_bytes()); // timescale
+        mvhd[12..16].copy_from_slice(&44_100u32.to_be_bytes()); // duration
+        let mut tkhd = vec![0u8; 80];
+        tkhd[3] = 1;
+        let mut mdhd = vec![0u8; 20];
+        mdhd[8..12].copy_from_slice(&44_100u32.to_be_bytes());
+        mdhd[12..16].copy_from_slice(&44_100u32.to_be_bytes());
+        let mut hdlr = vec![0u8; 4];
+        hdlr.extend(b"soun");
+        hdlr.extend([0u8; 13]);
+        let mut entry = vec![0u8; 6];
+        entry.extend(1u16.to_be_bytes()); // data reference index
+        entry.extend([0u8; 8]);
+        entry.extend(2u16.to_be_bytes()); // channels
+        entry.extend(16u16.to_be_bytes()); // bits
+        entry.extend([0u8; 4]);
+        entry.extend((44_100u32 << 16).to_be_bytes());
+        let mut stsd = 1u32.to_be_bytes().to_vec();
+        stsd.extend(mp4_box(b"mp4a", &entry));
+        let stbl = [full_box(b"stsd", &stsd), full_box(b"stts", &[0; 4]), full_box(b"stsc", &[0; 4]), full_box(b"stsz", &[0; 8]), full_box(b"stco", &[0; 4])].concat();
+        let minf = [full_box(b"smhd", &[0; 4]), mp4_box(b"stbl", &stbl)].concat();
+        let mdia = [full_box(b"mdhd", &mdhd), full_box(b"hdlr", &hdlr), mp4_box(b"minf", &minf)].concat();
+        let trak = [full_box(b"tkhd", &tkhd), mp4_box(b"mdia", &mdia)].concat();
+        let moov = [full_box(b"mvhd", &mvhd), mp4_box(b"trak", &trak)].concat();
+        let p = dir.join(name);
+        std::fs::write(&p, [ftyp, mp4_box(b"moov", &moov), mp4_box(b"mdat", &[0; 16])].concat()).unwrap();
+        p
+    }
+
     pub const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89";
 
     pub struct Fields<'a> {

@@ -74,6 +74,7 @@ pub fn run() {
         .manage(library_watch.clone())
         .manage(player.clone())
         .manage(visualizer_on.clone())
+        .manage(library::service::LastEdit::default())
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
             windows::setup(app.handle(), db.clone());
@@ -94,6 +95,9 @@ pub fn run() {
             library::service::add_folder,
             library::service::remove_folder,
             library::service::set_folder_encoding,
+            library::service::song_tags,
+            library::service::save_edits,
+            library::service::undo_edit,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

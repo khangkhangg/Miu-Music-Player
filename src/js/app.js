@@ -11,6 +11,10 @@ import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 import { t, startInLanguage } from './i18n.js';
+import { select } from './selection.js';
+import {
+  FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
+} from './editor.js';
 
 const ROW_HEIGHT = 36;
 let songs = [];
@@ -20,6 +24,7 @@ let activeFilter = 'all';
 let query = '';
 const SORT_LOCALE = sortLocale(navigator.languages);
 let songsById = new Map();
+let selection = { selected: new Set(), anchor: null };
 let playerState = null;
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -60,11 +65,28 @@ if (invoke) {
   });
   scroller.addEventListener('click', e => {
     const btn = e.target.closest('button[data-act]');
-    if (!btn) return;
+    if (!btn) {
+      const row = e.target.closest('.song-row');
+      if (!row) return;
+      selection = select(selection, shown.map(x => x.id), Number(row.dataset.index), { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+      renderSongs();
+      updateEditButton();
+      return;
+    }
     const song = shown[Number(btn.closest('.song-row').dataset.index)];
     if (btn.dataset.act === 'delete') confirmDelete([song]);
     else rate(song.id, btn.dataset.act);
   });
+  scroller.addEventListener('contextmenu', e => {
+    const row = e.target.closest('.song-row');
+    if (!row) return;
+    e.preventDefault();
+    const id = shown[Number(row.dataset.index)].id;
+    if (!selection.selected.has(id)) selection = select(selection, shown.map(x => x.id), Number(row.dataset.index), {});
+    renderSongs();
+    openEditor();
+  });
+  setupEditor();
   for (const id of ['np-like', 'np-dislike']) {
     document.getElementById(id).addEventListener('click', e => {
       if (playerState?.songId != null) rate(playerState.songId, e.currentTarget.dataset.act, true);
@@ -131,6 +153,7 @@ function refreshList() {
   document.getElementById('disliked-banner').hidden = !(activeFilter === 'disliked' && shown.length > 0);
   document.getElementById('duplicates-note').hidden = activeFilter !== 'duplicates';
   renderIndexBar();
+  updateEditButton();
 }
 
 /** Letters down the right of the list; each jumps to its first song. Hidden for grouped views. */
@@ -277,6 +300,7 @@ function renderSongs() {
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
     row.title = shown[i].path; // where the file is: tells copies apart
+    if (selection.selected.has(s.id)) row.classList.add('selected');
     row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.quality, 'muted quality'), cell(s.duration, 'num muted'), rateCell(shown[i].rating, activeFilter === 'disliked'));
     rows.push(row);
   }
@@ -535,4 +559,173 @@ function renderOutputInfo() {
   $('out-fallback').hidden = !(outputState?.exclusive && ev?.deviceRate && !ev.exclusive);
   $('out-path').textContent = path;
   $('out-path').classList.toggle('bit-perfect', path === t('output.bitPerfect'));
+}
+
+// ---- Tag editor (F9) ----
+let editing = []; // [{ id, path, tags }] in list order
+let perSong = []; // per song: field → typed value, only fields that were touched
+
+function selectedSongs() {
+  return shown.filter(x => selection.selected.has(x.id));
+}
+
+function updateEditButton() {
+  const n = selectedSongs().length;
+  const b = document.getElementById('edit-tags');
+  b.hidden = n === 0;
+  b.textContent = t('editor.editN', { n });
+}
+
+function setupEditor() {
+  const $ = id => document.getElementById(id);
+  $('edit-tags').addEventListener('click', openEditor);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'F2' && selection.selected.size) { e.preventDefault(); openEditor(); }
+    if (e.key === 'Escape' && !$('editor').open && document.activeElement?.id !== 'search' && selection.selected.size) {
+      selection = { selected: new Set(), anchor: null };
+      renderSongs();
+      updateEditButton();
+    }
+  });
+  for (const id of ['tool-find-field', 'tool-case-field']) {
+    $(id).replaceChildren(...FIELDS.filter(f => !f.number).map(f => {
+      const o = document.createElement('option');
+      o.value = f.key;
+      o.textContent = t(f.label);
+      return o;
+    }));
+  }
+  $('editor-cancel').addEventListener('click', () => $('editor').close());
+  $('editor-save').addEventListener('click', saveEditor);
+  $('tool-pattern-go').addEventListener('click', () => {
+    let missed = 0;
+    editing.forEach((song, i) => {
+      const parsed = parseFilename($('tool-pattern').value, song.path);
+      if (!parsed) { missed += 1; return; }
+      for (const [k, v] of Object.entries(parsed)) if (FIELDS.some(f => f.key === k)) perSong[i][k] = v;
+    });
+    $('tool-message').textContent = missed ? t('editor.patternMissed', { n: missed }) : '';
+    renderEditor();
+  });
+  $('tool-number').addEventListener('click', () => {
+    autoNumber(editing).forEach((nums, i) => Object.assign(perSong[i], nums));
+    renderEditor();
+  });
+  $('tool-find-go').addEventListener('click', () => {
+    const key = $('tool-find-field').value;
+    editing.forEach((song, i) => {
+      const current = key in perSong[i] ? perSong[i][key] : song.tags[key] ?? '';
+      const next = findReplace(current, $('tool-find').value, $('tool-replace').value, $('tool-case-sensitive').checked);
+      if (next !== current) perSong[i][key] = next;
+    });
+    renderEditor();
+  });
+  $('tool-case-go').addEventListener('click', () => {
+    const key = $('tool-case-field').value;
+    editing.forEach((song, i) => {
+      const current = key in perSong[i] ? perSong[i][key] : song.tags[key] ?? '';
+      const next = changeCase(current, $('tool-case').value);
+      if (next !== current) perSong[i][key] = next;
+    });
+    renderEditor();
+  });
+  $('toast-undo').addEventListener('click', () => {
+    invoke('undo_edit').then(() => toast(t('editor.undone'), false)).catch(err => toast(String(err), false));
+  });
+}
+
+async function openEditor() {
+  const songs = selectedSongs();
+  if (!songs.length) return;
+  editing = await invoke('song_tags', { ids: songs.map(x => x.id) });
+  const order = new Map(songs.map((x, i) => [x.id, i]));
+  editing.sort((a, b) => order.get(a.id) - order.get(b.id));
+  perSong = editing.map(() => ({}));
+  const $ = id => document.getElementById(id);
+  $('editor-heading').textContent = t('editor.heading', { n: editing.length });
+  $('editor-tools').hidden = editing.length < 2;
+  $('editor-error').textContent = '';
+  $('tool-message').textContent = '';
+  buildFields();
+  renderEditor();
+  $('editor').showModal();
+}
+
+/** Inputs for each field; typing applies the value to every song being edited. */
+function buildFields() {
+  const fields = editorFields(editing);
+  const box = document.getElementById('editor-fields');
+  box.replaceChildren(...FIELDS.flatMap(f => {
+    const label = document.createElement('label');
+    label.htmlFor = `edit-${f.key}`;
+    label.textContent = t(f.label);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = `edit-${f.key}`;
+    input.dir = 'auto';
+    if (f.number) input.inputMode = 'numeric';
+    input.value = fields[f.key].value;
+    if (fields[f.key].mixed) input.placeholder = t('editor.mixed');
+    input.addEventListener('input', () => {
+      input.classList.add('touched');
+      perSong.forEach(edited => { edited[f.key] = input.value; });
+      renderEditor();
+    });
+    return [label, input];
+  }));
+}
+
+function renderEditor() {
+  const list = document.getElementById('editor-preview');
+  const rows = previewRows(editing, perSong);
+  if (!rows.length) {
+    const li = document.createElement('li');
+    li.className = 'muted';
+    li.textContent = t('editor.noChanges');
+    list.replaceChildren(li);
+  } else {
+    const byId = new Map(editing.map(x => [x.id, x]));
+    list.replaceChildren(...rows.map(r => {
+      const li = document.createElement('li');
+      const name = document.createElement('strong');
+      name.textContent = byId.get(r.id).tags.title || byId.get(r.id).path.split(/[\\/]/).pop();
+      li.append(name);
+      for (const c of r.changes) {
+        const from = document.createElement('span');
+        from.className = 'from';
+        from.textContent = c.from;
+        li.append(` · ${t(FIELDS.find(f => f.key === c.field).label)}: `, from, ` → ${c.to}`);
+      }
+      return li;
+    }));
+  }
+  document.getElementById('editor-save').disabled = rows.length === 0;
+}
+
+async function saveEditor() {
+  const $ = id => document.getElementById(id);
+  const edits = editing.map((song, i) => ({ id: song.id, changes: changesFor(perSong[i]) }))
+    .filter(e => Object.keys(e.changes).length);
+  $('editor-save').disabled = true;
+  try {
+    const report = await invoke('save_edits', { edits });
+    $('editor').close();
+    const failed = report.failed.length
+      ? ` ${t('editor.failed', { n: report.failed.length, reasons: [...new Set(report.failed.map(([, why]) => why))].join('; ') })}`
+      : '';
+    toast(t('editor.saved', { n: report.saved }) + failed, report.saved > 0);
+  } catch (err) {
+    $('editor-error').textContent = String(err);
+    $('editor-save').disabled = false;
+  }
+}
+
+let toastTimer = null;
+function toast(text, undoable) {
+  const $ = id => document.getElementById(id);
+  $('toast-text').textContent = text;
+  $('toast-undo').hidden = !undoable;
+  $('toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 8000);
 }
