@@ -30,6 +30,7 @@
         <a class="nav-item active" id="nav-songs" href="#" data-i18n="nav.songs">Songs</a>
         <a class="nav-item" id="nav-albums" href="#" data-i18n="nav.albums">Albums</a>
         <a class="nav-item" id="nav-artists" href="#" data-i18n="nav.artists">Artists</a>
+        <a class="nav-item" id="nav-podcasts" href="#" data-i18n="nav.podcasts">Podcasts</a>
         <a class="nav-item" id="nav-liked" href="#" data-i18n="filters.liked">Liked</a>
         <a class="nav-item" id="nav-disliked" href="#" data-i18n="filters.disliked">Disliked</a>
         <a class="nav-item" id="nav-settings" href="#" data-i18n="nav.settings">Settings</a>
@@ -178,6 +179,49 @@
         </div>
         <p class="album-facts muted" id="album-facts"></p>
         <ol class="track-list" id="track-list"></ol>
+      </section>
+
+      <section class="grid-view" id="podcasts-view" hidden>
+        <header class="view-header">
+          <h1 data-i18n="nav.podcasts">Podcasts</h1>
+          <span class="muted" id="podcasts-summary"></span>
+        </header>
+        <form class="podcast-add" id="podcast-add">
+          <label class="search-box podcast-url">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+            <input class="search" id="podcast-url" type="url" placeholder="Paste a podcast feed address (RSS)" aria-label="Podcast feed address" spellcheck="false"
+              data-i18n-attr="placeholder:podcast.urlPlaceholder;aria-label:podcast.urlLabel">
+          </label>
+          <button class="primary" id="podcast-add-btn" type="submit" data-i18n="podcast.subscribe">Subscribe</button>
+          <p class="eq-error podcast-error" id="podcast-error" role="alert"></p>
+        </form>
+        <p class="muted podcast-empty" id="podcast-empty" data-i18n="podcast.empty">No podcasts yet. Paste a feed address above to subscribe.</p>
+        <div class="tile-scroll"><div class="tiles" id="podcast-tiles"></div></div>
+      </section>
+
+      <section class="album-page" id="show-page" hidden>
+        <div class="album-hero">
+          <img class="hero-bg" id="show-bg" alt="" hidden>
+          <div class="hero-shade"></div>
+          <button class="back-btn" id="show-back" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            <span data-i18n="nav.podcasts">Podcasts</span>
+          </button>
+          <div class="hero-body">
+            <div class="hero-cover" id="show-cover"></div>
+            <div class="hero-text">
+              <span class="hero-kicker" data-i18n="podcast.kicker">Podcast</span>
+              <h1 class="hero-title"><span class="light" id="show-line1"></span> <span class="bold" id="show-line2"></span></h1>
+              <span class="hero-artist" id="show-author"></span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button class="primary" id="show-refresh" type="button" data-i18n="podcast.refresh">Check for new episodes</button>
+            <button class="ghost-btn" id="show-unsubscribe" type="button" data-i18n="podcast.unsubscribe">Unsubscribe</button>
+          </div>
+        </div>
+        <p class="album-facts muted" id="show-facts"></p>
+        <ol class="track-list" id="episode-list"></ol>
       </section>
 
       <section class="settings-view" id="settings-view" hidden>

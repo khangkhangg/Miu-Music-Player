@@ -15,6 +15,8 @@ import { planSummary } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
+import { episodeMeta } from './podcasts.js';
+import { language } from './i18n.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
 import { groupAlbums, groupArtists, libraryStats, splitTitle } from './library.js';
@@ -830,14 +832,17 @@ function showView(name) {
   view = name;
   const $ = id => document.getElementById(id);
   const library = ['songs', 'albums', 'artists', 'page'].includes(name);
+  $('podcasts-view').hidden = name !== 'podcasts';
+  $('show-page').hidden = name !== 'show';
   $('settings-view').hidden = name !== 'settings';
   $('empty-state').hidden = !library || hasSongs;
   $('song-view').hidden = name !== 'songs' || !hasSongs;
   $('albums-view').hidden = !['albums', 'artists'].includes(name) || !hasSongs;
   $('album-page').hidden = name !== 'page' || !hasSongs;
   const navOn = name === 'songs' ? { all: 'nav-songs', liked: 'nav-liked', disliked: 'nav-disliked' }[activeFilter] ?? 'nav-songs'
-    : name === 'page' ? (page?.kind === 'artist' ? 'nav-artists' : 'nav-albums') : `nav-${name}`;
-  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', id === navOn);
+    : name === 'page' ? (page?.kind === 'artist' ? 'nav-artists' : 'nav-albums') : name === 'show' ? 'nav-podcasts' : `nav-${name}`;
+  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-podcasts', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', id === navOn);
+  if (name === 'podcasts') loadPodcasts();
   if (name === 'albums' || name === 'artists') renderTiles();
 }
 
@@ -866,6 +871,8 @@ function setupSettings(languageSetting) {
   go('nav-disliked', songsWith('disliked'));
   go('nav-albums', () => showView('albums'));
   go('nav-artists', () => showView('artists'));
+  go('nav-podcasts', () => showView('podcasts'));
+  setupPodcasts();
   go('nav-settings', () => showView('settings'));
   $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));
   $('album-play').addEventListener('click', () => { if (page) playList(page.songs.map(x => x.id), 0); });
@@ -1117,4 +1124,129 @@ function showWork(p) {
   document.getElementById('work').hidden = !w.show;
   document.getElementById('work-fill').style.width = `${w.percent}%`;
   document.getElementById('work-text').textContent = w.text;
+}
+
+// ---- Podcasts (Phase 7, P.1): subscribe by feed address, shows and their episodes ----
+let shows = [];
+let openShow = null;
+
+function setupPodcasts() {
+  const $ = id => document.getElementById(id);
+  $('podcast-add').addEventListener('submit', e => {
+    e.preventDefault();
+    const url = $('podcast-url').value.trim();
+    if (!url) return;
+    $('podcast-error').textContent = '';
+    $('podcast-add-btn').disabled = true;
+    invoke('podcast_subscribe', { url })
+      .then(list => { $('podcast-url').value = ''; renderShows(list); })
+      .catch(err => { $('podcast-error').textContent = t('podcast.failed', { reason: String(err) }); })
+      .finally(() => { $('podcast-add-btn').disabled = false; });
+  });
+  $('show-back').addEventListener('click', () => showView('podcasts'));
+  $('show-refresh').addEventListener('click', () => {
+    if (!openShow) return;
+    $('show-refresh').disabled = true;
+    invoke('podcast_refresh', { id: openShow.id })
+      .then(n => { $('show-facts').textContent = t('podcast.newEpisodes', { n }); return loadPodcasts().then(() => openShowPage(openShow.id, false)); })
+      .catch(err => { $('show-facts').textContent = t('podcast.failed', { reason: String(err) }); })
+      .finally(() => { $('show-refresh').disabled = false; });
+  });
+  $('show-unsubscribe').addEventListener('click', () => {
+    if (!openShow) return;
+    invoke('podcast_unsubscribe', { id: openShow.id }).then(list => { renderShows(list); showView('podcasts'); });
+  });
+}
+
+function loadPodcasts() {
+  return invoke('podcast_list').then(renderShows);
+}
+
+function remoteCover(url, cls) {
+  const box = document.createElement('span');
+  box.className = cls;
+  if (url) {
+    const img = document.createElement('img');
+    img.className = 'remote';
+    img.alt = '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.src = url;
+    img.addEventListener('error', () => { box.innerHTML = NOTE; }, { once: true }); // constant markup
+    box.append(img);
+  } else {
+    box.innerHTML = NOTE; // constant markup
+  }
+  return box;
+}
+
+function renderShows(list) {
+  shows = list;
+  const $ = id => document.getElementById(id);
+  $('podcasts-summary').textContent = t('podcast.count', { n: list.length });
+  $('podcast-empty').hidden = list.length > 0;
+  const box = $('podcast-tiles');
+  const cols = Math.max(2, Math.floor(box.clientWidth / 170 / 2) * 2) || 4;
+  box.style.setProperty('--tile-cols', cols);
+  const cells = [];
+  list.forEach((s, i) => {
+    const row = Math.floor((i * 2) / cols);
+    const open = () => openShowPage(s.id);
+    const cover = document.createElement('button');
+    cover.type = 'button';
+    cover.className = 'tile tile-cover';
+    cover.setAttribute('aria-label', s.title);
+    cover.addEventListener('click', open);
+    cover.append(remoteCover(s.artworkUrl, 'tile-art'));
+    const info = document.createElement('button');
+    info.type = 'button';
+    info.className = 'tile tile-info';
+    info.addEventListener('click', open);
+    const [l1, l2] = splitTitle(s.title);
+    const stat = (label, value) => {
+      const span = document.createElement('span');
+      const small = document.createElement('small');
+      small.className = 'stat-label';
+      small.textContent = label;
+      const b = document.createElement('b');
+      b.textContent = value;
+      span.append(small, b);
+      return span;
+    };
+    const stats = document.createElement('span');
+    stats.className = 'tile-stats';
+    stats.append(stat(t('podcast.episodesLabel'), s.episodes), stat(t('podcast.newLabel'), s.unplayed));
+    info.append(cell(l1, 'tile-line1'), cell(l2, 'tile-line2'), cell(s.author ?? '', 'tile-sub'), stats);
+    cells.push(...(row % 2 === 0 ? [cover, info] : [info, cover]));
+  });
+  box.replaceChildren(...cells);
+}
+
+function openShowPage(id, scroll = true) {
+  const s = shows.find(x => x.id === id);
+  if (!s) return Promise.resolve();
+  openShow = s;
+  const $ = el => document.getElementById(el);
+  const [l1, l2] = splitTitle(s.title);
+  $('show-line1').textContent = l1;
+  $('show-line2').textContent = l2;
+  $('show-author').textContent = s.author ?? '';
+  $('show-cover').replaceChildren(remoteCover(s.artworkUrl, 'hero-art'));
+  const bg = $('show-bg');
+  bg.hidden = !s.artworkUrl;
+  if (s.artworkUrl) { bg.referrerPolicy = 'no-referrer'; bg.src = s.artworkUrl; }
+  return invoke('podcast_episodes', { id }).then(eps => {
+    if (scroll) $('show-facts').textContent = t('podcast.facts', { n: eps.length, unplayed: eps.filter(e => !e.played).length });
+    $('episode-list').replaceChildren(...eps.map(e => {
+      const li = document.createElement('li');
+      li.className = e.played ? 'episode played' : 'episode';
+      const title = cell(e.title, 'episode-title');
+      const meta = cell(episodeMeta(e, language()), 'episode-meta');
+      const note = cell(t('podcast.downloadSoon'), 'episode-note');
+      li.append(title, note, meta);
+      return li;
+    }));
+    showView('show');
+    if (scroll) $('show-page').scrollTop = 0;
+  });
 }

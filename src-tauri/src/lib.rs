@@ -2,6 +2,7 @@ pub mod apple;
 pub mod audio;
 pub mod device;
 pub mod library;
+pub mod podcast;
 pub mod settings;
 mod windows;
 pub mod sync;
@@ -104,6 +105,11 @@ pub fn run() {
             library::service::save_edits,
             library::service::undo_edit,
             sync::service::sync_preview,
+            podcast::service::podcast_subscribe,
+            podcast::service::podcast_refresh,
+            podcast::service::podcast_list,
+            podcast::service::podcast_episodes,
+            podcast::service::podcast_unsubscribe,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

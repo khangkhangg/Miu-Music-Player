@@ -75,6 +75,40 @@ pub const MIGRATIONS: &[&str] = &[
          kind TEXT NOT NULL,
          error TEXT
      ) STRICT;",
+    // 9: podcasts (Phase 7)
+    "CREATE TABLE podcasts (
+         id INTEGER PRIMARY KEY,
+         feed_url TEXT NOT NULL UNIQUE,
+         title TEXT NOT NULL,
+         author TEXT,
+         description TEXT,
+         artwork_url TEXT,
+         link TEXT,
+         language TEXT,
+         added_at INTEGER NOT NULL,
+         last_checked INTEGER,
+         etag TEXT,
+         last_modified TEXT
+     ) STRICT;
+     CREATE TABLE episodes (
+         id INTEGER PRIMARY KEY,
+         podcast_id INTEGER NOT NULL REFERENCES podcasts(id) ON DELETE CASCADE,
+         guid TEXT NOT NULL,
+         title TEXT NOT NULL,
+         description TEXT,
+         published INTEGER,
+         duration_ms INTEGER,
+         audio_url TEXT NOT NULL,
+         audio_type TEXT,
+         audio_bytes INTEGER,
+         season INTEGER,
+         number INTEGER,
+         position_ms INTEGER NOT NULL DEFAULT 0,
+         played INTEGER NOT NULL DEFAULT 0,
+         download_path TEXT,
+         UNIQUE (podcast_id, guid)
+     ) STRICT;
+     CREATE INDEX episodes_podcast ON episodes(podcast_id, published);",
 ];
 
 #[derive(Debug, thiserror::Error)]
