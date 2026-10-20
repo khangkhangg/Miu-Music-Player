@@ -121,6 +121,11 @@ forged (CLAUDE.md rules; the spec's legal note). Option A lets Apple's iTunes do
 signing: Miu only drives iTunes through its documented COM automation interface.
 - [x] **S.1 COM probe** — *Machine test (#[ignore]):* connect to `iTunes.Application`, list sources, find the iPhone source. Read-only.
   2026-10-20: COM works by CLSID (packaged server, not in HKCR). With the 5s on USB iTunes lists it: 'khang’s iPhone', kind 2, 29.8 GB (23.3 free), 69 tracks, UpdateIPod available.
+- [ ] **S.1b Sync safeguards** — *Test first:* read the phone's tracks from a backup; find phone songs with no PC copy (size, or title
+  and length within 2 s) and copy them off read-only; before a sync flag phone songs missing from iTunes' view and IDs with a leading
+  zero byte; after a sync list songs added and removed. Tool: `sync-guard before [--itunes <view.json>]` / `after`
+  (`tools/itunes-view.ps1` writes the view until S.2's COM client exists). Built 2026-10-20; first run on the 5s: 65 phone-only
+  songs copied to `backupse51e30a5media` (770 MB), iTunes view matches all 69, `after` with no sync reports no change.
 - [ ] **S.2 Mirror liked songs into an iTunes playlist "Miu Music"** — *Test first:* against a fake iTunes, the playlist ends up holding exactly the liked set (adds, removes, no duplicates, converted copies for FLAC etc.).
 - [ ] **S.3 Start the device sync** — *Test first:* sync is only requested after the playlist matches; errors map to F5.6 messages. *Machine test:* `UpdateIPod` (or equivalent) syncs the iPhone.
 - [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).

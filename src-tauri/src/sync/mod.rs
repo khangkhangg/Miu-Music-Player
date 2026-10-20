@@ -6,5 +6,6 @@ pub mod host_info;
 pub mod plan;
 pub mod queue;
 pub mod verify;
+pub mod guard;
 pub mod service;
 pub mod journal;

@@ -474,3 +474,11 @@ Safeguards before any further `UpdateIPod` (S.2/S.3):
    song is missing or any ID has a leading zero byte.
 3. After syncing, diff the phone's songs (pid, sync_id, title). Report and offer to restore anything
    removed that the user didn't delete.
+
+### 2026-10-20 — safeguards in place (`sync-guard`)
+`sync-guard before --itunes <view.json>` (backup, copy phone-only songs off, iTunes-view check) and
+`sync-guard after` (backup, diff by pid). First run, read-only: 65 of the 69 phone songs have no
+copy in Miu's library and were copied to `%APPDATA%\MiuMusic\backups\e51e30a5\media\`
+(`<sync_id hex>.<ext>`, `index.json` with titles and phone paths). iTunes' view lists all 69 by
+sync_id; no IDs with a leading zero byte remain. Run both around every `UpdateIPod` until S.2/S.3
+call them automatically.
