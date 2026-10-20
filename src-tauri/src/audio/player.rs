@@ -61,7 +61,8 @@ pub fn output_devices() -> Vec<OutputDevice> {
 }
 
 enum Cmd {
-    Play { tracks: Vec<PathBuf>, start: usize },
+    /// `in_order`: a book's chapters, played in list order whatever shuffle and repeat say.
+    Play { tracks: Vec<PathBuf>, start: usize, in_order: bool },
     Pause,
     Resume,
     Seek(u64),
@@ -206,7 +207,11 @@ impl Player {
     }
 
     pub fn play(&self, tracks: Vec<PathBuf>, start: usize) {
-        let _ = self.tx.send(Cmd::Play { tracks, start });
+        let _ = self.tx.send(Cmd::Play { tracks, start, in_order: false });
+    }
+    /// Play `tracks` from `start` in list order, once (audiobook chapters).
+    pub fn play_in_order(&self, tracks: Vec<PathBuf>, start: usize) {
+        let _ = self.tx.send(Cmd::Play { tracks, start, in_order: true });
     }
     pub fn pause(&self) {
         let _ = self.tx.send(Cmd::Pause);
@@ -405,10 +410,10 @@ fn engine(
                 shared.flush.store(true, Ordering::Release);
             };
             match cmd {
-                Cmd::Play { tracks: t, start } => {
+                Cmd::Play { tracks: t, start, in_order } => {
                     tracks = t;
                     formats.clear();
-                    order = PlayOrder::new(tracks.len(), start, shuffle, repeat, seed());
+                    order = if in_order { PlayOrder::fixed(tracks.len(), start) } else { PlayOrder::new(tracks.len(), start, shuffle, repeat, seed()) };
                     restart(&tracks, start, 0, &order, &mut feeder, &mut timeline);
                     shared.paused.store(false, Ordering::Release);
                 }

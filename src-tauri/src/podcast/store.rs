@@ -52,7 +52,7 @@ fn upsert_show(tx: &rusqlite::Transaction<'_>, s: &Show, now: u64) -> rusqlite::
 }
 
 /// Insert the episodes the show does not have yet; returns how many were new.
-fn add_episodes(tx: &rusqlite::Transaction<'_>, id: i64, eps: &[Episode]) -> rusqlite::Result<usize> {
+pub(crate) fn add_episodes(tx: &rusqlite::Transaction<'_>, id: i64, eps: &[Episode]) -> rusqlite::Result<usize> {
     let mut added = 0;
     for e in eps {
         added += tx.execute(
@@ -98,7 +98,7 @@ pub fn list_shows(db: &Db) -> rusqlite::Result<Vec<ShowRow>> {
                 (SELECT count(*) FROM episodes e WHERE e.podcast_id = p.id),
                 (SELECT count(*) FROM episodes e WHERE e.podcast_id = p.id AND e.played = 0),
                 p.auto_download, p.keep_latest
-         FROM podcasts p ORDER BY p.title COLLATE NOCASE",
+         FROM podcasts p WHERE p.kind = 'podcast' ORDER BY p.title COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(ShowRow { id: r.get(0)?, feed_url: r.get(1)?, title: r.get(2)?, author: r.get(3)?, artwork_url: r.get(4)?,

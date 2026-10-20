@@ -20,8 +20,9 @@ pub struct PlayerHandle {
     /// Song ids and paths of the current queue, by queue index.
     queue: Mutex<Vec<i64>>,
     paths: Mutex<Vec<PathBuf>>,
-    /// The podcast episode being played instead of songs (P.5).
-    episode: Mutex<Option<i64>>,
+    /// Podcast episodes or audiobook chapters played instead of songs (P.5, A.3), by queue index;
+    /// empty while songs play.
+    episodes: Mutex<Vec<i64>>,
 }
 
 pub type SharedPlayer = Arc<PlayerHandle>;
@@ -60,7 +61,7 @@ fn open(device: Option<&str>, exclusive: bool) -> Option<Player> {
 impl PlayerHandle {
     /// `device`: the saved output device name, or `None` for the Windows default.
     pub fn new(device: Option<&str>, exclusive: bool) -> Self {
-        Self { player: Mutex::new(open(device, exclusive)), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episode: Mutex::new(None) }
+        Self { player: Mutex::new(open(device, exclusive)), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episodes: Mutex::new(Vec::new()) }
     }
 
     fn with<T>(&self, f: impl FnOnce(&Player) -> T) -> Option<T> {
@@ -87,7 +88,7 @@ impl PlayerHandle {
             };
         };
         let queue = self.queue.lock().map(|q| q.clone()).unwrap_or_default();
-        let episode_id = s.track.and(self.episode.lock().ok().and_then(|e| *e));
+        let episode_id = s.track.and_then(|t| self.episodes.lock().ok()?.get(t).copied());
         let song_id = if episode_id.is_some() { None } else { s.track.and_then(|t| queue.get(t).copied()) };
         let up_next = s.up_next.iter().filter_map(|&t| queue.get(t).copied()).collect();
         PlayerEvent {
@@ -111,7 +112,7 @@ impl PlayerHandle {
     /// Like `new`, but the device is opened on another thread: the app window does not wait for
     /// it. Until then the player reports "unavailable" and commands answer "no audio output device".
     pub fn new_deferred(device: Option<String>, exclusive: bool, shuffle: bool, repeat: Repeat) -> Arc<Self> {
-        let handle = Arc::new(Self { player: Mutex::new(None), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episode: Mutex::new(None) });
+        let handle = Arc::new(Self { player: Mutex::new(None), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episodes: Mutex::new(Vec::new()) });
         let h = handle.clone();
         std::thread::spawn(move || {
             if let Some(p) = open(device.as_deref(), exclusive) {
@@ -160,7 +161,11 @@ impl PlayerHandle {
             player.set_volume(s.volume);
             let paths = self.paths.lock().map_err(|e| e.to_string())?.clone();
             if let (Some(track), false) = (s.track, paths.is_empty()) {
-                player.play(paths, track);
+                if self.episodes.lock().map(|e| e.len() > 1).unwrap_or(false) {
+                    player.play_in_order(paths, track);
+                } else {
+                    player.play(paths, track);
+                }
                 player.seek(s.position_ms);
                 if !s.playing {
                     player.pause();
@@ -219,10 +224,35 @@ pub fn play_episode(id: i64, db: State<'_, SharedDb>, player: State<'_, SharedPl
     let path = PathBuf::from(path.ok_or("download the episode first")?);
     *player.queue.lock().map_err(|e| e.to_string())? = Vec::new();
     *player.paths.lock().map_err(|e| e.to_string())? = vec![path.clone()];
-    *player.episode.lock().map_err(|e| e.to_string())? = Some(id);
+    *player.episodes.lock().map_err(|e| e.to_string())? = vec![id];
     let resume = crate::podcast::policy::resume_at(position, played);
     player.act(|p| {
         p.play(vec![path], 0);
+        if let Some(ms) = resume {
+            p.seek(ms);
+        }
+    })
+}
+
+/// Play a book's downloaded chapters from `start` (A.3): in order, resuming where the listener
+/// stopped in the first one, then on to the next chapter.
+#[tauri::command]
+pub fn play_chapters(book: i64, start: Option<i64>, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    use crate::audiobook::store;
+    let chapters = store::chapters_of(&*db.lock().map_err(|e| e.to_string())?, book).map_err(|e| e.to_string())?;
+    let start = start.or_else(|| store::resume_point(&chapters).map(|r| r.0)).or_else(|| chapters.first().map(|c| c.id)).ok_or("this book has no chapters")?;
+    let queue = store::play_queue(&chapters, start);
+    if queue.is_empty() {
+        return Err("download the chapter first".into());
+    }
+    let first = chapters.iter().find(|c| c.id == start).ok_or("no such chapter")?;
+    let resume = crate::podcast::policy::resume_at(first.position_ms, first.played);
+    let (ids, paths): (Vec<i64>, Vec<PathBuf>) = queue.into_iter().map(|(id, p)| (id, PathBuf::from(p))).unzip();
+    *player.queue.lock().map_err(|e| e.to_string())? = Vec::new();
+    *player.paths.lock().map_err(|e| e.to_string())? = paths.clone();
+    *player.episodes.lock().map_err(|e| e.to_string())? = ids;
+    player.act(|p| {
+        p.play_in_order(paths, 0);
         if let Some(ms) = resume {
             p.seek(ms);
         }
@@ -241,7 +271,7 @@ pub fn play_songs(ids: Vec<i64>, start: usize, db: State<'_, SharedDb>, player: 
     let (queue, paths): (Vec<i64>, Vec<_>) = found.into_iter().unzip();
     *player.queue.lock().map_err(|e| e.to_string())? = queue;
     *player.paths.lock().map_err(|e| e.to_string())? = paths.clone();
-    *player.episode.lock().map_err(|e| e.to_string())? = None;
+    player.episodes.lock().map_err(|e| e.to_string())?.clear();
     player.act(|p| p.play(paths, start))
 }
 

@@ -191,7 +191,7 @@ pub fn enqueue(app: &tauri::AppHandle, db: &SharedDb, downloads: &SharedDownload
 }
 
 /// Delete the downloaded file of an episode and forget it.
-fn remove_download(db: &SharedDb, id: i64) -> Result<(), String> {
+pub(crate) fn remove_download(db: &SharedDb, id: i64) -> Result<(), String> {
     let d = db.lock().map_err(|e| e.to_string())?;
     if let Some(path) = store::episode(&d, id).map_err(|e| e.to_string())?.and_then(|e| e.download_path) {
         match std::fs::remove_file(&path) {

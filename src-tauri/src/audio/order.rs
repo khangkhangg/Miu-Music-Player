@@ -21,6 +21,8 @@ pub struct PlayOrder {
     shuffle: bool,
     repeat: Repeat,
     seed: u64,
+    /// Audiobook chapters: always in list order, once (shuffle and repeat do not apply).
+    fixed: bool,
 }
 
 /// xorshift64*: small, seedable, good enough to shuffle a queue.
@@ -36,9 +38,14 @@ fn next_random(state: &mut u64) -> u64 {
 impl PlayOrder {
     /// `len` queue entries; with `shuffle`, `start` plays first and the rest follow at random.
     pub fn new(len: usize, start: usize, shuffle: bool, repeat: Repeat, seed: u64) -> Self {
-        let mut o = Self { order: Vec::new(), pos: Vec::new(), shuffle, repeat, seed };
+        let mut o = Self { order: Vec::new(), pos: Vec::new(), shuffle, repeat, seed, fixed: false };
         o.rebuild(len, start);
         o
+    }
+
+    /// List order from `start`, ignoring shuffle and repeat (a book's chapters).
+    pub fn fixed(len: usize, start: usize) -> Self {
+        Self { fixed: true, ..Self::new(len, start, false, Repeat::Off, 1) }
     }
 
     fn rebuild(&mut self, len: usize, start: usize) {
@@ -68,11 +75,17 @@ impl PlayOrder {
     }
 
     pub fn set_repeat(&mut self, repeat: Repeat) {
+        if self.fixed {
+            return;
+        }
         self.repeat = repeat;
     }
 
     /// Switch shuffle; `current` keeps playing and the order continues from it.
     pub fn set_shuffle(&mut self, on: bool, current: usize) {
+        if self.fixed {
+            return;
+        }
         self.shuffle = on;
         next_random(&mut self.seed);
         self.rebuild(self.order.len(), current);
@@ -116,6 +129,17 @@ impl PlayOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn book_chapters_keep_their_order_whatever_shuffle_and_repeat_say() {
+        let mut o = PlayOrder::fixed(4, 1);
+        o.set_shuffle(true, 1);
+        o.set_repeat(Repeat::One);
+        assert_eq!((o.after(1), o.after(2), o.after(3)), (Some(2), Some(3), None), "next chapter, then the end");
+        assert_eq!(o.upcoming(1, 5), [2, 3]);
+        assert!(!o.shuffle());
+        assert_eq!(o.repeat(), Repeat::Off);
+    }
 
     #[test]
     fn in_order_it_stops_at_the_end() {

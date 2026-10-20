@@ -1,0 +1,386 @@
+<?xml version="1.0" ?><rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/" xmlns:creativeCommons="http://backend.userland.com/creativeCommonsRssModule" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+<channel>
+  <title><![CDATA[Treasure Island by Robert Louis Stevenson (1850 - 1894)]]></title>
+  <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+  <atom:link rel="self" href="https://librivox.org/rss/449" />
+  <description><![CDATA[Treasure Island is an adventure novel, a thrilling tale of "buccaneers and buried gold." Traditionally considered a coming of age story, it is an adventure tale of superb atmosphere, character and action, and also a wry commentary on the ambiguity of morality—as seen in Long John Silver—unusual for children's literature then and now. (Summary from wikipedia.org)]]></description>
+  <!--<genre>project element=Genre</genre>-->
+  <language><![CDATA[en]]></language>
+  <itunes:type>serial</itunes:type>
+  <itunes:author>LibriVox</itunes:author>
+  <itunes:summary><![CDATA[Treasure Island is an adventure novel, a thrilling tale of "buccaneers and buried gold." Traditionally considered a coming of age story, it is an adventure tale of superb atmosphere, character and action, and also a wry commentary on the ambiguity of morality—as seen in Long John Silver—unusual for children's literature then and now. (Summary from wikipedia.org)]]></itunes:summary>
+  <itunes:owner>
+    <itunes:name>LibriVox</itunes:name>
+    <itunes:email>info@librivox.org</itunes:email>
+  </itunes:owner>
+  <itunes:category text="Arts">
+    <itunes:category text="Literature" />
+  </itunes:category>
+  <itunes:image href="https://archive.org/download/treasureisland_librivox/treasure_island_1.jpg" />  <!-- file loop -->
+    <item>
+    <title><![CDATA[Chapters 1-2 ]]></title>
+    <itunes:episode><![CDATA[1]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_01-02_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:25:20]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_01-02_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 3-4]]></title>
+    <itunes:episode><![CDATA[2]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_03-04_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:29:19]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_03-04_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 5-6]]></title>
+    <itunes:episode><![CDATA[3]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_05-06_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:28:13]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_05-06_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 7-8]]></title>
+    <itunes:episode><![CDATA[4]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_07-08_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:23:05]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_07-08_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 9-10]]></title>
+    <itunes:episode><![CDATA[5]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_09-10_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:31:27]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_09-10_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 11-12]]></title>
+    <itunes:episode><![CDATA[6]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_11-12_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:23:11]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_11-12_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 13]]></title>
+    <itunes:episode><![CDATA[7]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_13_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:10:39]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_13_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 14]]></title>
+    <itunes:episode><![CDATA[8]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_14_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:12:22]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_14_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 15]]></title>
+    <itunes:episode><![CDATA[9]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_15_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:16:37]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_15_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 16]]></title>
+    <itunes:episode><![CDATA[10]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_16_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:11:25]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_16_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 17]]></title>
+    <itunes:episode><![CDATA[11]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_17_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:13:23]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_17_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 18]]></title>
+    <itunes:episode><![CDATA[12]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_18_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:14:15]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_18_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 19]]></title>
+    <itunes:episode><![CDATA[13]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_19_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:12:51]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_19_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 20]]></title>
+    <itunes:episode><![CDATA[14]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_20_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:12:48]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_20_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 21]]></title>
+    <itunes:episode><![CDATA[15]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_21_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:11:11]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_21_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 22]]></title>
+    <itunes:episode><![CDATA[16]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_22_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:10:50]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_22_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 23-24]]></title>
+    <itunes:episode><![CDATA[17]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_23-24_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:22:09]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_23-24_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapters 25-26]]></title>
+    <itunes:episode><![CDATA[18]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_25-26_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:32:47]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_25-26_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 27]]></title>
+    <itunes:episode><![CDATA[19]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_27_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:11:41]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_27_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 28]]></title>
+    <itunes:episode><![CDATA[20]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_28_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:15:24]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_28_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 29]]></title>
+    <itunes:episode><![CDATA[21]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_29_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:13:59]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_29_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 30]]></title>
+    <itunes:episode><![CDATA[22]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_30_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:14:43]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_30_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 31]]></title>
+    <itunes:episode><![CDATA[23]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_31_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:14:31]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_31_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 32 ]]></title>
+    <itunes:episode><![CDATA[24]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_32_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:12:28]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_32_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 33]]></title>
+    <itunes:episode><![CDATA[25]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_33_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:12:50]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_33_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <item>
+    <title><![CDATA[Chapter 34]]></title>
+    <itunes:episode><![CDATA[26]]></itunes:episode>
+    <!--<reader>file element=reader</reader> -->
+    <link><![CDATA[https://librivox.org/treasure-island-by-robert-louis-stevenson/]]></link>
+            <enclosure url="https://www.archive.org/download/treasureisland_librivox/treasure_island_34_stevenson_64kb.mp3" length="0" type="audio/mpeg" />
+  <itunes:explicit>No</itunes:explicit>
+  <itunes:block>No</itunes:block>
+  <itunes:duration>
+    <![CDATA[00:11:44]]>
+  </itunes:duration>
+  <!--<pubDate>file element=rss.pubDate</pubDate>-->
+  <media:content url="https://www.archive.org/download/treasureisland_librivox/treasure_island_34_stevenson_64kb.mp3" type="audio/mpeg" />
+ </item>
+    <!-- end file loop -->
+</channel>
+</rss>

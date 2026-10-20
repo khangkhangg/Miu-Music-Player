@@ -3,6 +3,7 @@ pub mod audio;
 pub mod device;
 pub mod library;
 pub mod podcast;
+pub mod audiobook;
 pub mod settings;
 mod windows;
 pub mod sync;
@@ -83,6 +84,7 @@ pub fn run() {
         .manage(library::service::LastEdit::default())
         .manage(podcast_downloads.clone())
         .manage(std::sync::Arc::new(podcast::service::DiscoverCache::default()))
+        .manage(std::sync::Arc::new(audiobook::service::RecentCache::default()))
         .register_uri_scheme_protocol("miuart", {
             let db = db.clone();
             move |_ctx, request| library::service::art_response(&db, request.uri().path())
@@ -141,6 +143,15 @@ pub fn run() {
             audio::service::set_exclusive,
             audio::service::player_shuffle,
             audio::service::play_episode,
+            audio::service::play_chapters,
+            audiobook::service::audiobook_search,
+            audiobook::service::audiobook_recent,
+            audiobook::service::audiobook_add,
+            audiobook::service::audiobook_list,
+            audiobook::service::audiobook_chapters,
+            audiobook::service::audiobook_download,
+            audiobook::service::audiobook_remove_download,
+            audiobook::service::audiobook_remove,
             audio::service::player_repeat,
             windows::open_main,
             audio::eq_service::eq_state,
