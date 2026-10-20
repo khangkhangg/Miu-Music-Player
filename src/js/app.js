@@ -30,7 +30,7 @@ let selection = { selected: new Set(), anchor: null };
 let playerState = null;
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
-const preference = 'system'; // becomes a setting in F5.5
+let preference = 'system'; // the theme setting (F5.5)
 
 function applyTheme() {
   document.documentElement.dataset.theme = resolveTheme(preference, media.matches);
@@ -41,9 +41,7 @@ media.addEventListener('change', applyTheme);
 const invoke = window.__TAURI__?.core?.invoke;
 if (invoke) {
   const languageSetting = await startInLanguage(invoke);
-  const picker = document.getElementById('language');
-  picker.value = languageSetting;
-  picker.addEventListener('change', () => invoke('set_ui_language', { language: picker.value }));
+  setupSettings(languageSetting);
   invoke('app_info').then(info => {
     document.getElementById('app-version').textContent = `${info.name} ${info.version}`;
   });
@@ -368,8 +366,8 @@ function showFolders(folders) {
     return li;
   }));
   const summary = librarySummary(folders);
-  document.getElementById('empty-state').hidden = Boolean(summary);
-  document.getElementById('song-view').hidden = !summary;
+  hasSongs = Boolean(summary);
+  showView(view);
   document.getElementById('library-summary-text').textContent = summary ?? '';
 }
 
@@ -749,4 +747,54 @@ function toast(text, undoable) {
   $('toast').hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 8000);
+}
+
+// ---- Views and settings (F5.5) ----
+let view = 'songs';
+let hasSongs = false;
+
+function showView(name) {
+  view = name;
+  const $ = id => document.getElementById(id);
+  $('settings-view').hidden = name !== 'settings';
+  $('song-view').hidden = name !== 'songs' || !hasSongs;
+  $('empty-state').hidden = name !== 'songs' || hasSongs;
+  $('nav-songs').classList.toggle('active', name === 'songs');
+  $('nav-settings').classList.toggle('active', name === 'settings');
+}
+
+function showSettings(s) {
+  const $ = id => document.getElementById(id);
+  preference = s.theme;
+  applyTheme();
+  $('set-theme').value = s.theme;
+  $('set-mini-minimize').checked = s.miniOnMinimize;
+  $('set-mini-top').checked = s.miniOnTop;
+  $('set-viz').checked = s.visualizerOn;
+  $('set-viz-style').value = s.visualizerStyle;
+  $('set-lossless').value = s.conversion.lossless;
+  $('set-hires').value = s.conversion.hiRes;
+  $('set-exclusive').checked = s.exclusiveOutput;
+}
+
+function setupSettings(languageSetting) {
+  const $ = id => document.getElementById(id);
+  $('language').value = languageSetting;
+  $('language').addEventListener('change', () => invoke('set_ui_language', { language: $('language').value }));
+  $('nav-songs').addEventListener('click', e => { e.preventDefault(); showView('songs'); });
+  $('nav-settings').addEventListener('click', e => { e.preventDefault(); showView('settings'); });
+  const reload = () => invoke('app_settings').then(showSettings);
+  $('set-theme').addEventListener('change', () => invoke('set_app_setting', { name: 'theme', value: $('set-theme').value }).then(showSettings));
+  const conversion = () => invoke('set_app_setting', { name: 'conversion', value: { lossless: $('set-lossless').value, hiRes: $('set-hires').value } })
+    .then(showSettings).then(showSyncPreview);
+  $('set-lossless').addEventListener('change', conversion);
+  $('set-hires').addEventListener('change', conversion);
+  $('set-mini-minimize').addEventListener('change', e => invoke('set_mini_on_minimize', { on: e.target.checked }).then(reload));
+  $('set-mini-top').addEventListener('change', e => invoke('set_mini_on_top', { on: e.target.checked }).then(reload));
+  $('set-viz').addEventListener('change', e => invoke('set_visualizer_on', { on: e.target.checked }).then(reload));
+  $('set-viz-style').addEventListener('change', e => invoke('set_visualizer_style', { style: e.target.value }).then(reload));
+  $('set-exclusive').addEventListener('change', e => invoke('set_exclusive', { on: e.target.checked }).then(renderDevices).then(reload));
+  window.__TAURI__.event.listen('settings-changed', ev => showSettings(ev.payload));
+  window.__TAURI__.event.listen('mini-on-top', reload);
+  reload();
 }

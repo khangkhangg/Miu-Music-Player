@@ -6,7 +6,8 @@ import { fromBytes, geometry } from './visualizer.js';
 import { t, startInLanguage } from './i18n.js';
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
-const applyTheme = () => { document.documentElement.dataset.theme = resolveTheme('system', media.matches); };
+let preference = 'system'; // the theme setting (F5.5)
+const applyTheme = () => { document.documentElement.dataset.theme = resolveTheme(preference, media.matches); };
 applyTheme();
 media.addEventListener('change', applyTheme);
 
@@ -14,6 +15,9 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const $ = id => document.getElementById(id);
 await startInLanguage(invoke);
+const useSettings = s => { preference = s.theme; applyTheme(); };
+invoke('app_settings').then(useSettings);
+listen('settings-changed', e => useSettings(e.payload));
 
 let songsById = new Map();
 let state = null;

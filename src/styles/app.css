@@ -139,6 +139,15 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .sync-shortage { margin: 0 0 6px; color: var(--danger); }
 .sync-btn { width: 100%; }
 .sync-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.settings-view { flex: 1; overflow-y: auto; min-height: 0; }
+.settings-view[hidden] { display: none; }
+.settings-body { padding: 0 20px 20px; max-width: 640px; }
+.settings-body fieldset { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px 14px 12px; margin: 0 0 14px; }
+.settings-body legend { font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 0 4px; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; padding: 5px 0; }
+.setting.check { justify-content: flex-start; }
+.setting select { font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); max-width: 60%; }
+.setting-note { font-size: 12px; margin: 6px 0 0; }
 .disliked-banner { display: flex; align-items: center; gap: 12px; margin: 0 20px 10px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--danger); background: var(--surface-muted); font-size: 12px; }
 .disliked-banner[hidden], .delete-result[hidden] { display: none; }
 .disliked-banner p { margin: 0; flex: 1; line-height: 1.5; }

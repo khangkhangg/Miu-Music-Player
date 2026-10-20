@@ -90,3 +90,25 @@ pub fn set_ui_language(language: String, app: AppHandle, db: State<'_, SharedDb>
     }
     app.emit("language-changed", &language).map_err(|e| e.to_string())
 }
+
+/// Every setting for the settings page (F5.5).
+#[tauri::command]
+pub fn app_settings(db: State<'_, SharedDb>) -> Result<crate::settings::AppSettings, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    Ok(crate::settings::all(&d))
+}
+
+/// Change a setting that needs no other action (theme, conversion) and tell every window.
+#[tauri::command]
+pub fn set_app_setting(name: String, value: serde_json::Value, app: AppHandle, db: State<'_, SharedDb>) -> Result<crate::settings::AppSettings, String> {
+    if !["theme", "conversion"].contains(&name.as_str()) {
+        return Err(format!("{name} has its own command"));
+    }
+    let all = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        crate::settings::change(&d, &name, &value)?;
+        crate::settings::all(&d)
+    };
+    let _ = app.emit("settings-changed", &all);
+    Ok(all)
+}

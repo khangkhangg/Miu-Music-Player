@@ -137,6 +137,66 @@ pub fn set_ui_language(db: &Db, code: &str) -> std::result::Result<(), String> {
     db.set_setting_json(UI_LANGUAGE, &code).map_err(|e| e.to_string())
 }
 
+const THEME: &str = "theme";
+pub const THEMES: [&str; 3] = ["system", "light", "dark"];
+
+/// Light, dark or following Windows (default and fallback: "system").
+pub fn theme(db: &Db) -> String {
+    db.setting_json::<String>(THEME).ok().flatten().filter(|s| THEMES.contains(&s.as_str())).unwrap_or_else(|| "system".into())
+}
+
+/// Every user-facing setting at once, for the settings page (F5.5).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    pub theme: String,
+    pub language: String,
+    pub mini_on_minimize: bool,
+    pub mini_on_top: bool,
+    pub visualizer_on: bool,
+    pub visualizer_style: String,
+    pub conversion: crate::library::convert::Policy,
+    pub exclusive_output: bool,
+}
+
+pub fn all(db: &Db) -> AppSettings {
+    AppSettings {
+        theme: theme(db),
+        language: ui_language(db),
+        mini_on_minimize: mini_on_minimize(db),
+        mini_on_top: mini_on_top(db),
+        visualizer_on: visualizer_on(db),
+        visualizer_style: visualizer_style(db),
+        conversion: conversion_policy(db),
+        exclusive_output: exclusive_output(db),
+    }
+}
+
+/// Change one setting by its camelCase name, checking the value first.
+pub fn change(db: &Db, name: &str, value: &serde_json::Value) -> std::result::Result<(), String> {
+    fn get<T: serde::de::DeserializeOwned>(v: &serde_json::Value) -> std::result::Result<T, String> {
+        serde_json::from_value(v.clone()).map_err(|e| format!("bad value: {e}"))
+    }
+    let db_err = |e: crate::library::db::DbError| e.to_string();
+    match name {
+        "theme" => {
+            let t: String = get(value)?;
+            if !THEMES.contains(&t.as_str()) {
+                return Err(format!("unknown theme {t:?}"));
+            }
+            db.set_setting_json(THEME, &t).map_err(db_err)
+        }
+        "language" => set_ui_language(db, &get::<String>(value)?),
+        "miniOnMinimize" => set_mini_on_minimize(db, get(value)?).map_err(db_err),
+        "miniOnTop" => set_mini_on_top(db, get(value)?).map_err(db_err),
+        "visualizerOn" => set_visualizer_on(db, get(value)?).map_err(db_err),
+        "visualizerStyle" => set_visualizer_style(db, &get::<String>(value)?),
+        "conversion" => set_conversion_policy(db, &get(value)?).map_err(db_err),
+        "exclusiveOutput" => set_exclusive_output(db, get(value)?).map_err(db_err),
+        _ => Err(format!("unknown setting {name:?}")),
+    }
+}
+
 const MINI_ON_TOP: &str = "mini_on_top";
 
 /// Keep the mini player above other windows (default: yes — the pin in the mini player).
@@ -352,5 +412,49 @@ mod language_tests {
         assert_eq!(ui_language(&db), "vi");
         db.set_setting_json("ui_language", &"klingon").unwrap();
         assert_eq!(ui_language(&db), "auto", "a bad stored value falls back");
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::library::convert::{HiRes, Lossless, Policy};
+
+    #[test]
+    fn a_fresh_install_has_these_defaults() {
+        let s = all(&Db::open_in_memory().unwrap());
+        assert_eq!(s, AppSettings {
+            theme: "system".into(),
+            language: "auto".into(),
+            mini_on_minimize: true,
+            mini_on_top: true,
+            visualizer_on: true,
+            visualizer_style: "bars".into(),
+            conversion: Policy { hi_res: HiRes::Alac24_48, lossless: Lossless::Alac },
+            exclusive_output: false,
+        });
+    }
+
+    #[test]
+    fn each_setting_can_be_changed_by_name() {
+        let db = Db::open_in_memory().unwrap();
+        change(&db, "theme", &serde_json::json!("dark")).unwrap();
+        change(&db, "miniOnTop", &serde_json::json!(false)).unwrap();
+        change(&db, "visualizerStyle", &serde_json::json!("line")).unwrap();
+        change(&db, "conversion", &serde_json::json!({ "hiRes": "alac16_44", "lossless": "aac256" })).unwrap();
+        let s = all(&db);
+        assert_eq!((s.theme.as_str(), s.mini_on_top, s.visualizer_style.as_str()), ("dark", false, "line"));
+        assert_eq!(s.conversion, Policy { hi_res: HiRes::Alac16_44, lossless: Lossless::Aac256 });
+    }
+
+    #[test]
+    fn bad_names_and_values_are_refused_and_change_nothing() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(change(&db, "colour", &serde_json::json!("red")).is_err(), "unknown setting");
+        assert!(change(&db, "theme", &serde_json::json!("purple")).is_err());
+        assert!(change(&db, "miniOnTop", &serde_json::json!("yes")).is_err(), "wrong type");
+        assert!(change(&db, "conversion", &serde_json::json!({ "hiRes": "8k" })).is_err());
+        assert!(change(&db, "language", &serde_json::json!("klingon")).is_err());
+        assert_eq!(all(&db), all(&Db::open_in_memory().unwrap()));
     }
 }

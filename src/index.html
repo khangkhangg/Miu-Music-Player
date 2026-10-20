@@ -13,9 +13,10 @@
     <aside class="sidebar">
       <div class="brand" data-i18n="app.name">Miu Music</div>
       <nav>
-        <a class="nav-item active" data-i18n="nav.songs">Songs</a>
+        <a class="nav-item active" id="nav-songs" href="#" data-i18n="nav.songs">Songs</a>
         <a class="nav-item" data-i18n="nav.albums">Albums</a>
         <a class="nav-item" data-i18n="nav.artists">Artists</a>
+        <a class="nav-item" id="nav-settings" href="#" data-i18n="nav.settings">Settings</a>
       </nav>
       <div class="section-label section-row">
         <span data-i18n="folders.title">Watched folders</span>
@@ -76,6 +77,57 @@
             <div class="song-spacer" id="song-spacer"></div>
           </div>
           <nav class="index-bar" id="index-bar" aria-label="Jump to letter" data-i18n-attr="aria-label:index.label"></nav>
+        </div>
+      </section>
+      <section class="settings-view" id="settings-view" hidden>
+        <header class="view-header"><h1 data-i18n="settings.title">Settings</h1></header>
+        <div class="settings-body">
+          <fieldset>
+            <legend data-i18n="settings.appearance">Appearance</legend>
+            <label class="setting"><span data-i18n="settings.theme">Theme</span>
+              <select id="set-theme">
+                <option value="system" data-i18n="theme.system">Follow Windows</option>
+                <option value="light" data-i18n="theme.light">Light</option>
+                <option value="dark" data-i18n="theme.dark">Dark</option>
+              </select></label>
+            <label class="setting"><span data-i18n="language.label">Language</span>
+              <select id="language">
+                <option value="auto" data-i18n="language.auto">System language</option>
+                <option value="en" data-i18n="language.en">English</option>
+                <option value="vi" data-i18n="language.vi">Tiếng Việt</option>
+              </select></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="settings.miniPlayer">Mini player</legend>
+            <label class="setting check"><input type="checkbox" id="set-mini-minimize"><span data-i18n="settings.miniOnMinimize">Open the mini player when the window is minimised</span></label>
+            <label class="setting check"><input type="checkbox" id="set-mini-top"><span data-i18n="settings.miniOnTop">Keep the mini player above other windows</span></label>
+            <label class="setting check"><input type="checkbox" id="set-viz"><span data-i18n="settings.visualizer">Show the visualizer</span></label>
+            <label class="setting"><span data-i18n="settings.visualizerStyle">Visualizer style</span>
+              <select id="set-viz-style">
+                <option value="bars" data-i18n="viz.bars">Bars</option>
+                <option value="mirrored" data-i18n="viz.mirrored">Mirrored bars</option>
+                <option value="line" data-i18n="viz.line">Line</option>
+              </select></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="settings.conversion">Songs on the iPhone</legend>
+            <label class="setting"><span data-i18n="settings.lossless">FLAC and other lossless files</span>
+              <select id="set-lossless">
+                <option value="alac" data-i18n="conv.alac">Apple Lossless (ALAC) — same quality</option>
+                <option value="aac256" data-i18n="conv.aac256">AAC 256 kbps — much smaller files</option>
+              </select></label>
+            <label class="setting"><span data-i18n="settings.hiRes">Hi-res files (above 48 kHz or 24-bit)</span>
+              <select id="set-hires">
+                <option value="alac24_48" data-i18n="conv.alac24_48">24-bit / 48 kHz — the best the iPhone plays</option>
+                <option value="alac16_44" data-i18n="conv.alac16_44">16-bit / 44.1 kHz — CD quality, smaller</option>
+              </select></label>
+            <p class="muted setting-note" data-i18n="settings.conversionNote">Only the copies on the iPhone are converted. Your files and playback on this PC stay as they are.</p>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="settings.playback">Playback on this PC</legend>
+            <label class="setting check"><input type="checkbox" id="set-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
+            <p class="muted setting-note" data-i18n="output.exclusiveNote">Miu takes the device for itself.</p>
+          </fieldset>
         </div>
       </section>
       <div class="now-playing" id="now-playing" hidden>
@@ -196,11 +248,6 @@
       </div>
       <footer class="status muted">
         <span id="app-version"></span>
-        <select class="language" id="language" aria-label="Language" data-i18n-attr="aria-label:language.label">
-          <option value="auto" data-i18n="language.auto">System language</option>
-          <option value="en" data-i18n="language.en">English</option>
-          <option value="vi" data-i18n="language.vi">Tiếng Việt</option>
-        </select>
       </footer>
     </main>
   </div>
