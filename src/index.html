@@ -185,7 +185,29 @@
         <header class="view-header">
           <h1 data-i18n="nav.podcasts">Podcasts</h1>
           <span class="muted" id="podcasts-summary"></span>
+          <div class="seg" role="tablist" aria-label="Podcasts" data-i18n-attr="aria-label:nav.podcasts">
+            <button type="button" role="tab" class="seg-btn active" id="tab-mine" aria-selected="true" data-i18n="podcast.tabMine">Your podcasts</button>
+            <button type="button" role="tab" class="seg-btn" id="tab-discover" aria-selected="false" data-i18n="podcast.tabDiscover">Discover</button>
+          </div>
         </header>
+        <div class="discover" id="discover" hidden>
+          <div class="discover-bar">
+            <div class="seg" role="group" aria-label="Country" data-i18n-attr="aria-label:podcast.country">
+              <button type="button" class="seg-btn active" data-country="vn" data-i18n="podcast.vn">Việt Nam</button>
+              <button type="button" class="seg-btn" data-country="us" data-i18n="podcast.us">United States</button>
+            </div>
+            <form class="discover-search" id="discover-search">
+              <label class="search-box">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input class="search" id="discover-term" type="search" placeholder="Search Apple Podcasts" aria-label="Search Apple Podcasts" dir="auto"
+                  data-i18n-attr="placeholder:podcast.searchApple;aria-label:podcast.searchApple">
+              </label>
+            </form>
+          </div>
+          <p class="muted discover-status" id="discover-status" role="status"></p>
+          <div class="tile-scroll"><div class="tiles" id="discover-tiles"></div></div>
+        </div>
+        <div class="mine" id="mine">
         <form class="podcast-add" id="podcast-add">
           <label class="search-box podcast-url">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
@@ -199,6 +221,7 @@
         </form>
         <p class="muted podcast-empty" id="podcast-empty" data-i18n="podcast.empty">No podcasts yet. Paste a feed address above to subscribe.</p>
         <div class="tile-scroll"><div class="tiles" id="podcast-tiles"></div></div>
+        </div>
       </section>
 
       <section class="album-page" id="show-page" hidden>

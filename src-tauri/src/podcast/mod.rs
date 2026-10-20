@@ -6,3 +6,4 @@ pub mod service;
 pub mod opml;
 pub mod download;
 pub mod policy;
+pub mod discover;

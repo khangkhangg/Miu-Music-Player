@@ -26,3 +26,10 @@ export function episodeState(e, pending) {
   if (e.downloadPath) return 'downloaded';
   return pending.has(e.id) ? 'downloading' : 'download';
 }
+
+/** Mark Discover results already subscribed (same feed, or same name when a chart gave no feed). */
+export function markSubscribed(found, shows) {
+  const feeds = new Set(shows.map((s) => s.feedUrl));
+  const names = new Set(shows.map((s) => s.title.trim().toLocaleLowerCase()));
+  return found.map((f) => ({ ...f, subscribed: (f.feedUrl && feeds.has(f.feedUrl)) || names.has(f.title.trim().toLocaleLowerCase()) }));
+}

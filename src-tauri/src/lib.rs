@@ -79,6 +79,7 @@ pub fn run() {
         .manage(visualizer_on.clone())
         .manage(library::service::LastEdit::default())
         .manage(podcast_downloads.clone())
+        .manage(std::sync::Arc::new(podcast::service::DiscoverCache::default()))
         .register_uri_scheme_protocol("miuart", {
             let db = db.clone();
             move |_ctx, request| library::service::art_response(&db, request.uri().path())
@@ -119,6 +120,9 @@ pub fn run() {
             podcast::service::podcast_delete_download,
             podcast::service::podcast_set_played,
             podcast::service::podcast_set_options,
+            podcast::service::podcast_chart,
+            podcast::service::podcast_search,
+            podcast::service::podcast_subscribe_found,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

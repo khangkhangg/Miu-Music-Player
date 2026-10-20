@@ -15,7 +15,7 @@ import { planSummary } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
-import { episodeMeta, episodeState } from './podcasts.js';
+import { episodeMeta, episodeState, markSubscribed } from './podcasts.js';
 import { language } from './i18n.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
@@ -1171,6 +1171,7 @@ function setupPodcasts() {
       .catch(err => { $('podcast-error').textContent = String(err); });
   });
   $('show-back').addEventListener('click', () => showView('podcasts'));
+  setupDiscover();
   const saveOptions = () => {
     if (!openShow) return;
     invoke('podcast_set_options', { id: openShow.id, autoDownload: $('show-auto').checked, keepLatest: Number($('show-keep').value) })
@@ -1324,4 +1325,90 @@ function episodeActions(e) {
   }
   box.append(button(e.played ? 'podcast.markUnplayed' : 'podcast.markPlayed', () => invoke('podcast_set_played', { id: e.id, played: !e.played }).then(() => loadPodcasts()).then(refreshShow)));
   return box;
+}
+
+// ---- Discover (P.4): Apple charts for Vietnam and the US, and search ----
+let discoverCountry = 'vn';
+let discoverTerm = '';
+let discovered = [];
+
+function setupDiscover() {
+  const $ = id => document.getElementById(id);
+  const tab = discover => {
+    $('discover').hidden = !discover;
+    $('mine').hidden = discover;
+    $('tab-mine').classList.toggle('active', !discover);
+    $('tab-discover').classList.toggle('active', discover);
+    $('tab-mine').setAttribute('aria-selected', String(!discover));
+    $('tab-discover').setAttribute('aria-selected', String(discover));
+    if (discover) loadDiscover();
+  };
+  $('tab-mine').addEventListener('click', () => tab(false));
+  $('tab-discover').addEventListener('click', () => tab(true));
+  for (const b of document.querySelectorAll('[data-country]')) {
+    b.addEventListener('click', () => {
+      discoverCountry = b.dataset.country;
+      for (const x of document.querySelectorAll('[data-country]')) x.classList.toggle('active', x === b);
+      loadDiscover();
+    });
+  }
+  $('discover-search').addEventListener('submit', e => {
+    e.preventDefault();
+    discoverTerm = $('discover-term').value.trim();
+    loadDiscover();
+  });
+  $('discover-term').addEventListener('input', () => {
+    if (!$('discover-term').value.trim() && discoverTerm) { discoverTerm = ''; loadDiscover(); }
+  });
+}
+
+function loadDiscover() {
+  const $ = id => document.getElementById(id);
+  $('discover-status').textContent = t('podcast.loading');
+  const call = discoverTerm
+    ? invoke('podcast_search', { term: discoverTerm, country: discoverCountry })
+    : invoke('podcast_chart', { country: discoverCountry });
+  return call
+    .then(found => {
+      discovered = found;
+      $('discover-status').textContent = discoverTerm
+        ? t('podcast.results', { n: found.length, term: discoverTerm })
+        : t(discoverCountry === 'vn' ? 'podcast.topVn' : 'podcast.topUs');
+      renderDiscover();
+    })
+    .catch(err => { $('discover-status').textContent = t('podcast.failed', { reason: String(err) }); });
+}
+
+function renderDiscover() {
+  const box = document.getElementById('discover-tiles');
+  const cols = Math.max(2, Math.floor(box.clientWidth / 170 / 2) * 2) || 4;
+  box.style.setProperty('--tile-cols', cols);
+  const cells = [];
+  markSubscribed(discovered, shows).forEach((f, i) => {
+    const row = Math.floor((i * 2) / cols);
+    const cover = document.createElement('div');
+    cover.className = 'tile tile-cover';
+    cover.append(remoteCover(f.artworkUrl, 'tile-art'));
+    const info = document.createElement('div');
+    info.className = 'tile tile-info';
+    const [l1, l2] = splitTitle(f.title);
+    info.append(cell(l1, 'tile-line1'), cell(l2, 'tile-line2'), cell(f.author, 'tile-sub'), cell(f.genre ?? '', 'tile-genre'));
+    if (f.subscribed) {
+      info.append(cell(t('podcast.alreadySubscribed'), 'subscribed'));
+    } else {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'primary subscribe';
+      b.textContent = t('podcast.subscribe');
+      b.addEventListener('click', () => {
+        b.disabled = true;
+        invoke('podcast_subscribe_found', { appleId: f.appleId, feedUrl: f.feedUrl ?? null })
+          .then(list => { shows = list; renderShows(list); renderDiscover(); })
+          .catch(err => { b.disabled = false; document.getElementById('discover-status').textContent = t('podcast.failed', { reason: String(err) }); });
+      });
+      info.append(b);
+    }
+    cells.push(...(row % 2 === 0 ? [cover, info] : [info, cover]));
+  });
+  box.replaceChildren(...cells);
 }

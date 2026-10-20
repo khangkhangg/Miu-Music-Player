@@ -288,3 +288,54 @@ pub fn podcast_set_options(
     enqueue(&app, &db, &downloads, &wanted);
     Ok(shows)
 }
+
+// ---- Discover (P.4): Apple charts and search ----
+
+use crate::podcast::discover::{self, Found};
+
+/// Charts per country, kept for a few hours (they change daily at most).
+#[derive(Default)]
+pub struct DiscoverCache(Mutex<std::collections::HashMap<String, (std::time::Instant, Vec<Found>)>>);
+
+const CHART_TTL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+
+fn get_text(url: &str) -> Result<String, String> {
+    match fetch(url, None, None)? {
+        Fetched::Feed { body, .. } => String::from_utf8(body).map_err(|e| e.to_string()),
+        Fetched::NotModified => Err("no answer".into()),
+    }
+}
+
+/// Top podcasts in a country ("vn", "us"), cached for six hours.
+#[tauri::command]
+pub async fn podcast_chart(country: String, cache: State<'_, Arc<DiscoverCache>>) -> Result<Vec<Found>, String> {
+    let key = country.to_ascii_lowercase();
+    if let Some((at, shows)) = cache.0.lock().map_err(|e| e.to_string())?.get(&key) {
+        if at.elapsed() < CHART_TTL {
+            return Ok(shows.clone());
+        }
+    }
+    let url = discover::chart_url(&key, 50)?;
+    let shows = off_thread(move || discover::parse_chart(&get_text(&url)?)).await?;
+    cache.0.lock().map_err(|e| e.to_string())?.insert(key, (std::time::Instant::now(), shows.clone()));
+    Ok(shows)
+}
+
+#[tauri::command]
+pub async fn podcast_search(term: String, country: String) -> Result<Vec<Found>, String> {
+    if term.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let url = discover::search_url(&term, &country)?;
+    off_thread(move || discover::parse_search(&get_text(&url)?)).await
+}
+
+/// Subscribe to a Discover result: its feed address, looked up from Apple when a chart gave none.
+#[tauri::command]
+pub async fn podcast_subscribe_found(apple_id: i64, feed_url: Option<String>, db: State<'_, SharedDb>) -> Result<Vec<ShowRow>, String> {
+    let url = match feed_url {
+        Some(u) => u,
+        None => off_thread(move || discover::parse_lookup(&get_text(&discover::lookup_url(apple_id))?).ok_or_else(|| "this podcast has no public feed".to_string())).await?,
+    };
+    podcast_subscribe(url, db).await
+}

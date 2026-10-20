@@ -323,5 +323,17 @@
   "podcast.removeDownload": "Remove download",
   "podcast.markPlayed": "Mark played",
   "podcast.markUnplayed": "Mark unplayed",
-  "podcast.downloadFailed": "Download failed: {reason}"
+  "podcast.downloadFailed": "Download failed: {reason}",
+  "podcast.tabMine": "Your podcasts",
+  "podcast.tabDiscover": "Discover",
+  "podcast.country": "Country",
+  "podcast.vn": "Việt Nam",
+  "podcast.us": "United States",
+  "podcast.searchApple": "Search Apple Podcasts",
+  "podcast.loading": "Loading…",
+  "podcast.results.one": "{n} result for “{term}”",
+  "podcast.results.other": "{n} results for “{term}”",
+  "podcast.topVn": "Top podcasts in Vietnam",
+  "podcast.topUs": "Top podcasts in the United States",
+  "podcast.alreadySubscribed": "Subscribed"
 }

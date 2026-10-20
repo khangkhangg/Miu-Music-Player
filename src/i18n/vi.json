@@ -323,5 +323,17 @@
   "podcast.removeDownload": "Xóa bản tải",
   "podcast.markPlayed": "Đánh dấu đã nghe",
   "podcast.markUnplayed": "Đánh dấu chưa nghe",
-  "podcast.downloadFailed": "Tải về thất bại: {reason}"
+  "podcast.downloadFailed": "Tải về thất bại: {reason}",
+  "podcast.tabMine": "Podcast của bạn",
+  "podcast.tabDiscover": "Khám phá",
+  "podcast.country": "Quốc gia",
+  "podcast.vn": "Việt Nam",
+  "podcast.us": "Hoa Kỳ",
+  "podcast.searchApple": "Tìm trên Apple Podcasts",
+  "podcast.loading": "Đang tải…",
+  "podcast.results.one": "{n} kết quả cho “{term}”",
+  "podcast.results.other": "{n} kết quả cho “{term}”",
+  "podcast.topVn": "Podcast hàng đầu tại Việt Nam",
+  "podcast.topUs": "Podcast hàng đầu tại Hoa Kỳ",
+  "podcast.alreadySubscribed": "Đã đăng ký"
 }

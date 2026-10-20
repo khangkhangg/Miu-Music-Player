@@ -23,3 +23,15 @@ test('an episode is downloadable, downloading, or on this PC', () => {
   assert.equal(episodeState({ id: 1, downloadPath: null }, new Set([1])), 'downloading');
   assert.equal(episodeState({ id: 1, downloadPath: 'C:/p/1.mp3' }, new Set([1])), 'downloaded');
 });
+
+import { markSubscribed } from '../../src/js/podcasts.js';
+
+test('discover results you already follow are marked, by feed or by name', () => {
+  const found = [
+    { appleId: 1, title: 'The Daily', feedUrl: null },
+    { appleId: 2, title: 'Tám Sài Gòn', feedUrl: 'https://anchor.fm/s/1/podcast/rss' },
+    { appleId: 3, title: 'Something new', feedUrl: null },
+  ];
+  const shows = [{ title: 'the daily', feedUrl: 'https://feeds.simplecast.com/x' }, { title: 'Other', feedUrl: 'https://anchor.fm/s/1/podcast/rss' }];
+  assert.deepEqual(markSubscribed(found, shows).map((f) => f.subscribed), [true, true, false]);
+});
