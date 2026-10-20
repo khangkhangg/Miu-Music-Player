@@ -446,3 +446,31 @@ it could not reconcile (cause unknown — confidence low).
 Conclusion: an iTunes sync is **not** guaranteed to leave the 3uTools songs alone even with manual
 management. Before S.2/S.3 rely on this path: always back up first, diff the phone's track list
 before/after every sync (pid + title), and understand why CWXN was dropped.
+
+### 2026-10-20 — why "Áo Mới Cà Mau" was dropped (read-only investigation)
+- **iTunes' persistent ID for a phone track = the phone's `item_store.sync_id`** (COM
+  `ITObjectPersistentIDHigh/Low`, signed 64-bit). After the sync, all 69 tracks in iTunes' device
+  view match the phone by sync_id. Confidence: high.
+- **iTunes left the song out of its sync list; the phone only obeyed.** The syslog has 69
+  `adding track <MLDITunesSyncImportItem sync_id=…>` lines: 68 matched existing phone songs, 1 was
+  the new song. The one phone song never listed was CWXN (sync_id 43170718095898799). The importer
+  then removed it as a source-3 (iTunes sync) track not in the import ("Deleting 1 assets due to
+  automated action"). No phone-side error or warning near it. Confidence: high.
+- **The phone's rows for CWXN look like every kept song** (item, item_extra, item_store,
+  item_stats, item_playback compared against two kept songs; only ordinary per-song values differ).
+- **Its one unusual trait:** the only sync_id with a leading zero byte
+  (`00995F8A14CDF8AF`). All the others start at 0x12 or above. A plausible cause is iTunes losing
+  the leading zero when it formats or parses the ID, so it couldn't match the track. Confidence:
+  low; it can't be tested read-only. Even by chance, about 1 in 4 libraries of 69 songs would have
+  such an ID. None of the remaining 69 phone songs has one.
+- iTunes' device cache was also wrong about "Ai Đưa Em Về": it tried to re-send that song's file
+  (ATError 16, kept). So iTunes' picture of 3uTools-added songs isn't fully reliable.
+- iTunes' view before the sync showed 70, so a count check before syncing would not have caught it.
+
+Safeguards before any further `UpdateIPod` (S.2/S.3):
+1. Back up the database, and also copy (read-only, AFC) every phone song with no copy on the PC
+   into `%APPDATA%\MiuMusic\backups\<udid8>\media\`, so a dropped song can be put back.
+2. Before syncing, match iTunes' device view to the phone's sync_ids. Refuse to sync if any phone
+   song is missing or any ID has a leading zero byte.
+3. After syncing, diff the phone's songs (pid, sync_id, title). Report and offer to restore anything
+   removed that the user didn't delete.
