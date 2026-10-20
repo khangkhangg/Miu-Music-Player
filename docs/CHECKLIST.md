@@ -140,9 +140,9 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   changed → wait until the phone shows the changes (unconfirmed after 5 min is reported) → backup, diff (unplanned removals reported) →
   record the run. Leading-zero IDs only warn (a copy is kept). `sync_now` runs on its own DB connection with `sync-progress` events.
   Built 2026-10-20. Conversion is in (F3.5): liked FLACs go as cached ALAC copies; a first run sends the 51 liked FLACs (~1.4 GB).
-- [ ] **S.4 First-time guide** — iTunes' COM has no "Manually manage music" flag, so: the sync box shows a three-step guide until the
+- [x] **S.4 First-time guide** — iTunes' COM has no "Manually manage music" flag, so: the sync box shows a three-step guide until the
   phone's first sync, and when iTunes refuses every new song the result says to turn the setting on (tested with a fake). Built 2026-10-20.
-- [ ] **S.5 Verify** — every sync checks which songs Miu sent (or adopted) are still on the phone; ones deleted there are forgotten
+- [x] **S.5 Verify** — every sync checks which songs Miu sent (or adopted) are still on the phone; ones deleted there are forgotten
   and sent again (tested). The sync box shows the last sync ("Last sync: 10 min ago · 51 songs"). Built 2026-10-20.
 - [x] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync. Verified 2026-10-20: 54 songs (3 MP3, 51 ALAC) play with titles and covers.
 
