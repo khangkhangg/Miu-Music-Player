@@ -12,5 +12,6 @@ pub mod service;
 pub mod songs;
 pub mod sync_rules;
 pub mod tags;
+pub mod transcode;
 pub mod legacy;
 pub mod watch;

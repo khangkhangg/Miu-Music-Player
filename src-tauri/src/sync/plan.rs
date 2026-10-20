@@ -93,6 +93,15 @@ fn meta_hash(r: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
     Ok(fnv64(s.as_bytes()))
 }
 
+/// The tag hash of one song, as a sync records it.
+pub(crate) fn tags_hash(db: &Db, song_id: i64) -> rusqlite::Result<String> {
+    db.conn().query_row(
+        "SELECT id, title, artist, album, album_artist, genre, year, track_no, track_total, disc_no FROM songs WHERE id = ?1",
+        [song_id],
+        meta_hash,
+    )
+}
+
 /// Tag and audio hashes of the liked songs, as a sync records them.
 pub(crate) fn liked_hashes(db: &Db) -> rusqlite::Result<HashMap<i64, (String, Option<String>)>> {
     let mut stmt = db.conn().prepare(

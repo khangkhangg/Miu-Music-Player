@@ -97,6 +97,10 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected. Ticked on tests 2026-10-20: no UI yet (the
   sync engine uses it in Phase 4, the setting appears in F5.5). 88.2/176.4 kHz sources go to 44.1, not 48.
 - [ ] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.
+  Built 2026-10-20 (`library::transcode`): ffmpeg args per action (ALAC 16 → s16p, 24 → s32p + 24 bits; AAC 256k; `-f ipod`, tags
+  mapped, artwork re-added by lofty), cache in `%LOCALAPPDATA%\MiuMusic\cache` keyed by audio hash + action, `.tags` key for re-tags,
+  failed encodes leave nothing. Machine test: 24/96 FLAC → ALAC 24/48 with tags and cover. `convert-liked`: 51 liked FLACs → ALAC
+  16/44.1 in 96 s (1.5 GB), second run all hits in 0.1 s. No cache size limit yet.
 - [x] **F3.6 Duplicate detection** — *Test first:* same audio, different names → duplicate; different audio same tags → not.
   Verified in the app 2026-10-20 (Duplicates chip, path tooltip). Fingerprint = first 30 s at 16-bit + length within 1 s.
 
@@ -135,8 +139,7 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   stop if iTunes' view misses a phone song (nothing changed) → adopt → plan → apply through iTunes → `UpdateIPod` only when something
   changed → wait until the phone shows the changes (unconfirmed after 5 min is reported) → backup, diff (unplanned removals reported) →
   record the run. Leading-zero IDs only warn (a copy is kept). `sync_now` runs on its own DB connection with `sync-progress` events.
-  Built 2026-10-20. With today's library (22 FLAC + 1 MP3 liked) a first run adopts the MP3 and lists the FLACs as needing conversion,
-  so it should not change the phone until ffmpeg (F6.1) is in.
+  Built 2026-10-20. Conversion is in (F3.5): liked FLACs go as cached ALAC copies; a first run sends the 51 liked FLACs (~1.4 GB).
 - [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).
 - [ ] **S.5 Verify** — reuse F4.5 (pull the device DB, compare per track).
 - [ ] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync.
@@ -220,6 +223,11 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
+  2026-10-20: path resolution tested (next to the app, or `src-tauri/binaries` from `target/<profile>`); `externalBin` + licence
+  resource set in tauri.conf.json; the build copies `ffmpeg.exe` next to the app. ffmpeg is the BtbN LGPL v3 build
+  `ffmpeg-n8.1-latest-win64-lgpl-8.1.zip` (2026-10-19), 128 MB, **not in git** (GitHub's 100 MB limit): put `bin/ffmpeg.exe` at
+  `src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe` and `LICENSE.txt` at `src-tauri/binaries/FFMPEG-LICENSE.txt` before building.
+  Still to do: build the installer and check size and a clean install.
 - [ ] **F6.2 First-run wizard** — *Test first (JS):* wizard step logic (drivers → phone → folders).
   Built 2026-10-20, tests green, **waiting for your check in the app**: welcome panel (drivers → iPhone, skippable → folders), hideable.
 - [ ] **F6.3 Crash-safe journal** — *Test first:* journal replay resumes or rolls back an interrupted sync.

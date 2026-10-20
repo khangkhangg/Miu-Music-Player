@@ -6,3 +6,6 @@ src-tauri/target/
 
 # generated
 src-tauri/gen/
+
+# ffmpeg sidecar (128 MB, LGPL build from github.com/BtbN/FFmpeg-Builds); see docs/CHECKLIST.md F6.1
+src-tauri/binaries/*.exe

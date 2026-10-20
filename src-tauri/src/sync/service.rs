@@ -110,12 +110,24 @@ fn sync_blocking(udid: &str, app: &AppHandle) -> Result<Report, SyncStop> {
     let phone = RealPhone { afc, root: crate::util::paths::backups_dir_in(&appdata), udid: udid.to_string() };
     let itunes = crate::apple::itunes_com::ITunesCom::connect().map_err(failed)?;
     let options = Options { poll_every: Duration::from_secs(5), max_polls: 60 };
+    // Songs the Music app cannot play go as converted copies, cached between syncs (F3.5).
+    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(std::path::Path::to_path_buf)).unwrap_or_default();
+    let ffmpeg = crate::library::transcode::ffmpeg_path(&exe_dir).map(|exe| crate::library::transcode::Ffmpeg { exe });
+    if ffmpeg.is_none() {
+        log::warn!("ffmpeg sidecar not found next to {}: songs that need converting will be skipped", exe_dir.display());
+    }
+    let cache = crate::library::transcode::Cache { dir: crate::util::paths::local_appdata_root().join("MiuMusic").join("cache") };
+    let convert = |s: &crate::sync::itunes::SongSource| match &ffmpeg {
+        Some(ff) => cache.converted(ff, &s.path, &s.audio_key, &s.tags_key, s.action),
+        None => Err("needs converting for the iPhone, and the ffmpeg sidecar is missing".into()),
+    };
     let report = run_sync(
         &db,
         udid,
         &policy,
         &phone,
         &itunes,
+        Some(&convert),
         &options,
         &std::thread::sleep,
         &mut |stage| {

@@ -13,7 +13,7 @@ use serde::Serialize;
 use crate::library::convert::Policy;
 use crate::library::db::Db;
 use crate::sync::guard::{diff, phone_only, precheck, Concern, CopyReport, PcSong, PhoneTrack};
-use crate::sync::itunes::{adopt, apply, sendable_path, ITunes};
+use crate::sync::itunes::{adopt, apply, sendable_path, Convert, ITunes};
 use crate::sync::plan::{plan, record_run, Step};
 
 /// The phone's files, as a sync needs them.
@@ -74,6 +74,7 @@ pub fn run_sync(
     policy: &Policy,
     phone: &dyn PhoneSide,
     itunes: &dyn ITunes,
+    convert: Option<Convert>,
     options: &Options,
     sleep: &dyn Fn(Duration),
     progress: &mut dyn FnMut(Stage),
@@ -116,7 +117,7 @@ pub fn run_sync(
     if p.steps.is_empty() {
         return Ok(report);
     }
-    let source = |id: i64| sendable_path(db, id, policy);
+    let source = |id: i64| sendable_path(db, id, policy, convert);
     let mut results = Vec::with_capacity(p.steps.len());
     for (i, step) in p.steps.iter().enumerate() {
         results.extend(apply(itunes, std::slice::from_ref(step), &source));
@@ -294,7 +295,7 @@ mod tests {
 
     fn sync(db: &Db, f: &Fakes) -> (Result<Report, SyncError>, Vec<Stage>) {
         let mut stages = Vec::new();
-        let r = run_sync(db, PHONE, &Policy::default(), f, f, &opts(), &|_| {}, &mut |s| stages.push(s), 100);
+        let r = run_sync(db, PHONE, &Policy::default(), f, f, None, &opts(), &|_| {}, &mut |s| stages.push(s), 100);
         (r, stages)
     }
 
@@ -347,6 +348,17 @@ mod tests {
         f.0.borrow_mut().drops_on_sync = Some(-12);
         let r = sync(&db, &f).0.unwrap();
         assert_eq!(r.unexpected_removed.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), vec!["Bông Cỏ Mây"]);
+    }
+
+    #[test]
+    fn with_a_converter_flacs_go_as_converted_copies() {
+        let (db, f) = setup();
+        let flac = song(&db, "Diễm Xưa", 9, 1);
+        db.conn().execute("UPDATE songs SET format = 'flac' WHERE id = ?1", [flac]).unwrap();
+        let convert = |s: &crate::sync::itunes::SongSource| Ok(std::path::PathBuf::from(format!(r"C:\cache\{}.m4a", s.audio_key.len())));
+        let r = run_sync(&db, PHONE, &Policy::default(), &f, &f, Some(&convert), &opts(), &|_| {}, &mut |_| {}, 100).unwrap();
+        assert_eq!((r.added, r.failed.len()), (2, 0));
+        assert!(f.0.borrow().log.iter().any(|l| l.starts_with(r"add C:\cache\")), "{:?}", f.0.borrow().log);
     }
 
     #[test]

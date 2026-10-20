@@ -66,16 +66,38 @@ pub fn adopt(db: &Db, udid: &str, device: &[DeviceTrack], now_unix: u64) -> Resu
     Ok(adopted)
 }
 
-/// The file to hand to iTunes for a song, or why it cannot go yet.
-pub fn sendable_path(db: &Db, song_id: i64, policy: &Policy) -> Result<PathBuf, String> {
-    let (path, format, rate, bits): (String, String, Option<u32>, Option<u32>) = db
+/// A song that needs converting, as the converter sees it.
+#[derive(Debug, Clone)]
+pub struct SongSource {
+    pub path: PathBuf,
+    /// Same audio, same key (the song's audio hash, or its path, size and time when not hashed yet).
+    pub audio_key: String,
+    /// Changes when the song's tags change.
+    pub tags_key: String,
+    pub action: Action,
+}
+
+/// Turns a song into the file the iPhone can play (`library::transcode::Cache` in the app).
+pub type Convert<'a> = &'a dyn Fn(&SongSource) -> Result<PathBuf, String>;
+
+/// The file to hand to iTunes for a song: the original, or its converted copy.
+pub fn sendable_path(db: &Db, song_id: i64, policy: &Policy, convert: Option<Convert>) -> Result<PathBuf, String> {
+    let (path, format, rate, bits, audio_hash, size, mtime): (String, String, Option<u32>, Option<u32>, Option<String>, i64, i64) = db
         .conn()
-        .query_row("SELECT path, format, sample_rate, bit_depth FROM songs WHERE id = ?1", [song_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .query_row("SELECT path, format, sample_rate, bit_depth, audio_hash, size, mtime FROM songs WHERE id = ?1", [song_id], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
+        })
         .map_err(|e| e.to_string())?;
-    match action(Format::from_name(&format), rate, bits, policy) {
+    let act = action(Format::from_name(&format), rate, bits, policy);
+    match act {
         Action::Keep => Ok(PathBuf::from(path)),
         Action::Skip => Err("not a format Miu can read".into()),
-        Action::Aac { .. } | Action::Alac { .. } => Err("needs converting for the iPhone first (ffmpeg is not set up yet)".into()),
+        Action::Aac { .. } | Action::Alac { .. } => {
+            let convert = convert.ok_or("needs converting for the iPhone, and the ffmpeg sidecar is missing")?;
+            let audio_key = audio_hash.filter(|h| !h.is_empty()).unwrap_or_else(|| format!("{path}|{size}|{mtime}"));
+            let tags_key = crate::sync::plan::tags_hash(db, song_id).map_err(|e| e.to_string())?;
+            convert(&SongSource { path: PathBuf::from(path), audio_key, tags_key, action: act })
+        }
     }
 }
 
@@ -173,13 +195,34 @@ mod tests {
     }
 
     #[test]
-    fn songs_that_need_converting_cannot_be_sent_yet() {
+    fn songs_that_need_converting_cannot_be_sent_without_a_converter() {
         let db = Db::open_in_memory().unwrap();
         let mp3 = song(&db, r"E:\Nhạc\a.mp3", "a", "mp3", 1, 1, 1);
         let flac = song(&db, r"E:\Nhạc\b.flac", "b", "flac", 1, 1, 1);
-        assert_eq!(sendable_path(&db, mp3, &Policy::default()).unwrap(), PathBuf::from(r"E:\Nhạc\a.mp3"));
-        let err = sendable_path(&db, flac, &Policy::default()).unwrap_err();
+        assert_eq!(sendable_path(&db, mp3, &Policy::default(), None).unwrap(), PathBuf::from(r"E:\Nhạc\a.mp3"));
+        let err = sendable_path(&db, flac, &Policy::default(), None).unwrap_err();
         assert!(err.contains("convert"), "{err}");
+    }
+
+    #[test]
+    fn a_flac_goes_as_its_converted_copy_keyed_by_audio_and_tags() {
+        let db = Db::open_in_memory().unwrap();
+        let flac = song(&db, r"E:\Nhạc\b.flac", "Diễm xưa", "flac", 1, 1, 1);
+        db.conn().execute("UPDATE songs SET audio_hash = 'abc' WHERE id = ?1", [flac]).unwrap();
+        let seen = RefCell::new(Vec::new());
+        let convert = |s: &SongSource| {
+            seen.borrow_mut().push((s.path.clone(), s.audio_key.clone(), s.tags_key.clone(), s.action));
+            Ok(PathBuf::from(r"C:\cache\x.m4a"))
+        };
+        assert_eq!(sendable_path(&db, flac, &Policy::default(), Some(&convert)).unwrap(), PathBuf::from(r"C:\cache\x.m4a"));
+        db.conn().execute("UPDATE songs SET title = 'Diễm Xưa (live)' WHERE id = ?1", [flac]).unwrap();
+        sendable_path(&db, flac, &Policy::default(), Some(&convert)).unwrap();
+        let seen = seen.borrow();
+        assert_eq!(seen[0].0, PathBuf::from(r"E:\Nhạc\b.flac"));
+        assert_eq!(seen[0].1, "abc");
+        assert_eq!(seen[0].3, Action::Alac { bits: 16, rate: 44_100 });
+        assert_eq!(seen[0].1, seen[1].1, "same audio");
+        assert_ne!(seen[0].2, seen[1].2, "a title edit changes the tags key");
     }
 
     #[derive(Default)]
