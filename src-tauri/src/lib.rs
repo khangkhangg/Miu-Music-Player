@@ -125,6 +125,7 @@ pub fn run() {
             windows::app_settings,
             windows::set_app_setting,
             windows::open_store_page,
+            windows::export_diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Miu Music");

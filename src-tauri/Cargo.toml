@@ -33,6 +33,7 @@ trash = "5"
 encoding_rs = "0.8.42"
 chardetng = "1.0.0"
 unicode-normalization = "0.1.26"
+regex = "1.13.1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

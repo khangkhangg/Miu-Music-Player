@@ -146,6 +146,12 @@
             <label class="setting check"><input type="checkbox" id="set-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
             <p class="muted setting-note" data-i18n="output.exclusiveNote">Miu takes the device for itself.</p>
           </fieldset>
+          <fieldset>
+            <legend data-i18n="settings.help">Help</legend>
+            <div class="setting"><span data-i18n="settings.diagnostics">Logs and device facts for a bug report. No music, databases or account details are included.</span>
+              <button class="eq-btn" id="export-diagnostics" type="button" data-i18n="settings.exportDiagnostics">Export diagnostics…</button></div>
+            <p class="muted setting-note" id="diagnostics-result" role="status"></p>
+          </fieldset>
         </div>
       </section>
       <div class="now-playing" id="now-playing" hidden>

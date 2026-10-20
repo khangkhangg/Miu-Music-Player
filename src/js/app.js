@@ -808,6 +808,15 @@ function setupSettings(languageSetting) {
   $('set-viz').addEventListener('change', e => invoke('set_visualizer_on', { on: e.target.checked }).then(reload));
   $('set-viz-style').addEventListener('change', e => invoke('set_visualizer_style', { style: e.target.value }).then(reload));
   $('set-exclusive').addEventListener('change', e => invoke('set_exclusive', { on: e.target.checked }).then(renderDevices).then(reload));
+  $('export-diagnostics').addEventListener('click', async () => {
+    const path = await window.__TAURI__.dialog.save({ defaultPath: 'MiuMusic-diagnostics.txt', filters: [{ name: t('settings.textFiles'), extensions: ['txt'] }] }); // i18n-ignore: file name
+    if (!path) return;
+    const card = document.getElementById('device-card');
+    const device = `${card.querySelector('.device-name').textContent} · ${card.querySelector('.device-detail').textContent}`;
+    invoke('export_diagnostics', { path, device })
+      .then(() => { $('diagnostics-result').textContent = t('settings.diagnosticsSaved', { path }); })
+      .catch(err => { $('diagnostics-result').textContent = String(err); });
+  });
   window.__TAURI__.event.listen('settings-changed', ev => showSettings(ev.payload));
   window.__TAURI__.event.listen('mini-on-top', reload);
   reload();

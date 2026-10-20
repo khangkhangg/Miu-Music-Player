@@ -245,5 +245,10 @@
   "wizard.phoneBody": "Dùng cáp USB. Bạn cũng có thể bỏ qua bước này và chỉ nghe nhạc.",
   "wizard.skip": "Bỏ qua",
   "wizard.folders": "Thêm thư mục nhạc",
-  "wizard.foldersBody": "Miu theo dõi các thư mục này và tự cập nhật bài hát mới."
+  "wizard.foldersBody": "Miu theo dõi các thư mục này và tự cập nhật bài hát mới.",
+  "settings.help": "Trợ giúp",
+  "settings.diagnostics": "Nhật ký và thông tin thiết bị để báo lỗi. Không gồm nhạc, cơ sở dữ liệu hay thông tin tài khoản.",
+  "settings.exportDiagnostics": "Xuất thông tin chẩn đoán…",
+  "settings.diagnosticsSaved": "Đã lưu vào {path}",
+  "settings.textFiles": "Tệp văn bản"
 }

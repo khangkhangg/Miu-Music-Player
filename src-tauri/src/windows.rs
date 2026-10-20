@@ -120,3 +120,11 @@ pub fn open_store_page() -> Result<(), String> {
     const APPLE_DEVICES: &str = "ms-windows-store://pdp/?productid=9NP83LWLPZ9K";
     std::process::Command::new("explorer.exe").arg(APPLE_DEVICES).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
+
+/// Save a diagnostics report (logs + device facts, no databases or account ids) to `path` (F6.4).
+#[tauri::command]
+pub fn export_diagnostics(path: String, device: String) -> Result<(), String> {
+    let app_data = crate::util::paths::app_data_dir_in(&crate::util::paths::appdata_root());
+    let version = format!("Miu Music {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS);
+    crate::util::diagnostics::export(&app_data, &version, &device, std::path::Path::new(&path)).map_err(|e| e.to_string())
+}

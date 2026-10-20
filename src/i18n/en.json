@@ -245,5 +245,10 @@
   "wizard.phoneBody": "Use a USB cable. You can also skip this and just play music.",
   "wizard.skip": "Skip",
   "wizard.folders": "Add your music folders",
-  "wizard.foldersBody": "Miu watches them and keeps up with new songs."
+  "wizard.foldersBody": "Miu watches them and keeps up with new songs.",
+  "settings.help": "Help",
+  "settings.diagnostics": "Logs and device facts for a bug report. No music, databases or account details are included.",
+  "settings.exportDiagnostics": "Export diagnostics…",
+  "settings.diagnosticsSaved": "Saved to {path}",
+  "settings.textFiles": "Text files"
 }

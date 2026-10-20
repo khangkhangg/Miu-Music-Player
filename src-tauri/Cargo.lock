@@ -2081,6 +2081,7 @@ dependencies = [
  "log",
  "notify",
  "object",
+ "regex",
  "rtrb",
  "rubato",
  "rusqlite",
