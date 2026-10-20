@@ -10,6 +10,7 @@ pub fn setup(app: &AppHandle, db: SharedDb) {
         log::warn!("mini player window missing");
         return;
     };
+    fit_main_window(&main);
     let on_top = db.lock().map(|d| crate::settings::mini_on_top(&d)).unwrap_or(true);
     if let Err(e) = mini.set_always_on_top(on_top) {
         log::warn!("could not set mini player on top: {e}");
@@ -172,4 +173,33 @@ pub fn taskbar_playing(playing: bool, app: AppHandle) -> Result<(), String> {
         }
     })
     .map_err(|e| e.to_string())
+}
+
+/// Height the main window opens at: 90 % of the screen's usable height, between 600 and 960.
+pub fn start_height(work_area_height: f64) -> f64 {
+    ((work_area_height * 0.9 * 10.0).round() / 10.0).clamp(600.0, 960.0)
+}
+
+/// Open the main window taller, fitted to the screen it is on, and centred.
+fn fit_main_window(main: &tauri::WebviewWindow) {
+    let Ok(Some(monitor)) = main.current_monitor() else { return };
+    let scale = monitor.scale_factor();
+    let height = start_height(monitor.work_area().size.height as f64 / scale);
+    let width = main.outer_size().map(|s| s.width as f64 / scale).unwrap_or(1280.0);
+    if main.set_size(tauri::LogicalSize::new(width, height)).is_ok() {
+        let _ = main.center();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::start_height;
+
+    #[test]
+    fn the_window_opens_taller_but_never_past_the_screen() {
+        assert_eq!(start_height(1400.0), 960.0, "capped on tall screens");
+        assert_eq!(start_height(1040.0), 936.0, "1080p at 100 %: 90 % of the work area");
+        assert_eq!(start_height(824.0), 741.6, "1080p at 125 %");
+        assert_eq!(start_height(500.0), 600.0, "never below the minimum size");
+    }
 }

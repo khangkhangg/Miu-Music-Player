@@ -30,7 +30,11 @@ button, input, select { font: inherit; }
 .app { display: grid; grid-template-columns: 228px minmax(0, 1fr) 320px; height: 100%; }
 
 /* ---- Left: library ---- */
-.sidebar { background: var(--sidebar); display: flex; flex-direction: column; padding: 24px 0 16px; position: relative; z-index: 2; min-height: 0; overflow-y: auto; overflow-x: visible; }
+.sidebar { background: var(--sidebar); display: flex; flex-direction: column; padding: 24px 0 16px; position: relative; z-index: 2; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+/* Slim, and only while the mouse is over the panel. */
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background-color: transparent; border-width: 1px; }
+.sidebar:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--text) 22%, transparent); }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 24px; }
 .brand-mark { width: 26px; height: 26px; }
 .brand-name { font-size: 18px; font-weight: 300; letter-spacing: 0.02em; }
