@@ -131,7 +131,12 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   update as remove + add; songs needing conversion fail with a clear reason until ffmpeg is set up; liked songs already on the phone
   (3uTools) are adopted (migration 12) — not sent twice, never removed by Miu. Real iTunes: `apple::itunes_com` (late-bound COM,
   persistent ID = phone sync_id). Built 2026-10-20; machine test reads the 5s's 69 tracks with IDs matching the phone. Nothing sent yet.
-- [ ] **S.3 Start the device sync** — *Test first:* sync is only requested after the playlist matches; errors map to F5.6 messages. *Machine test:* `UpdateIPod` (or equivalent) syncs the iPhone.
+- [ ] **S.3 Guarded sync from the Sync button** — *Test first (fakes for phone and iTunes):* backup → copy off phone-only songs →
+  stop if iTunes' view misses a phone song (nothing changed) → adopt → plan → apply through iTunes → `UpdateIPod` only when something
+  changed → wait until the phone shows the changes (unconfirmed after 5 min is reported) → backup, diff (unplanned removals reported) →
+  record the run. Leading-zero IDs only warn (a copy is kept). `sync_now` runs on its own DB connection with `sync-progress` events.
+  Built 2026-10-20. With today's library (22 FLAC + 1 MP3 liked) a first run adopts the MP3 and lists the FLACs as needing conversion,
+  so it should not change the phone until ffmpeg (F6.1) is in.
 - [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).
 - [ ] **S.5 Verify** — reuse F4.5 (pull the device DB, compare per track).
 - [ ] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync.

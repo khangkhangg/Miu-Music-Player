@@ -56,10 +56,11 @@ fn before() {
     for c in &concerns {
         match c {
             Concern::MissingFromItunes(t) => println!("  NOT in iTunes' view (a sync would delete it): {}", describe(t)),
-            Concern::LeadingZeroId(t) => println!("  ID with a leading zero byte (the kind iTunes dropped): {}", describe(t)),
+            Concern::LeadingZeroId(t) => println!("  warning: ID with a leading zero byte (the kind iTunes dropped; a copy is kept): {}", describe(t)),
         }
     }
-    if concerns.is_empty() && report.failed.is_empty() {
+    let blocked = concerns.iter().any(|c| matches!(c, Concern::MissingFromItunes(_)));
+    if !blocked && report.failed.is_empty() {
         println!("ok to sync");
     } else {
         println!("do not sync");

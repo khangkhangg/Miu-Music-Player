@@ -111,6 +111,7 @@ pub fn run() {
             library::service::save_edits,
             library::service::undo_edit,
             sync::service::sync_preview,
+            sync::service::sync_now,
             podcast::service::podcast_subscribe,
             podcast::service::podcast_refresh,
             podcast::service::podcast_list,

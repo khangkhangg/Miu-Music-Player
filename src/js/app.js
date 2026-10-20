@@ -11,7 +11,7 @@ import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 import { t, startInLanguage } from './i18n.js';
-import { planSummary } from './sync.js';
+import { planSummary, stageText, syncResult, syncStopped } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
@@ -466,6 +466,46 @@ function showDevices(devices) {
 // ---- Sync preview (F5.3): what a sync would change on the connected phone ----
 let lastDevices = [];
 
+// ---- Sync through iTunes (S.3) ----
+let syncing = false;
+
+function setupSync() {
+  const $ = id => document.getElementById(id);
+  window.__TAURI__.event.listen('sync-progress', e => {
+    const s = stageText(e.payload);
+    $('sync-status').hidden = false;
+    $('sync-status').textContent = s.text;
+  });
+  $('sync-btn').addEventListener('click', () => {
+    const phone = (lastDevices ?? []).find(d => d.trusted && d.udid);
+    if (!phone || syncing) return;
+    syncing = true;
+    $('sync-btn').disabled = true;
+    $('sync-btn').textContent = t('sync.syncing');
+    $('sync-result').hidden = true;
+    invoke('sync_now', { udid: phone.udid })
+      .then(report => { const r = syncResult(report); showSyncOutcome(r.tone, null, r.lines); })
+      .catch(err => { const s = syncStopped(err); showSyncOutcome('warn', s.title, s.lines); })
+      .finally(() => {
+        syncing = false;
+        $('sync-btn').disabled = false;
+        $('sync-btn').textContent = t('sync.button');
+        $('sync-status').hidden = true;
+        showSyncPreview();
+      });
+  });
+}
+
+function showSyncOutcome(tone, title, lines) {
+  const box = document.getElementById('sync-result');
+  box.className = `sync-result ${tone}`;
+  const items = [];
+  if (title) { const h = document.createElement('p'); h.className = 'sync-result-title'; h.textContent = title; items.push(h); }
+  for (const line of lines) { const p = document.createElement('p'); p.textContent = line; items.push(p); }
+  box.replaceChildren(...items);
+  box.hidden = false;
+}
+
 function showSyncPreview() {
   const box = document.getElementById('sync-box');
   const phone = (lastDevices ?? []).find(d => d.trusted && d.udid);
@@ -884,6 +924,7 @@ function setupSettings(languageSetting) {
   go('nav-artists', () => showView('artists'));
   go('nav-podcasts', () => showView('podcasts'));
   setupPodcasts();
+  setupSync();
   go('nav-settings', () => showView('settings'));
   $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));
   $('album-play').addEventListener('click', () => { if (page) playList(page.songs.map(x => x.id), 0); });

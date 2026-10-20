@@ -81,6 +81,11 @@ button, input, select { font: inherit; }
 .storage-label { font-size: 11px; margin-top: 4px !important; }
 .sync-box { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; }
 .sync-plan { font-size: 13px; }
+.sync-status { font-size: 12px; margin: 0; }
+.sync-result { font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.sync-result p { margin: 0; }
+.sync-result .sync-result-title { font-weight: 600; }
+.sync-result.warn .sync-result-title { color: var(--accent-ink); }
 .sync-shortage { color: var(--danger); }
 .sync-btn { border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 12px; padding: 8px; cursor: not-allowed; }
 .sync-btn:enabled { cursor: pointer; background: var(--accent); color: var(--on-accent); border-color: transparent; }

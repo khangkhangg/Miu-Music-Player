@@ -220,6 +220,21 @@ pub fn migrate(conn: &mut Connection, steps: &[&str]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_second_connection_waits_for_a_brief_write_lock() {
+        // The sync (S.3) writes through its own connection while the app keeps its own; rusqlite's
+        // default 5 s busy timeout makes it wait. Guarded here because the sync relies on it.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("miumusic.db");
+        let a = Db::open(&path).unwrap();
+        let b = Db::open(&path).unwrap();
+        a.conn().execute_batch("BEGIN IMMEDIATE; INSERT INTO settings VALUES ('k', 'a');").unwrap();
+        let writer = std::thread::spawn(move || b.conn().execute("INSERT INTO settings VALUES ('other', 'b')", []).map(|_| ()));
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        a.conn().execute_batch("COMMIT").unwrap();
+        writer.join().unwrap().expect("waits instead of failing with database is locked");
+    }
     use super::*;
 
     fn table_exists(db: &Db, name: &str) -> bool {

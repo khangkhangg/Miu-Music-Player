@@ -8,5 +8,6 @@ pub mod queue;
 pub mod verify;
 pub mod guard;
 pub mod itunes;
+pub mod run;
 pub mod service;
 pub mod journal;

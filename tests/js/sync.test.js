@@ -31,3 +31,39 @@ test('ETA reads as minutes and seconds', () => {
   assert.equal(etaLabel(125), 'About 2 min left');
   assert.equal(etaLabel(null), '');
 });
+
+import { stageText, syncResult, syncStopped } from '../../src/js/sync.js';
+
+test('each sync stage says what is happening; sending shows how far along', () => {
+  assert.deepEqual(stageText({ stage: 'Backup' }), { text: 'Backing up the iPhone’s music database…', percent: null });
+  assert.equal(stageText({ stage: 'CopyOff', songs: 3 }).text, 'Keeping a copy of 3 songs that are only on the iPhone…');
+  assert.deepEqual(stageText({ stage: 'Apply', done: 1, total: 4 }), { text: 'Handing songs to iTunes: 1 of 4', percent: 25 });
+  assert.equal(stageText({ stage: 'UpdateDevice' }).text, 'iTunes is syncing the iPhone…');
+});
+
+test('a finished sync says what changed and anything to look at', () => {
+  const ok = syncResult({ added: 2, removed: 1, adopted: 5, failed: [], unexpectedRemoved: [], warnings: [], confirmed: true });
+  assert.equal(ok.tone, 'ok');
+  assert.deepEqual(ok.lines, ['Sync finished: 2 added, 1 removed.', '5 liked songs were already on the iPhone.']);
+  const warn = syncResult({
+    added: 1, removed: 0, adopted: 0, confirmed: false, warnings: [],
+    failed: [[7, 'needs converting for the iPhone first (ffmpeg is not set up yet)']],
+    unexpectedRemoved: [{ title: 'Bông Cỏ Mây' }],
+  });
+  assert.equal(warn.tone, 'warn');
+  assert.deepEqual(warn.lines, [
+    'Sync finished: 1 added, 0 removed.',
+    '1 song could not go: needs converting for the iPhone first (ffmpeg is not set up yet)',
+    'The sync removed “Bông Cỏ Mây” without being asked. A copy is in Miu’s backups folder.',
+    'The iPhone has not shown every change yet.',
+  ]);
+});
+
+test('a stopped sync says nothing changed, and why', () => {
+  assert.deepEqual(syncStopped({ kind: 'blocked', reasons: ['iTunes does not list “X”, so a sync would delete it from the iPhone.'] }), {
+    title: 'Sync stopped before changing anything',
+    lines: ['iTunes does not list “X”, so a sync would delete it from the iPhone.'],
+  });
+  assert.deepEqual(syncStopped({ kind: 'failed', reason: 'cannot start iTunes' }), { title: 'Sync failed', lines: ['cannot start iTunes'] });
+  assert.deepEqual(syncStopped('boom'), { title: 'Sync failed', lines: ['boom'] });
+});
