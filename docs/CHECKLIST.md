@@ -102,19 +102,31 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 
 ## Phase 4 – Sync engine
 - [ ] **F4.1 Sync plan diff** — *Test first:* local liked set vs device set → add / update metadata / remove.
+  Logic built 2026-10-20 (sync/plan.rs, tested): add / update / replace / remove per phone; only Miu-added tracks are ever removed. Sending to the phone waits on Phase 2.
 - [ ] **F4.2 Liked-only sync set** — *Test first:* not rated and disliked never in plan; liked → disliked = remove.
+  Logic built 2026-10-20 (tested in sync/plan.rs).
 - [ ] **F4.3 Queue, pause/resume/cancel** — *Test first:* resume continues from the next unfinished track.
+  Logic built 2026-10-20 (sync/queue.rs, tested). Wiring to a real transfer waits on Phase 2.
 - [ ] **F4.4 Free-space check** — *Test first:* plan larger than free space (minus margin) → blocked with sizes.
+  Logic built 2026-10-20; the device card shows a space warning in the plan preview.
 - [ ] **F4.5 Post-sync verification** — *Test first:* mismatch between plan and pulled DB is reported per track.
+  Logic built 2026-10-20 (sync/verify.rs reads a pulled MediaLibrary.sqlitedb).
 - [ ] **F4.6 Sync history** — *Test first:* each run stored with per-track status; re-run of unchanged library → empty plan.
+  Logic built 2026-10-20 (synced / sync_runs / sync_items, migration 8).
 
 ## Phase 5 – UI
-- [ ] **F5.1 Device card** — *Test first (JS):* storage bar percentages and labels from device info.
-- [ ] **F5.2 Library view** — *Test first (JS):* virtual list window math (visible range for scroll offset).
+- [x] **F5.1 Device card** — *Test first (JS):* storage bar percentages and labels from device info.
+  Done by F1.3/F1.4 (device.test.js), verified then.
+- [x] **F5.2 Library view** — *Test first (JS):* virtual list window math (visible range for scroll offset).
+  Done by the F5.2 song list (visibleRange in songs.test.js), plus search, sorting, index bar and Format column.
 - [ ] **F5.3 Sync button + plan preview** — *Test first (JS):* plan → "+42 add · 3 remove · 1.2 GB" text.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: the device card shows "+N add · N remove · size" for a trusted iPhone; the Sync button stays disabled (Phase 2).
 - [ ] **F5.4 Live progress + ETA** — *Test first (JS):* ETA from bytes/sec, smoothed, never negative.
+  Text helpers built 2026-10-20 (sync.js); live progress needs a real transfer (Phase 2).
 - [ ] **F5.5 Settings** — *Test first:* settings schema defaults + validation.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: sidebar → Settings (theme, language, mini player, visualizer, iPhone conversion, exclusive mode, diagnostics).
 - [ ] **F5.6 Error/empty states** — *Test first (JS):* each error code maps to a message and an action.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: the driver notice has an "Open Microsoft Store" button; the other messages are ready for the states that use them.
 - [ ] **F5.7 Accessibility** — *Manual:* keyboard-only pass, AA contrast check in both themes.
 - [ ] Idle RAM < 60 MB measured and recorded.
 
@@ -139,7 +151,9 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 
 ## Phase 5c – Languages and metadata editing
 - [ ] **F8.1 Tag encoding detection** — *Test first:* CP1258, GBK, Shift-JIS, CP1251 fixtures decode correctly; folder override wins.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: old ID3 tags in Windows-1258 / GBK / Shift-JIS / Windows-1251 read correctly; "Aa" next to a folder forces an encoding.
 - [ ] **F8.2 Unicode-safe paths** — *Test first:* scan, convert and play a file in `Nhạc Trịnh/日本語/`.
+  Scan, tags, play and fingerprint covered by a test under Nhạc Trịnh/日本語/ (passed first run). Conversion waits for F3.5 (ffmpeg).
 - [ ] **F8.3 Font fallback + RTL** — *Manual:* Arabic/Hebrew titles render right-to-left; CJK has no tofu boxes.
 - [x] **F8.4 Search** — *Test first:* "mua thu" finds "Mùa thu"; "DIEM XUA" finds "Diễm xưa"; CJK substring.
   Verified in the app 2026-10-20 (title/artist/album, every word must match, Ctrl+F / Esc).
@@ -148,16 +162,24 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F8.6 UI translation** — *Test first (JS):* every key in `en.json` exists in `vi.json`; no hard-coded UI strings (lint test).
   Verified in the app 2026-10-20 (language picker; both windows reload). Left: error messages from the Rust side are English only.
 - [ ] **F9.1 Single-song editor** — *Test first:* edit → tags written → re-read equals edit, for MP3, M4A, FLAC.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: select a song, then "Edit tags", right-click or F2.
 - [ ] **F9.2 Bulk editor** — *Test first:* "Mixed" fields untouched; edited fields applied to all.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: Ctrl/Shift-click several songs; differing fields show "Mixed" and are left alone.
 - [ ] **F9.3 Bulk tools** — *Test first:* filename pattern parse, auto-number, find/replace, case change.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: file-name pattern, auto-number, find/replace, case change (in the editor's Bulk tools).
 - [ ] **F9.4 Preview, atomic write, undo** — *Test first:* crash mid-write leaves the original intact; undo restores old tags.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: preview list in the editor; Undo in the toast after saving.
 - [ ] **F9.5 Watcher + sync + cache** — *Test first:* own writes don't trigger rescans; edited liked song appears as "update" in the sync plan.
+  Built 2026-10-20: our own writes refresh the row so the rescan finds nothing; an edited liked song plans an update (tested). Cache part waits for F3.5.
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
 - [ ] **F6.2 First-run wizard** — *Test first (JS):* wizard step logic (drivers → phone → folders).
+  Built 2026-10-20, tests green, **waiting for your check in the app**: welcome panel (drivers → iPhone, skippable → folders), hideable.
 - [ ] **F6.3 Crash-safe journal** — *Test first:* journal replay resumes or rolls back an interrupted sync.
+  Logic built 2026-10-20 (sync/journal.rs, tested); used once transfers exist (Phase 2).
 - [ ] **F6.4 Diagnostics export** — *Test first:* export contains logs + device info and **no** `.sqlitedb`, account IDs or paths under `research/`.
+  Built 2026-10-20, tests green, **waiting for your check in the app**: Settings → Help → Export diagnostics….
 - [ ] **Manual:** clean install on a fresh Windows 11 VM works end to end.
 
 ## Fallbacks (only if needed)
