@@ -7,3 +7,4 @@ pub mod plan;
 pub mod queue;
 pub mod verify;
 pub mod service;
+pub mod journal;
