@@ -3,7 +3,7 @@ import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
 import { folderItems, librarySummary, encodingOptions } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
-import { nowPlaying, seekTarget } from './player.js';
+import { nowPlaying, seekTarget, nextRepeat, repeatButton } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
@@ -16,7 +16,7 @@ import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
-import { groupAlbums, groupArtists, upNext, libraryStats, splitTitle } from './library.js';
+import { groupAlbums, groupArtists, libraryStats, splitTitle } from './library.js';
 import { formatDuration } from './songs.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
@@ -93,11 +93,8 @@ if (invoke) {
     openEditor();
   });
   setupEditor();
-  for (const id of ['np-like', 'np-dislike']) {
-    document.getElementById(id).addEventListener('click', e => {
-      if (playerState?.songId != null) rate(playerState.songId, e.currentTarget.dataset.act, true);
-    });
-  }
+  document.getElementById('np-shuffle').addEventListener('click', () => invoke('player_shuffle', { on: !playerState?.shuffle }));
+  document.getElementById('np-repeat').addEventListener('click', () => invoke('player_repeat', { repeat: nextRepeat(playerState?.repeat) }));
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
   window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); showSyncPreview(); });
   document.getElementById('np-play').addEventListener('click', () =>
@@ -225,10 +222,20 @@ function rate(id, act, fromPlayer = false) {
   });
 }
 
+/** Shuffle and repeat buttons follow what the engine reports. */
+function updateModeButtons() {
+  const shuffle = document.getElementById('np-shuffle');
+  shuffle.setAttribute('aria-pressed', String(Boolean(playerState?.shuffle)));
+  const r = repeatButton(playerState?.repeat);
+  const repeat = document.getElementById('np-repeat');
+  repeat.setAttribute('aria-pressed', String(r.pressed));
+  repeat.classList.toggle('one', r.one);
+  repeat.setAttribute('aria-label', r.label);
+  repeat.title = r.label;
+}
+
 function updateRateButtons() {
-  const rating = songsById.get(playerState?.songId)?.rating ?? 0;
-  document.getElementById('np-like').classList.toggle('on', rating === 1);
-  document.getElementById('np-dislike').classList.toggle('on', rating === -1);
+  updateModeButtons();
 }
 
 function showPlayer(event) {
@@ -236,6 +243,9 @@ function showPlayer(event) {
   playerState = event;
   const np = nowPlaying(event, songsById);
   document.getElementById('now-playing').classList.toggle('idle', !np);
+  const upNextChanged = (event?.upNext ?? []).join() !== (renderedUpNext ?? []).join();
+  updateModeButtons();
+  if (upNextChanged) renderUpNext();
   if (songChanged) {
     renderSongs();
     updateRateButtons();
@@ -889,11 +899,9 @@ function renderWizard() {
 }
 
 // ---- Redesign: art, stats, albums and artists, album page, up next ----
-let queueIds = []; // what play_songs was last given, to show what comes next
 let page = null; // the album or artist page on show: { kind, title, artist, songs, coverId, year }
 
 function playList(ids, start) {
-  queueIds = ids;
   invoke('play_songs', { ids, start });
 }
 
@@ -1048,8 +1056,12 @@ function renderNowArt() {
   }
 }
 
+let renderedUpNext = null;
+
+/** What plays next, in the engine's order (follows shuffle and repeat). */
 function renderUpNext() {
-  const list = upNext(queueIds, playerState?.songId, songsById, 4);
+  renderedUpNext = playerState?.upNext ?? [];
+  const list = renderedUpNext.map(id => songsById.get(id)).filter(Boolean);
   document.getElementById('up-next').replaceChildren(...list.map(x => {
     const li = document.createElement('li');
     const text = document.createElement('span');

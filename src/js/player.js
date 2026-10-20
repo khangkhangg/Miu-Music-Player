@@ -26,3 +26,17 @@ export function seekTarget(fraction, durationMs) {
 export function pinButton(onTop) {
   return { pressed: Boolean(onTop), label: t(onTop ? 'mini.pinOn' : 'mini.pinOff') };
 }
+
+const REPEATS = ['off', 'all', 'one'];
+
+/** Repeat mode after a click: off → all → one → off. */
+export function nextRepeat(mode) {
+  const at = Math.max(0, REPEATS.indexOf(mode)); // unknown counts as off
+  return REPEATS[(at + 1) % REPEATS.length];
+}
+
+/** State and label of the repeat button for `mode`. */
+export function repeatButton(mode) {
+  const m = REPEATS.includes(mode) ? mode : 'off';
+  return { pressed: m !== 'off', one: m === 'one', label: t({ off: 'player.repeatOff', all: 'player.repeatAll', one: 'player.repeatOne' }[m]) };
+}

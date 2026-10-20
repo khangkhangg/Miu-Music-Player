@@ -274,5 +274,9 @@
   "page.facts": "{songs} · {time} · {liked} đã thích",
   "page.play": "Phát {title}",
   "player.mini": "Mini",
-  "player.miniTitle": "Chuyển sang trình phát mini"
+  "player.miniTitle": "Chuyển sang trình phát mini",
+  "player.shuffle": "Phát ngẫu nhiên",
+  "player.repeatOff": "Lặp lại: tắt",
+  "player.repeatAll": "Lặp lại: tất cả",
+  "player.repeatOne": "Lặp lại: bài này"
 }

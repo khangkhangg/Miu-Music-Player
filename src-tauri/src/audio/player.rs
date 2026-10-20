@@ -14,6 +14,7 @@ use serde::Serialize;
 
 use crate::audio::decode::{AudioError, SourceFormat};
 use crate::audio::eq::{EqSettings, Equalizer};
+use crate::audio::order::{PlayOrder, Repeat};
 use crate::audio::pipeline::Feeder;
 use crate::audio::timeline::Timeline;
 
@@ -33,6 +34,10 @@ pub struct Status {
     pub exclusive: bool,
     /// Valid bits per sample sent to the device in exclusive mode (0 in shared mode: 32-bit float).
     pub device_bits: u32,
+    pub shuffle: bool,
+    pub repeat: Repeat,
+    /// Queue indices that play next, in order (for "Up next").
+    pub up_next: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -62,6 +67,8 @@ enum Cmd {
     Seek(u64),
     Volume(f32),
     Skip(i64),
+    Shuffle(bool),
+    Repeat(Repeat),
     Stop,
 }
 
@@ -211,9 +218,16 @@ impl Player {
     pub fn set_volume(&self, v: f32) {
         let _ = self.tx.send(Cmd::Volume(v.clamp(0.0, 1.0)));
     }
-    /// +1 next track, -1 previous.
+    /// +1 next track, -1 previous, following the play order.
     pub fn skip(&self, by: i64) {
         let _ = self.tx.send(Cmd::Skip(by));
+    }
+    /// Shuffle the rest of the queue (the current song keeps playing), or go back to list order.
+    pub fn set_shuffle(&self, on: bool) {
+        let _ = self.tx.send(Cmd::Shuffle(on));
+    }
+    pub fn set_repeat(&self, repeat: Repeat) {
+        let _ = self.tx.send(Cmd::Repeat(repeat));
     }
     pub fn status(&self) -> Status {
         self.status.lock().map(|s| s.clone()).unwrap_or_default()
@@ -353,6 +367,10 @@ fn engine(
     let mut want: Option<u32> = None;
     // Where in its track the feeder started, for the timeline after the device is reopened.
     let mut start_ms = 0u64;
+    // Shuffle and repeat, and the order they make for the current queue.
+    let (mut shuffle, mut repeat) = (false, Repeat::Off);
+    let mut order = PlayOrder::new(0, 0, false, Repeat::Off, 1);
+    let seed = || std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
 
     loop {
         // Rate 0 until an exclusive device is open: the feeder then asks for the first file's rate.
@@ -370,8 +388,8 @@ fn engine(
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return,
             };
-            let mut restart = |tracks: &[PathBuf], track: usize, offset_ms: u64, feeder: &mut Option<Feeder>, timeline: &mut Timeline| {
-                let mut f = fresh(tracks, track, exclusive);
+            let mut restart = |tracks: &[PathBuf], track: usize, offset_ms: u64, order: &PlayOrder, feeder: &mut Option<Feeder>, timeline: &mut Timeline| {
+                let mut f = fresh(tracks, track, exclusive).with_order(order.clone());
                 if offset_ms > 0 && f.seek_ms(offset_ms).is_err() {
                     return;
                 }
@@ -388,7 +406,8 @@ fn engine(
                 Cmd::Play { tracks: t, start } => {
                     tracks = t;
                     formats.clear();
-                    restart(&tracks, start, 0, &mut feeder, &mut timeline);
+                    order = PlayOrder::new(tracks.len(), start, shuffle, repeat, seed());
+                    restart(&tracks, start, 0, &order, &mut feeder, &mut timeline);
                     shared.paused.store(false, Ordering::Release);
                 }
                 Cmd::Stop => return,
@@ -397,15 +416,32 @@ fn engine(
                 Cmd::Volume(v) => shared.volume.store(v.to_bits(), Ordering::Relaxed),
                 Cmd::Seek(ms) => {
                     if let (true, Some((track, _))) = (feeder.is_some(), timeline.at(shared.played.load(Ordering::Acquire))) {
-                        restart(&tracks, track, ms, &mut feeder, &mut timeline);
+                        restart(&tracks, track, ms, &order, &mut feeder, &mut timeline);
                     }
                 }
                 Cmd::Skip(by) => {
                     if let Some((track, _)) = timeline.at(shared.played.load(Ordering::Acquire)) {
-                        let next = track as i64 + by;
-                        if next >= 0 && (next as usize) < tracks.len() {
-                            restart(&tracks, next as usize, 0, &mut feeder, &mut timeline);
+                        match order.skip(track, by) {
+                            Some(next) => restart(&tracks, next, 0, &order, &mut feeder, &mut timeline),
+                            // Previous on the first song: start it again.
+                            None if by < 0 => restart(&tracks, track, 0, &order, &mut feeder, &mut timeline),
+                            None => {}
                         }
+                    }
+                }
+                Cmd::Shuffle(on) => {
+                    shuffle = on;
+                    let current = timeline.at(shared.played.load(Ordering::Acquire)).map_or(0, |(t, _)| t);
+                    order.set_shuffle(on, current);
+                    if let Some(f) = feeder.as_mut() {
+                        *f.order_mut() = order.clone();
+                    }
+                }
+                Cmd::Repeat(r) => {
+                    repeat = r;
+                    order.set_repeat(r);
+                    if let Some(f) = feeder.as_mut() {
+                        f.order_mut().set_repeat(r);
                     }
                 }
             }
@@ -456,6 +492,10 @@ fn engine(
                         if let (false, Some(fmt)) = (formats.contains_key(&block.track), f.current_format()) {
                             formats.insert(block.track, fmt);
                         }
+                        if block.starts_track {
+                            // A new pass (next song, or the same one again with repeat-one) starts at 0.
+                            timeline.start_track(block.track, 0);
+                        }
                         timeline.add(block.track, (block.samples.len() / channels) as u64);
                         pending = block.samples;
                         pending_at = 0;
@@ -503,6 +543,9 @@ fn engine(
             s.device_rate = out.as_ref().map_or(0, |o| o.rate);
             s.exclusive = out.as_ref().is_some_and(|o| o.exclusive);
             s.device_bits = out.as_ref().map_or(0, |o| o.bits);
+            s.shuffle = shuffle;
+            s.repeat = repeat;
+            s.up_next = here.map(|(t, _)| order.upcoming(t, 4)).unwrap_or_default();
             let name = out.as_ref().map_or(wanted.unwrap_or(""), |o| o.name.as_str());
             if s.device_name != name {
                 s.device_name = name.to_string();
@@ -719,5 +762,41 @@ mod exclusive_machine_tests {
         shared.play(vec![a], 0);
         std::thread::sleep(Duration::from_millis(400));
         assert!(shared.status().playing);
+    }
+}
+
+// Machine test: shuffle and repeat on the default device (quietly).
+#[cfg(test)]
+mod order_machine_tests {
+    use super::*;
+    use crate::audio::fixtures::wav;
+
+    #[test]
+    #[ignore]
+    fn repeat_one_keeps_the_song_and_shuffle_changes_what_comes_next() {
+        let d = tempfile::tempdir().unwrap();
+        let tracks: Vec<PathBuf> = (0..6).map(|i| wav(d.path(), &format!("{i}.wav"), 44_100, 1, 16, 22_050)).collect(); // 0.5 s each
+        let player = Player::start().expect("engine");
+        player.set_volume(0.05);
+        player.set_repeat(Repeat::One);
+        player.play(tracks, 0);
+        std::thread::sleep(Duration::from_millis(1_400));
+        let s = player.status();
+        println!("{s:?}");
+        assert_eq!(s.track, Some(0), "still the first song after it ended twice");
+        assert!(s.position_ms < 500, "position restarts on each pass: {}", s.position_ms);
+        assert_eq!(s.repeat, Repeat::One);
+        player.skip(1);
+        std::thread::sleep(Duration::from_millis(250));
+        assert_eq!(player.status().track, Some(1), "Next moves on even with repeat one");
+        assert_eq!(player.status().up_next, vec![2, 3, 4, 5]);
+        player.set_shuffle(true);
+        std::thread::sleep(Duration::from_millis(100));
+        let s = player.status();
+        println!("shuffled up next: {:?}", s.up_next);
+        assert!(s.shuffle);
+        assert_eq!(s.track, Some(1), "the current song keeps playing");
+        assert!(!s.up_next.contains(&1));
+        player.pause();
     }
 }

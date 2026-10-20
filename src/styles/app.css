@@ -235,6 +235,11 @@ button.primary svg { width: 12px; height: 12px; fill: currentColor; }
 .np-controls .rate-btn { color: var(--text-muted); }
 .np-controls .rate-btn[data-act="like"].on { color: var(--accent-ink); }
 .np-controls .rate-btn[data-act="dislike"].on { color: var(--danger); }
+.mode-btn { position: relative; color: var(--text-muted) !important; }
+.mode-btn[aria-pressed="true"] { color: var(--accent-ink) !important; }
+.mode-btn[aria-pressed="true"]::after { content: ""; position: absolute; bottom: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; }
+.repeat-one { display: none; position: absolute; top: 6px; right: 5px; font-size: 9px; font-weight: 700; line-height: 1; }
+.mode-btn.one .repeat-one { display: block; }
 .np-play { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; }
 .np-play svg { width: 18px; height: 18px; fill: currentColor; }
 .np-play .i-play, .np-play.paused .i-pause { display: none; }

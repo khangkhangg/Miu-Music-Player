@@ -38,3 +38,16 @@ test('the pin says what clicking will do', () => {
   assert.deepEqual(pinButton(true), { pressed: true, label: 'Stop keeping on top' });
   assert.deepEqual(pinButton(false), { pressed: false, label: 'Keep on top of other windows' });
 });
+
+import { nextRepeat, repeatButton } from '../../src/js/player.js';
+
+test('the repeat button cycles off → all → one → off', () => {
+  assert.deepEqual(['off', 'all', 'one'].map(nextRepeat), ['all', 'one', 'off']);
+  assert.equal(nextRepeat(undefined), 'all');
+});
+
+test('the repeat button says what it does now', () => {
+  assert.deepEqual(repeatButton('off'), { pressed: false, one: false, label: 'Repeat: off' });
+  assert.deepEqual(repeatButton('all'), { pressed: true, one: false, label: 'Repeat: all songs' });
+  assert.deepEqual(repeatButton('one'), { pressed: true, one: true, label: 'Repeat: this song' });
+});

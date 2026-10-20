@@ -274,5 +274,9 @@
   "page.facts": "{songs} · {time} · {liked} liked",
   "page.play": "Play {title}",
   "player.mini": "Mini",
-  "player.miniTitle": "Switch to the mini player"
+  "player.miniTitle": "Switch to the mini player",
+  "player.shuffle": "Shuffle",
+  "player.repeatOff": "Repeat: off",
+  "player.repeatAll": "Repeat: all songs",
+  "player.repeatOne": "Repeat: this song"
 }

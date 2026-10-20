@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use rubato::{Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 
 use crate::audio::decode::{AudioError, Decoder, SourceFormat};
+use crate::audio::order::{PlayOrder, Repeat};
 
 /// Convert interleaved `samples` from `from` channels to `to` channels.
 pub fn remix(samples: &[f32], from: usize, to: usize) -> Vec<f32> {
@@ -126,6 +127,8 @@ impl Resampler {
 pub struct Block {
     pub track: usize,
     pub samples: Vec<f32>,
+    /// First block of a pass through the song (its position starts at 0 here; repeat-one restarts).
+    pub starts_track: bool,
 }
 
 /// Plays `tracks[start..]` as one stream: when a file ends, the next one continues immediately.
@@ -138,11 +141,31 @@ pub struct Feeder {
     /// Exclusive mode: ask for each file's own rate instead of resampling to `out_rate`.
     follow: bool,
     wants: Option<u32>,
+    /// Which queue entry follows which (shuffle, repeat); list order by default.
+    order: PlayOrder,
+    ended: bool,
+    /// The next block is the first of a pass through the current song.
+    fresh_pass: bool,
+    /// Files in a row that would not open; once every file failed, the queue ends.
+    failures: usize,
 }
 
 impl Feeder {
     pub fn new(tracks: Vec<PathBuf>, start: usize, out_rate: u32, out_channels: usize) -> Self {
-        Self { tracks, index: start, out_rate, out_channels, current: None, follow: false, wants: None }
+        let order = PlayOrder::new(tracks.len(), start, false, Repeat::Off, 0);
+        let ended = start >= tracks.len();
+        Self { tracks, index: start, out_rate, out_channels, current: None, follow: false, wants: None, order, ended, fresh_pass: false, failures: 0 }
+    }
+
+    /// Play in `order` (shuffle / repeat) instead of list order.
+    pub fn with_order(mut self, order: PlayOrder) -> Self {
+        self.order = order;
+        self
+    }
+
+    /// Change shuffle or repeat while playing; it applies from the next song.
+    pub fn order_mut(&mut self) -> &mut PlayOrder {
+        &mut self.order
     }
 
     /// Like `new`, but when a file's rate differs from the output rate the feeder stops and asks for
@@ -206,14 +229,20 @@ impl Feeder {
                 return Ok(None);
             }
             if self.current.is_none() {
-                if self.index >= self.tracks.len() {
+                if self.ended {
                     return Ok(None);
                 }
                 if let Err(e) = self.open_current() {
                     log::warn!("skipping {}: {e}", self.tracks[self.index].display());
-                    self.index += 1;
+                    self.failures += 1;
+                    // Next in order, never "repeat one" on a file that does not open.
+                    match self.order.skip(self.index, 1) {
+                        Some(next) if self.failures < self.tracks.len() => self.index = next,
+                        _ => self.ended = true,
+                    }
                     continue;
                 }
+                self.fresh_pass = true;
                 if self.wants.is_some() {
                     return Ok(None);
                 }
@@ -228,16 +257,23 @@ impl Feeder {
             };
             let track = self.index;
             let samples = match chunk {
-                Some(c) => res.process(&remix(&c, dec.channels, self.out_channels))?,
+                Some(c) => {
+                    self.failures = 0;
+                    res.process(&remix(&c, dec.channels, self.out_channels))?
+                }
                 None => {
                     let tail = res.flush()?;
                     self.current = None;
-                    self.index += 1;
+                    match self.order.after(self.index) {
+                        Some(next) => self.index = next,
+                        None => self.ended = true,
+                    }
                     tail
                 }
             };
             if !samples.is_empty() {
-                return Ok(Some(Block { track, samples }));
+                let starts_track = std::mem::take(&mut self.fresh_pass);
+                return Ok(Some(Block { track, samples, starts_track }));
             }
         }
     }
@@ -433,5 +469,89 @@ mod follow_rate_tests {
         assert_eq!(f.wants_rate(), Some(48_000));
         f.set_out_rate(48_000).unwrap();
         assert_eq!(drain(&mut f).len(), 480);
+    }
+}
+
+#[cfg(test)]
+mod order_tests {
+    use super::*;
+    use crate::audio::fixtures::wav;
+    use crate::audio::order::{PlayOrder, Repeat};
+
+    fn tracks_seen(f: &mut Feeder, max_blocks: usize) -> Vec<usize> {
+        let mut seen = Vec::new();
+        for _ in 0..max_blocks {
+            let Some(b) = f.next_block().unwrap() else { break };
+            if seen.last() != Some(&b.track) {
+                seen.push(b.track);
+            }
+        }
+        seen
+    }
+
+    fn three(d: &std::path::Path) -> Vec<PathBuf> {
+        (0..3).map(|i| wav(d, &format!("{i}.wav"), 8_000, 1, 16, 400)).collect()
+    }
+
+    #[test]
+    fn the_feeder_follows_the_play_order() {
+        let d = tempfile::tempdir().unwrap();
+        let order = PlayOrder::new(3, 1, false, Repeat::All, 1);
+        let mut f = Feeder::new(three(d.path()), 1, 8_000, 1).with_order(order);
+        assert_eq!(tracks_seen(&mut f, 200)[..4], [1, 2, 0, 1], "wraps with repeat all");
+    }
+
+    #[test]
+    fn repeat_one_plays_the_same_song_again_without_a_gap() {
+        let d = tempfile::tempdir().unwrap();
+        let mut f = Feeder::new(three(d.path()), 2, 8_000, 1).with_order(PlayOrder::new(3, 2, false, Repeat::One, 1));
+        let mut samples = 0;
+        for _ in 0..50 {
+            let b = f.next_block().unwrap().expect("never ends");
+            assert_eq!(b.track, 2);
+            samples += b.samples.len();
+        }
+        assert!(samples > 800, "played more than twice over: {samples}");
+    }
+
+    #[test]
+    fn changing_repeat_while_playing_takes_effect_at_the_next_song() {
+        let d = tempfile::tempdir().unwrap();
+        let mut f = Feeder::new(three(d.path()), 0, 8_000, 1).with_order(PlayOrder::new(3, 0, false, Repeat::Off, 1));
+        f.order_mut().set_repeat(Repeat::All);
+        assert_eq!(tracks_seen(&mut f, 200)[..4], [0, 1, 2, 0]);
+    }
+
+    #[test]
+    fn a_queue_of_unplayable_files_ends_even_with_repeat_all() {
+        let d = tempfile::tempdir().unwrap();
+        let bad: Vec<PathBuf> = (0..3).map(|i| {
+            let p = d.path().join(format!("{i}.mp3"));
+            std::fs::write(&p, b"nope").unwrap();
+            p
+        }).collect();
+        let mut f = Feeder::new(bad, 0, 8_000, 1).with_order(PlayOrder::new(3, 0, false, Repeat::All, 1));
+        assert!(f.next_block().unwrap().is_none());
+    }
+
+    #[test]
+    fn each_pass_of_a_song_is_marked_so_its_position_restarts() {
+        let d = tempfile::tempdir().unwrap();
+        let mut f = Feeder::new(three(d.path()), 0, 8_000, 1).with_order(PlayOrder::new(3, 0, false, Repeat::One, 1));
+        let mut starts = 0;
+        for _ in 0..60 {
+            if f.next_block().unwrap().unwrap().starts_track {
+                starts += 1;
+            }
+        }
+        assert!(starts >= 3, "a start marker for every pass: {starts}");
+    }
+
+    #[test]
+    fn a_block_after_a_seek_is_not_a_fresh_start() {
+        let d = tempfile::tempdir().unwrap();
+        let mut f = Feeder::new(three(d.path()), 0, 8_000, 1);
+        f.seek_ms(20).unwrap();
+        assert!(!f.next_block().unwrap().unwrap().starts_track, "the seek already set the position");
     }
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupAlbums, groupArtists, upNext, libraryStats, splitTitle } from '../../src/js/library.js';
+import { groupAlbums, groupArtists, libraryStats, splitTitle } from '../../src/js/library.js';
 
 const song = (id, title, artist, album, extra = {}) => ({
   id, title, artist, album, albumArtist: null, year: null, trackNo: null, discNo: null, hasArtwork: false, durationMs: 200_000, rating: 0, ...extra,
@@ -46,13 +46,6 @@ test('artists list their songs and albums', () => {
   const kl = artists.find((a) => a.name === 'Khánh Ly');
   assert.deepEqual([kl.count, kl.albums, kl.coverId], [2, 1, 2]);
   assert.deepEqual(artists.map((a) => a.name), ['A', 'B', 'Khánh Ly', 'Ngọc Lan', 'X', 'Y', 'Z']);
-});
-
-test('up next is what follows the current song in the queue', () => {
-  const byId = new Map(songs.map((s) => [s.id, s]));
-  assert.deepEqual(upNext([3, 2, 1, 4, 5, 6], 2, byId, 3).map((s) => s.id), [1, 4, 5]);
-  assert.deepEqual(upNext([3, 2], 2, byId, 3), []);
-  assert.deepEqual(upNext([3, 2], 99, byId, 3), [], 'nothing known: nothing shown');
 });
 
 test('sidebar stats', () => {

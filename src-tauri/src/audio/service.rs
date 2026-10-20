@@ -9,6 +9,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::audio::decode::SourceFormat;
+use crate::audio::order::Repeat;
 use crate::audio::player::{output_devices, OutputDevice, Player};
 use crate::library::service::SharedDb;
 use crate::library::songs::paths_for;
@@ -36,6 +37,10 @@ pub struct PlayerEvent {
     pub device_rate: u32,
     pub exclusive: bool,
     pub device_bits: u32,
+    pub shuffle: bool,
+    pub repeat: Repeat,
+    /// Song ids that play next, in order.
+    pub up_next: Vec<i64>,
 }
 
 fn open(device: Option<&str>, exclusive: bool) -> Option<Player> {
@@ -71,9 +76,14 @@ impl PlayerHandle {
                 device_rate: 0,
                 exclusive: false,
                 device_bits: 0,
+                shuffle: false,
+                repeat: Repeat::Off,
+                up_next: Vec::new(),
             };
         };
-        let song_id = s.track.and_then(|t| self.queue.lock().ok()?.get(t).copied());
+        let queue = self.queue.lock().map(|q| q.clone()).unwrap_or_default();
+        let song_id = s.track.and_then(|t| queue.get(t).copied());
+        let up_next = s.up_next.iter().filter_map(|&t| queue.get(t).copied()).collect();
         PlayerEvent {
             available: true,
             playing: s.playing,
@@ -85,7 +95,18 @@ impl PlayerHandle {
             device_rate: s.device_rate,
             exclusive: s.exclusive,
             device_bits: s.device_bits,
+            shuffle: s.shuffle,
+            repeat: s.repeat,
+            up_next,
         }
+    }
+
+    /// Saved shuffle and repeat, applied at start-up.
+    pub fn set_order(&self, shuffle: bool, repeat: Repeat) {
+        self.with(|p| {
+            p.set_shuffle(shuffle);
+            p.set_repeat(repeat);
+        });
     }
 
     pub fn set_eq(&self, settings: crate::audio::eq::EqSettings) {
@@ -116,6 +137,8 @@ impl PlayerHandle {
         let player = open(device, exclusive).ok_or("could not open that output device")?;
         player.set_eq(eq);
         if let Some(s) = before {
+            player.set_shuffle(s.shuffle);
+            player.set_repeat(s.repeat);
             player.set_volume(s.volume);
             let paths = self.paths.lock().map_err(|e| e.to_string())?.clone();
             if let (Some(track), false) = (s.track, paths.is_empty()) {
@@ -260,4 +283,18 @@ mod tests {
         assert!(after.position_ms >= before.position_ms, "position kept: {} -> {}", before.position_ms, after.position_ms);
         assert!((after.volume - 0.05).abs() < 1e-6, "volume kept");
     }
+}
+
+/// Shuffle on or off (saved); the current song keeps playing.
+#[tauri::command]
+pub fn player_shuffle(on: bool, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    crate::settings::set_shuffle(&*db.lock().map_err(|e| e.to_string())?, on).map_err(|e| e.to_string())?;
+    player.act(|p| p.set_shuffle(on))
+}
+
+/// Repeat off, all or one (saved).
+#[tauri::command]
+pub fn player_repeat(repeat: Repeat, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    crate::settings::set_repeat(&*db.lock().map_err(|e| e.to_string())?, repeat).map_err(|e| e.to_string())?;
+    player.act(|p| p.set_repeat(repeat))
 }

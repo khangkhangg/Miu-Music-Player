@@ -55,13 +55,6 @@ export function groupArtists(songs, locale) {
     .sort((a, b) => c.compare(a.name, b.name));
 }
 
-/** The next `n` songs after `currentId` in the play queue. */
-export function upNext(queueIds, currentId, songsById, n = 4) {
-  const at = queueIds.indexOf(currentId);
-  if (at < 0) return [];
-  return queueIds.slice(at + 1, at + 1 + n).map((id) => songsById.get(id)).filter(Boolean);
-}
-
 export function libraryStats(songs) {
   return { songs: songs.length, liked: songs.filter((s) => s.rating === 1).length };
 }

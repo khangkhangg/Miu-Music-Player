@@ -197,6 +197,27 @@ pub fn change(db: &Db, name: &str, value: &serde_json::Value) -> std::result::Re
     }
 }
 
+const SHUFFLE: &str = "shuffle";
+const REPEAT: &str = "repeat";
+
+/// Play the queue in random order (default: no).
+pub fn shuffle(db: &Db) -> bool {
+    db.setting_json::<bool>(SHUFFLE).ok().flatten().unwrap_or(false)
+}
+
+pub fn set_shuffle(db: &Db, on: bool) -> Result<()> {
+    db.set_setting_json(SHUFFLE, &on)
+}
+
+/// Repeat off, the whole queue, or one song (default: off).
+pub fn repeat(db: &Db) -> crate::audio::order::Repeat {
+    db.setting_json(REPEAT).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_repeat(db: &Db, r: crate::audio::order::Repeat) -> Result<()> {
+    db.set_setting_json(REPEAT, &r)
+}
+
 const MINI_ON_TOP: &str = "mini_on_top";
 
 /// Keep the mini player above other windows (default: yes — the pin in the mini player).
@@ -456,5 +477,25 @@ mod schema_tests {
         assert!(change(&db, "conversion", &serde_json::json!({ "hiRes": "8k" })).is_err());
         assert!(change(&db, "language", &serde_json::json!("klingon")).is_err());
         assert_eq!(all(&db), all(&Db::open_in_memory().unwrap()));
+    }
+}
+
+#[cfg(test)]
+mod play_order_tests {
+    use super::*;
+    use crate::audio::order::Repeat;
+
+    #[test]
+    fn songs_play_in_list_order_without_repeat_by_default() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!((shuffle(&db), repeat(&db)), (false, Repeat::Off));
+    }
+
+    #[test]
+    fn shuffle_and_repeat_are_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        set_shuffle(&db, true).unwrap();
+        set_repeat(&db, Repeat::One).unwrap();
+        assert_eq!((shuffle(&db), repeat(&db)), (true, Repeat::One));
     }
 }

@@ -4,6 +4,7 @@ pub mod eq_service;
 pub mod exclusive;
 #[cfg(test)]
 pub mod fixtures;
+pub mod order;
 pub mod pipeline;
 pub mod player;
 pub mod presets;
