@@ -287,12 +287,15 @@ pub fn undo_edit(app: AppHandle, db: State<'_, SharedDb>, last: State<'_, LastEd
 pub fn art_response(db: &SharedDb, uri_path: &str) -> tauri::http::Response<Vec<u8>> {
     let not_found = || tauri::http::Response::builder().status(404).body(Vec::new()).unwrap();
     let Some((id, size)) = crate::library::art::parse_request(uri_path) else { return not_found() };
-    let row: Option<(String, i64)> = db.lock().ok().and_then(|d| {
-        d.conn().query_row("SELECT path, mtime FROM songs WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?))).ok()
-    });
-    let Some((path, mtime)) = row else { return not_found() };
+    let cover = db.lock().ok().and_then(|d| crate::library::artfetch::cover_of(&d, id));
     let cache = crate::util::paths::local_appdata_root().join("MiuMusic").join("art");
-    match crate::library::art::cached_thumbnail(&cache, id, mtime, Path::new(&path), size) {
+    // Embedded first; otherwise the cover found online for the song's album.
+    let made = match cover {
+        Some(crate::library::artfetch::Cover::Embedded { path, mtime }) => crate::library::art::cached_thumbnail(&cache, id, mtime, Path::new(&path), size),
+        Some(crate::library::artfetch::Cover::Fetched(file)) => crate::library::art::cached_file_thumbnail(&cache, &file, size),
+        None => return not_found(),
+    };
+    match made {
         Ok(Some(jpg)) => tauri::http::Response::builder()
             .header("Content-Type", "image/jpeg")
             .header("Cache-Control", "max-age=86400")
@@ -300,4 +303,117 @@ pub fn art_response(db: &SharedDb, uri_path: &str) -> tauri::http::Response<Vec<
             .unwrap(),
         _ => not_found(),
     }
+}
+
+// ---- Covers found online for albums without one ----
+
+use crate::library::artfetch::{self, AlbumKey, Http, Outcome};
+
+static FETCHING_ART: AtomicBool = AtomicBool::new(false);
+static STOP_ART: AtomicBool = AtomicBool::new(false);
+/// iTunes allows about 20 searches a minute; MusicBrainz one a second.
+const ART_PAUSE: Duration = Duration::from_secs(3);
+const MAX_ART_BYTES: u64 = 10 * 1024 * 1024;
+
+/// HTTP for the cover services. MusicBrainz asks clients to say who they are.
+struct WebHttp(ureq::Agent);
+
+impl WebHttp {
+    fn new() -> Self {
+        let agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(30)))
+            .http_status_as_error(false)
+            .user_agent(concat!("MiuMusic/", env!("CARGO_PKG_VERSION"), " ( https://musicplayer.vietnamcos.com )"))
+            .build()
+            .into();
+        Self(agent)
+    }
+}
+
+impl Http for WebHttp {
+    fn get(&self, url: &str) -> Result<Vec<u8>, String> {
+        let mut res = self.0.get(url).call().map_err(|e| e.to_string())?;
+        let status = res.status().as_u16();
+        if !(200..300).contains(&status) {
+            return Err(format!("{url} answered {status}"));
+        }
+        res.body_mut().with_config().limit(MAX_ART_BYTES).read_to_vec().map_err(|e| e.to_string())
+    }
+}
+
+fn covers_dir() -> std::path::PathBuf {
+    crate::util::paths::app_data_dir_in(&crate::util::paths::appdata_root()).join("covers")
+}
+
+/// Look one album up now (the album page's "Find artwork"). Returns whether a cover was found.
+#[tauri::command]
+pub async fn find_album_art(artist: String, album: String, app: AppHandle, db: State<'_, SharedDb>) -> Result<bool, String> {
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = AlbumKey { artist, album };
+        let outcome = artfetch::fetch_one(&WebHttp::new(), &key, &covers_dir())?;
+        let found = matches!(outcome, Outcome::Found { .. });
+        {
+            let d = db.lock().map_err(|e| e.to_string())?;
+            artfetch::record(&d, &key, &outcome, now_unix())?;
+        }
+        if found {
+            let _ = app.emit("library-changed", folder_list(&db));
+        }
+        Ok(found)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Look up every album without a cover, in the background (progress as `library-progress`, phase "art").
+/// Returns how many albums will be looked up.
+#[tauri::command]
+pub fn fetch_missing_art(app: AppHandle, db: State<'_, SharedDb>) -> Result<usize, String> {
+    let todo = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        artfetch::missing_albums(&d, now_unix())?
+    };
+    if todo.is_empty() || FETCHING_ART.swap(true, Ordering::AcqRel) {
+        return Ok(0);
+    }
+    STOP_ART.store(false, Ordering::Release);
+    let (db, total) = (db.inner().clone(), todo.len());
+    std::thread::spawn(move || {
+        let http = WebHttp::new();
+        let mut found = 0;
+        for (i, key) in todo.iter().enumerate() {
+            if STOP_ART.load(Ordering::Acquire) {
+                break;
+            }
+            progress(&app, "art", i, total);
+            match artfetch::fetch_one(&http, key, &covers_dir()) {
+                Ok(outcome) => {
+                    if matches!(outcome, Outcome::Found { .. }) {
+                        found += 1;
+                    }
+                    if let Ok(d) = db.lock() {
+                        let _ = artfetch::record(&d, key, &outcome, now_unix());
+                    }
+                    // Show covers as they arrive, a few at a time.
+                    if found > 0 && found % 5 == 0 {
+                        let _ = app.emit("library-changed", folder_list(&db));
+                    }
+                }
+                Err(e) => log::warn!("cover lookup for {} – {} failed: {e}", key.artist, key.album),
+            }
+            std::thread::sleep(ART_PAUSE);
+        }
+        log::info!("album covers: {found} found for {total} albums");
+        progress(&app, "art", total, total);
+        let _ = app.emit("library-changed", folder_list(&db));
+        FETCHING_ART.store(false, Ordering::Release);
+    });
+    Ok(total)
+}
+
+/// Stop the background cover lookup after the album in progress.
+#[tauri::command]
+pub fn cancel_art_fetch() {
+    STOP_ART.store(true, Ordering::Release);
 }

@@ -3,7 +3,7 @@
 import { t } from './i18n.js';
 import { formatBytes } from './device.js';
 
-const LABELS = { scan: 'work.scan', fingerprint: 'work.fingerprint', import: 'work.import' };
+const LABELS = { scan: 'work.scan', fingerprint: 'work.fingerprint', import: 'work.import', art: 'work.art' };
 
 function download(p) {
   if (!(p.done > 0)) return { show: false, percent: 100, text: '' };

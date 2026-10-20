@@ -11,12 +11,32 @@ pub const MAX_SIZE: u32 = 640;
 /// The song's cover as a `size`×`size` JPEG (centre-cropped; never enlarged), or `None` if it has none.
 pub fn thumbnail(song: &Path, size: u32) -> Result<Option<Vec<u8>>, String> {
     let Some(art) = crate::library::tags::read_artwork(song)? else { return Ok(None) };
-    let img = image::load_from_memory(&art.data).map_err(|e| e.to_string())?;
+    square_jpeg(&art.data, size).map(Some)
+}
+
+/// Centre-cropped square JPEG of an encoded image, never enlarged.
+fn square_jpeg(bytes: &[u8], size: u32) -> Result<Vec<u8>, String> {
+    let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
     let side = size.min(img.width()).min(img.height()).max(1);
     let square = img.resize_to_fill(side, side, FilterType::Lanczos3).to_rgb8();
     let mut out = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 85).encode_image(&square).map_err(|e| e.to_string())?;
-    Ok(Some(out))
+    Ok(out)
+}
+
+/// A cover found online (`library::artfetch`) as a thumbnail, cached by file, its time and size.
+pub fn cached_file_thumbnail(cache: &Path, file: &Path, size: u32) -> Result<Option<Vec<u8>>, String> {
+    let Ok(meta) = std::fs::metadata(file) else { return Ok(None) };
+    let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+    let name = crate::library::fingerprint::fnv64(file.to_string_lossy().as_bytes());
+    let cached = cache.join(format!("f{name}-{stamp}-{size}.jpg"));
+    if let Ok(bytes) = std::fs::read(&cached) {
+        return Ok(Some(bytes));
+    }
+    let jpg = square_jpeg(&std::fs::read(file).map_err(|e| e.to_string())?, size)?;
+    std::fs::create_dir_all(cache).map_err(|e| e.to_string())?;
+    std::fs::write(&cached, &jpg).map_err(|e| e.to_string())?;
+    Ok(Some(jpg))
 }
 
 fn cache_file(cache: &Path, song_id: i64, mtime: i64, size: u32) -> PathBuf {
@@ -59,6 +79,20 @@ mod tests {
         tag.push_picture(Picture::new_unchecked(PictureType::CoverFront, Some(MimeType::Png), None, png));
         tag.save_to_path(&p, WriteOptions::default()).unwrap();
         p
+    }
+
+    #[test]
+    fn a_fetched_cover_file_becomes_a_cached_square_thumbnail() {
+        let d = tempfile::tempdir().unwrap();
+        let file = d.path().join("cover.jpg");
+        image::RgbImage::from_pixel(500, 300, image::Rgb([200, 80, 40])).save(&file).unwrap();
+        let cache = d.path().join("cache");
+        let jpg = cached_file_thumbnail(&cache, &file, 120).unwrap().expect("a thumbnail");
+        let img = image::load_from_memory(&jpg).unwrap();
+        assert_eq!((img.width(), img.height()), (120, 120));
+        assert_eq!(std::fs::read_dir(&cache).unwrap().count(), 1, "cached");
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(cached_file_thumbnail(&cache, &file, 120).unwrap(), None, "a removed cover is not served from cache");
     }
 
     #[test]

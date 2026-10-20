@@ -19,7 +19,7 @@ import { episodeMeta, episodeState, markSubscribed } from './podcasts.js';
 import { language } from './i18n.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
-import { groupAlbums, groupArtists, libraryStats, splitTitle, syncRuleFor, hasSyncRule } from './library.js';
+import { groupAlbums, groupArtists, libraryStats, splitTitle, syncRuleFor, hasSyncRule, needsArtwork } from './library.js';
 import { formatDuration } from './songs.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
@@ -944,6 +944,35 @@ function setupSettings(languageSetting) {
     invoke('set_sync_rule', { rule, on: !hasSyncRule(syncRules, rule) })
       .then(r => { syncRules = r; renderSyncRule(); if (page) openPage(page.kind, { ...page, name: page.title }, false); });
   });
+  $('album-art').addEventListener('click', () => {
+    if (!needsArtwork(page)) return;
+    const b = $('album-art');
+    b.disabled = true;
+    b.textContent = t('album.findingArt');
+    invoke('find_album_art', { artist: page.artist, album: page.title })
+      .then(found => { if (!found) b.textContent = t('album.noArt'); })
+      .catch(() => { b.disabled = false; b.textContent = t('album.findArt'); });
+  });
+  let findingCovers = false;
+  $('covers-find').addEventListener('click', () => {
+    if (findingCovers) {
+      invoke('cancel_art_fetch');
+      $('covers-result').textContent = t('settings.coversStopping');
+      return;
+    }
+    invoke('fetch_missing_art').then(n => {
+      if (!n) { $('covers-result').textContent = t('settings.coversNone'); return; }
+      findingCovers = true;
+      $('covers-find').textContent = t('settings.coversStop');
+      $('covers-result').textContent = t('settings.coversStarted', { n });
+    });
+  });
+  window.__TAURI__.event.listen('library-progress', e => {
+    if (e.payload.phase !== 'art' || e.payload.done < e.payload.total) return;
+    findingCovers = false;
+    $('covers-find').textContent = t('settings.coversFind');
+    $('covers-result').textContent = t('settings.coversDone');
+  });
   $('album-edit').addEventListener('click', () => {
     if (!page) return;
     selection = { selected: new Set(page.songs.map(x => x.id)), anchor: null };
@@ -1109,6 +1138,10 @@ function openPage(kind, item, scroll = true) {
   $('hero-kicker').textContent = artist ? t('page.artist') : (page.year ? t('page.albumYear', { year: page.year }) : t('page.album'));
   $('album-back-label').textContent = t(artist ? 'nav.artists' : 'nav.albums');
   renderSyncRule();
+  const findArt = $('album-art');
+  findArt.hidden = !needsArtwork(page);
+  findArt.disabled = false;
+  findArt.textContent = t('album.findArt');
   const cover = $('hero-cover');
   cover.replaceChildren(thumb(page.coverId != null ? { id: page.coverId, hasArtwork: true } : null, 'hero-art', 320));
   const bg = $('hero-bg');

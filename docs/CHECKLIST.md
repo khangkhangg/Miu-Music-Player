@@ -96,6 +96,11 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
 - [x] **F3.4 Conversion policy + Hi-res for iPhone** — *Test first:* table test format/bit depth/rate → action
   (keep / ALAC / AAC 256k / ALAC 24-48); hi-res setting respected. Ticked on tests 2026-10-20: no UI yet (the
   sync engine uses it in Phase 4, the setting appears in F5.5). 88.2/176.4 kHz sources go to 44.1, not 48.
+- [ ] **F3.7 Find missing album covers** — *Test first:* iTunes Search then MusicBrainz + Cover Art Archive (no keys), accent-insensitive
+  matching that ignores "(1984) [Remastered] - Single"-style suffixes; covers saved under %APPDATA%MiuMusiccovers (music files untouched);
+  misses remembered for 30 days (migration 13); album tags that are website names ("NhacCuaTui.Com") skipped; fetched covers show in
+  lists and pages and go onto converted iPhone copies. "Find artwork" on album pages, "Find missing covers" in Settings (stoppable).
+  Built 2026-10-20; live test: Khánh Ly "Diễm Xưa" found on iTunes (600×600). In this library 1 real album lacks a cover.
 - [x] **F3.5 Conversion cache** — *Test first:* second conversion of the same audio is a cache hit; tag-only change re-tags, no re-encode.
   Built 2026-10-20 (`library::transcode`): ffmpeg args per action (ALAC 16 → s16p, 24 → s32p + 24 bits; AAC 256k; `-f ipod`, tags
   mapped, artwork re-added by lofty), cache in `%LOCALAPPDATA%\MiuMusic\cache` keyed by audio hash + action, `.tags` key for re-tags,

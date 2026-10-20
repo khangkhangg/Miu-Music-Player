@@ -37,7 +37,10 @@ pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
     let mut stmt = db
         .conn()
         .prepare("SELECT id, path, title, artist, album, duration_ms, format, rating, sample_rate, bit_depth, bitrate_kbps,
-                  album_artist, year, track_no, disc_no, has_artwork FROM songs")?;
+                  album_artist, year, track_no, disc_no,
+                  has_artwork OR EXISTS (SELECT 1 FROM album_art x WHERE x.file IS NOT NULL AND x.album = songs.album
+                      AND x.artist = COALESCE(NULLIF(songs.album_artist, ''), NULLIF(songs.artist, ''), ''))
+                  FROM songs")?;
     let mut rows: Vec<SongRow> = stmt
         .query_map([], |r| {
             let path: String = r.get(1)?;

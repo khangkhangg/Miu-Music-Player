@@ -72,9 +72,11 @@ pub struct SongSource {
     pub path: PathBuf,
     /// Same audio, same key (the song's audio hash, or its path, size and time when not hashed yet).
     pub audio_key: String,
-    /// Changes when the song's tags change.
+    /// Changes when the song's tags (or its fetched cover) change.
     pub tags_key: String,
     pub action: Action,
+    /// The album cover found online, for songs without one of their own.
+    pub cover: Option<PathBuf>,
 }
 
 /// Turns a song into the file the iPhone can play (`library::transcode::Cache` in the app).
@@ -95,8 +97,15 @@ pub fn sendable_path(db: &Db, song_id: i64, policy: &Policy, convert: Option<Con
         Action::Aac { .. } | Action::Alac { .. } => {
             let convert = convert.ok_or("needs converting for the iPhone, and the ffmpeg sidecar is missing")?;
             let audio_key = audio_hash.filter(|h| !h.is_empty()).unwrap_or_else(|| format!("{path}|{size}|{mtime}"));
-            let tags_key = crate::sync::plan::tags_hash(db, song_id).map_err(|e| e.to_string())?;
-            convert(&SongSource { path: PathBuf::from(path), audio_key, tags_key, action: act })
+            let cover = match crate::library::artfetch::cover_of(db, song_id) {
+                Some(crate::library::artfetch::Cover::Fetched(file)) => Some(file),
+                _ => None,
+            };
+            let mut tags_key = crate::sync::plan::tags_hash(db, song_id).map_err(|e| e.to_string())?;
+            if let Some(c) = &cover {
+                tags_key.push_str(&crate::library::fingerprint::fnv64(c.to_string_lossy().as_bytes()));
+            }
+            convert(&SongSource { path: PathBuf::from(path), audio_key, tags_key, action: act, cover })
         }
     }
 }
@@ -202,6 +211,27 @@ mod tests {
         assert_eq!(sendable_path(&db, mp3, &Policy::default(), None).unwrap(), PathBuf::from(r"E:\Nhạc\a.mp3"));
         let err = sendable_path(&db, flac, &Policy::default(), None).unwrap_err();
         assert!(err.contains("convert"), "{err}");
+    }
+
+    #[test]
+    fn a_fetched_album_cover_goes_with_the_converted_copy() {
+        let db = Db::open_in_memory().unwrap();
+        let flac = song(&db, r"E:\Nhạc\b.flac", "Diễm xưa", "flac", 1, 1, 1);
+        db.conn().execute("UPDATE songs SET artist = 'Khánh Ly', album = 'Tình ca' WHERE id = ?1", [flac]).unwrap();
+        let seen = RefCell::new(Vec::new());
+        let convert = |s: &SongSource| {
+            seen.borrow_mut().push((s.cover.clone(), s.tags_key.clone()));
+            Ok(PathBuf::from(r"C:\cache\x.m4a"))
+        };
+        sendable_path(&db, flac, &Policy::default(), Some(&convert)).unwrap();
+        let key = crate::library::artfetch::AlbumKey { artist: "Khánh Ly".into(), album: "Tình ca".into() };
+        let cover = PathBuf::from(r"C:\covers\t.jpg");
+        crate::library::artfetch::record(&db, &key, &crate::library::artfetch::Outcome::Found { source: "itunes", file: cover.clone() }, 1).unwrap();
+        sendable_path(&db, flac, &Policy::default(), Some(&convert)).unwrap();
+        let seen = seen.borrow();
+        assert_eq!(seen[0].0, None);
+        assert_eq!(seen[1].0, Some(cover));
+        assert_ne!(seen[0].1, seen[1].1, "a new cover re-tags the cached copy");
     }
 
     #[test]

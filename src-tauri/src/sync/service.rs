@@ -123,7 +123,7 @@ fn sync_blocking(udid: &str, app: &AppHandle) -> Result<Report, SyncStop> {
     }
     let cache = crate::library::transcode::Cache { dir: crate::util::paths::local_appdata_root().join("MiuMusic").join("cache") };
     let convert = |s: &crate::sync::itunes::SongSource| match &ffmpeg {
-        Some(ff) => cache.converted(ff, &s.path, &s.audio_key, &s.tags_key, s.action),
+        Some(ff) => cache.converted(ff, &s.path, &s.audio_key, &s.tags_key, s.action, s.cover.as_deref()),
         None => Err("needs converting for the iPhone, and the ffmpeg sidecar is missing".into()),
     };
     let report = run_sync(
