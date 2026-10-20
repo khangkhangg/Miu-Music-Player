@@ -140,8 +140,10 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   changed → wait until the phone shows the changes (unconfirmed after 5 min is reported) → backup, diff (unplanned removals reported) →
   record the run. Leading-zero IDs only warn (a copy is kept). `sync_now` runs on its own DB connection with `sync-progress` events.
   Built 2026-10-20. Conversion is in (F3.5): liked FLACs go as cached ALAC copies; a first run sends the 51 liked FLACs (~1.4 GB).
-- [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).
-- [ ] **S.5 Verify** — reuse F4.5 (pull the device DB, compare per track).
+- [ ] **S.4 First-time guide** — iTunes' COM has no "Manually manage music" flag, so: the sync box shows a three-step guide until the
+  phone's first sync, and when iTunes refuses every new song the result says to turn the setting on (tested with a fake). Built 2026-10-20.
+- [ ] **S.5 Verify** — every sync checks which songs Miu sent (or adopted) are still on the phone; ones deleted there are forgotten
+  and sent again (tested). The sync box shows the last sync ("Last sync: 10 min ago · 51 songs"). Built 2026-10-20.
 - [x] **Manual:** liked songs play in the iPhone 5s Music app after an iTunes-driven sync. Verified 2026-10-20: 54 songs (3 MP3, 51 ALAC) play with titles and covers.
 
 ## Phase 5 – UI
@@ -227,7 +229,7 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
   resource set in tauri.conf.json; the build copies `ffmpeg.exe` next to the app. ffmpeg is the BtbN LGPL v3 build
   `ffmpeg-n8.1-latest-win64-lgpl-8.1.zip` (2026-10-19), 128 MB, **not in git** (GitHub's 100 MB limit): put `bin/ffmpeg.exe` at
   `src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe` and `LICENSE.txt` at `src-tauri/binaries/FFMPEG-LICENSE.txt` before building.
-  Still to do: build the installer and check size and a clean install.
+  2026-10-20: `npx tauri build` on this PC → `Miu Music_0.1.0_x64-setup.exe`, 48.2 MB (ffmpeg is most of it). Still to do: a clean install.
 - [ ] **F6.2 First-run wizard** — *Test first (JS):* wizard step logic (drivers → phone → folders).
   Built 2026-10-20, tests green, **waiting for your check in the app**: welcome panel (drivers → iPhone, skippable → folders), hideable.
 - [ ] **F6.3 Crash-safe journal** — *Test first:* journal replay resumes or rolls back an interrupted sync.
