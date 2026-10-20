@@ -6,7 +6,7 @@ import { fromBytes, geometry } from './visualizer.js';
 import { t, startInLanguage } from './i18n.js';
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
-let preference = 'system'; // the theme setting (F5.5)
+let preference = 'dark'; // the theme setting (F5.5); dark until the setting loads
 const applyTheme = () => { document.documentElement.dataset.theme = resolveTheme(preference, media.matches); };
 applyTheme();
 media.addEventListener('change', applyTheme);
@@ -40,8 +40,25 @@ function loadSongs() {
   });
 }
 
+let artFor = null;
+
+/** The playing song's cover (from the miuart: protocol), or the note icon. */
+function showArt(song) {
+  if (artFor === (song?.id ?? null)) return;
+  artFor = song?.id ?? null;
+  const img = $('mini-art');
+  const has = Boolean(song?.hasArtwork);
+  img.hidden = !has;
+  $('mini-art-empty').hidden = has;
+  if (has) {
+    img.onerror = () => { img.hidden = true; $('mini-art-empty').hidden = false; };
+    img.src = window.__TAURI__.core.convertFileSrc(`${song.id}-240`, 'miuart');
+  }
+}
+
 function show(event) {
   state = event;
+  showArt(songsById.get(event?.songId));
   const np = nowPlaying(event, songsById);
   $('mini-title').textContent = np ? np.title : t('player.nothing');
   $('mini-artist').textContent = np ? np.artist : t('mini.hint');

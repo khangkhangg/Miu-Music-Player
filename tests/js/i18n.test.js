@@ -97,3 +97,17 @@ for (const file of fs.readdirSync(path.join(root, 'src/js')).filter((f) => f.end
     assert.deepEqual(untranslatedJs(read(`src/js/${file}`)), []);
   });
 }
+
+test('every key the code and pages use exists in en.json (plain or as plural forms)', () => {
+  const has = (k) => k in en || (`${k}.one` in en && `${k}.other` in en);
+  const used = new Set();
+  for (const file of fs.readdirSync(path.join(root, 'src/js')).filter((f) => f.endsWith('.js'))) {
+    for (const m of read(`src/js/${file}`).matchAll(/\bt\('([\w.-]+)'/g)) used.add(m[1]);
+  }
+  for (const file of ['src/index.html', 'src/mini.html']) {
+    const html = read(file);
+    for (const m of html.matchAll(/data-i18n="([\w.-]+)"/g)) used.add(m[1]);
+    for (const m of html.matchAll(/data-i18n-attr="([^"]+)"/g)) for (const pair of m[1].split(';')) used.add(pair.split(':')[1]);
+  }
+  assert.deepEqual([...used].filter((k) => !has(k)).sort(), []);
+});

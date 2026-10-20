@@ -11,38 +11,54 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand" data-i18n="app.name">Miu Music</div>
-      <nav>
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+        <span class="brand-name"><span data-i18n="brand.first">Miu</span> <b data-i18n="brand.second">Music</b></span>
+      </div>
+
+      <div class="stats">
+        <div><span class="stat-label" data-i18n="stats.songs">SONGS</span><span class="stat-value" id="stat-songs">0</span></div>
+        <div><span class="stat-label" data-i18n="stats.liked">LIKED</span><span class="stat-value" id="stat-liked">0</span></div>
+      </div>
+
+      <nav class="nav" aria-label="Library" data-i18n-attr="aria-label:nav.library">
         <a class="nav-item active" id="nav-songs" href="#" data-i18n="nav.songs">Songs</a>
-        <a class="nav-item" data-i18n="nav.albums">Albums</a>
-        <a class="nav-item" data-i18n="nav.artists">Artists</a>
+        <a class="nav-item" id="nav-albums" href="#" data-i18n="nav.albums">Albums</a>
+        <a class="nav-item" id="nav-artists" href="#" data-i18n="nav.artists">Artists</a>
+        <a class="nav-item" id="nav-liked" href="#" data-i18n="filters.liked">Liked</a>
+        <a class="nav-item" id="nav-disliked" href="#" data-i18n="filters.disliked">Disliked</a>
         <a class="nav-item" id="nav-settings" href="#" data-i18n="nav.settings">Settings</a>
       </nav>
+
       <div class="section-label section-row">
         <span data-i18n="folders.title">Watched folders</span>
         <button class="icon-btn" id="add-folder" type="button" title="Add a folder" aria-label="Add a folder" data-i18n-attr="title:folders.add;aria-label:folders.add">+</button>
       </div>
       <ul class="folder-list" id="folder-list"></ul>
       <p class="folder-error" id="folder-error" role="alert" hidden></p>
-      <div class="section-label" data-i18n="device.title">Device</div>
+
       <div class="device-card empty" id="device-card" aria-live="polite">
-        <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="34" r="2"/></svg>
-        <div>
-          <p class="device-name" data-i18n="device.none">No device connected</p>
-          <p class="muted device-detail" data-i18n="device.plugIn">Plug in your iPhone with a USB cable</p>
-          <div class="storage" hidden>
-            <div class="storage-bar"><div class="storage-used"></div></div>
-            <p class="muted storage-label"></p>
+        <div class="device-head">
+          <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="34" r="2"/></svg>
+          <div class="device-text">
+            <p class="device-name" data-i18n="device.none">No device connected</p>
+            <p class="muted device-detail" data-i18n="device.plugIn">Plug in your iPhone with a USB cable</p>
           </div>
-          <div class="sync-box" id="sync-box" hidden>
-            <p class="sync-plan" id="sync-plan"></p>
-            <p class="sync-shortage" id="sync-shortage" role="alert" hidden></p>
-            <button class="primary sync-btn" id="sync-btn" type="button" disabled title="Sync is not available yet"
-              data-i18n="sync.button" data-i18n-attr="title:sync.unavailable">Sync</button>
-          </div>
+        </div>
+        <div class="storage" hidden>
+          <div class="storage-bar"><div class="storage-used"></div></div>
+          <p class="muted storage-label"></p>
+        </div>
+        <div class="sync-box" id="sync-box" hidden>
+          <span class="stat-label" data-i18n="sync.title">YOUR IPHONE</span>
+          <p class="sync-plan" id="sync-plan"></p>
+          <p class="sync-shortage" id="sync-shortage" role="alert" hidden></p>
+          <button class="sync-btn" id="sync-btn" type="button" disabled title="Sync is not available yet"
+            data-i18n="sync.button" data-i18n-attr="title:sync.unavailable">Sync</button>
         </div>
       </div>
     </aside>
+
     <main class="main">
       <div class="notice" id="prereq-notice" role="alert" hidden>
         <p class="notice-title"></p>
@@ -67,18 +83,23 @@
             <button class="eq-btn" id="wizard-folder" type="button" data-i18n="folders.addButton">Add folder</button></li>
         </ol>
       </section>
+
       <div class="empty-state" id="empty-state">
         <h1 data-i18n="empty.title">Add your music</h1>
         <p class="muted" data-i18n="empty.body">Choose one or more folders to watch, or drop them here. Miu keeps up with new and removed songs.</p>
         <button class="primary" id="empty-add-folder" type="button" data-i18n="folders.addButton">Add folder</button>
       </div>
+
       <section class="song-view" id="song-view" hidden>
         <header class="view-header">
           <h1 data-i18n="nav.songs">Songs</h1>
           <span class="muted" id="library-summary-text"></span>
-          <button class="eq-btn" id="edit-tags" type="button" hidden></button>
-          <input class="search" id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search" autocomplete="off" spellcheck="false" dir="auto"
-            data-i18n-attr="placeholder:search.placeholder;aria-label:search.label">
+          <button class="eq-btn accent-btn" id="edit-tags" type="button" hidden></button>
+          <label class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input class="search" id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search" autocomplete="off" spellcheck="false" dir="auto"
+              data-i18n-attr="placeholder:search.placeholder;aria-label:search.label">
+          </label>
         </header>
         <div class="chips" id="filter-chips" role="tablist" aria-label="Filter by rating" data-i18n-attr="aria-label:filters.label"></div>
         <div class="disliked-banner" id="disliked-banner" hidden>
@@ -88,7 +109,7 @@
         <p class="duplicates-note muted" id="duplicates-note" hidden data-i18n="duplicates.note">Songs with the same audio, whatever their names or tags. Copies sit next to each other; hover a song to see where its file is.</p>
         <p class="delete-result muted" id="delete-result" role="status" hidden></p>
         <div class="song-row song-head" aria-hidden="true">
-          <span data-i18n="columns.title">Title</span><span data-i18n="columns.artist">Artist</span><span data-i18n="columns.album">Album</span><span class="quality" data-i18n="columns.format">Format</span><span class="num" data-i18n="columns.time">Time</span><span></span>
+          <span></span><span data-i18n="columns.title">Title</span><span data-i18n="columns.album">Album</span><span class="quality" data-i18n="columns.format">Format</span><span class="num" data-i18n="columns.time">Time</span><span></span>
         </div>
         <div class="song-body">
           <div class="song-scroll" id="song-scroll" role="list" aria-label="Songs" data-i18n-attr="aria-label:nav.songs">
@@ -97,6 +118,43 @@
           <nav class="index-bar" id="index-bar" aria-label="Jump to letter" data-i18n-attr="aria-label:index.label"></nav>
         </div>
       </section>
+
+      <section class="grid-view" id="albums-view" hidden>
+        <header class="view-header">
+          <h1 id="grid-heading" data-i18n="nav.albums">Albums</h1>
+          <span class="muted" id="grid-summary"></span>
+        </header>
+        <div class="tile-scroll"><div class="tiles" id="tiles"></div></div>
+      </section>
+
+      <section class="album-page" id="album-page" hidden>
+        <div class="album-hero">
+          <img class="hero-bg" id="hero-bg" alt="" hidden>
+          <div class="hero-shade"></div>
+          <button class="back-btn" id="album-back" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            <span id="album-back-label"></span>
+          </button>
+          <div class="hero-body">
+            <div class="hero-cover" id="hero-cover"></div>
+            <div class="hero-text">
+              <span class="hero-kicker" id="hero-kicker"></span>
+              <h1 class="hero-title"><span class="light" id="hero-line1"></span> <span class="bold" id="hero-line2"></span></h1>
+              <span class="hero-artist" id="hero-artist"></span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button class="primary" id="album-play" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>
+              <span data-i18n="album.playAll">Play all</span>
+            </button>
+            <button class="ghost-btn" id="album-edit" type="button" data-i18n="album.editTags">Edit tags</button>
+          </div>
+        </div>
+        <p class="album-facts muted" id="album-facts"></p>
+        <ol class="track-list" id="track-list"></ol>
+      </section>
+
       <section class="settings-view" id="settings-view" hidden>
         <header class="view-header"><h1 data-i18n="settings.title">Settings</h1></header>
         <div class="settings-body">
@@ -152,128 +210,138 @@
               <button class="eq-btn" id="export-diagnostics" type="button" data-i18n="settings.exportDiagnostics">Export diagnostics…</button></div>
             <p class="muted setting-note" id="diagnostics-result" role="status"></p>
           </fieldset>
+          <p class="muted setting-note" id="app-version"></p>
         </div>
       </section>
-      <div class="now-playing" id="now-playing" hidden>
-        <div class="np-text">
-          <p class="np-title" id="np-title" dir="auto"></p>
-          <p class="np-artist muted" id="np-artist" dir="auto"></p>
-        </div>
-        <div class="np-controls">
-          <button class="icon-btn rate-btn" id="np-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>
-          </button>
-          <button class="icon-btn np-btn" id="np-prev" type="button" aria-label="Previous song" data-i18n-attr="aria-label:player.prev">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg>
-          </button>
-          <button class="np-play" id="np-play" type="button" aria-label="Pause" data-i18n-attr="aria-label:player.pause">
-            <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
-            <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg>
-          </button>
-          <button class="icon-btn np-btn" id="np-next" type="button" aria-label="Next song" data-i18n-attr="aria-label:player.next">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg>
-          </button>
-          <button class="icon-btn rate-btn" id="np-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>
-          </button>
-        </div>
-        <div class="np-progress">
-          <span class="muted np-time" id="np-elapsed">0:00</span>
-          <div class="np-bar" id="np-bar" role="slider" aria-label="Position" tabindex="0" data-i18n-attr="aria-label:player.position"><div class="np-fill" id="np-fill"></div></div>
-          <span class="muted np-time" id="np-duration"></span>
-        </div>
-        <div class="np-right">
-          <button class="eq-toggle" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path"
-            data-i18n="output.open" data-i18n-attr="title:output.openTitle">Output</button>
-          <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel" data-i18n="eq.open">EQ</button>
-          <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume" data-i18n-attr="aria-label:player.volume">
-        </div>
-      </div>
-      <section class="eq-panel" id="eq-panel" aria-label="Equalizer" data-i18n-attr="aria-label:eq.title" hidden>
-        <div class="eq-head">
-          <strong data-i18n="eq.title">Equalizer</strong>
-          <label class="eq-switch"><input type="checkbox" id="eq-enabled"><span data-i18n="eq.on">On</span></label>
-          <select id="eq-preset" aria-label="Preset" data-i18n-attr="aria-label:eq.preset"></select>
-          <button class="eq-btn" id="eq-save-open" type="button" data-i18n="eq.saveAs">Save as…</button>
-          <span class="eq-save" id="eq-save-row" hidden>
-            <input id="eq-save-name" type="text" maxlength="40" placeholder="My preset" aria-label="Preset name" data-i18n-attr="placeholder:eq.presetPlaceholder;aria-label:eq.presetName">
-            <button class="eq-btn" id="eq-save" type="button" data-i18n="eq.save">Save</button>
-          </span>
-          <button class="eq-btn" id="eq-delete" type="button" hidden data-i18n="eq.deletePreset">Delete preset</button>
-          <span class="eq-error" id="eq-error" role="alert"></span>
-        </div>
-        <div class="eq-sliders" id="eq-sliders"></div>
-        <p class="eq-clip" id="eq-clip" role="status" hidden></p>
-      </section>
-      <section class="eq-panel out-panel" id="out-panel" aria-label="Output" data-i18n-attr="aria-label:output.title" hidden>
-        <div class="eq-head">
-          <strong data-i18n="output.title">Output</strong>
-          <select id="out-device" aria-label="Output device" data-i18n-attr="aria-label:output.device"></select>
-          <span class="eq-error" id="out-error" role="alert"></span>
-        </div>
-        <label class="eq-switch out-exclusive"><input type="checkbox" id="out-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
-        <p class="out-note muted" id="out-exclusive-note" hidden data-i18n="output.exclusiveNote">Miu takes the device for itself: other apps are silent while it plays, and the Windows volume no longer applies — set the level with Miu's volume or on your amplifier.</p>
-        <p class="out-note eq-error" id="out-fallback" role="status" hidden data-i18n="output.fallback">Exclusive mode was refused (another app holds the device, or it takes no matching format), so Miu is playing in shared mode.</p>
-        <dl class="out-info">
-          <dt data-i18n="output.source">Source</dt><dd id="out-source" data-i18n="player.nothing">Nothing playing</dd>
-          <dt data-i18n="output.deviceLabel">Device</dt><dd id="out-device-info"></dd>
-          <dt data-i18n="output.path">Signal path</dt><dd id="out-path"></dd>
-        </dl>
-      </section>
-      <dialog class="editor" id="editor" aria-labelledby="editor-heading">
-        <form method="dialog" id="editor-form">
-          <h2 id="editor-heading"></h2>
-          <div class="editor-fields" id="editor-fields"></div>
-          <details class="editor-tools" id="editor-tools">
-            <summary data-i18n="editor.tools">Bulk tools</summary>
-            <div class="tool-row">
-              <label for="tool-pattern" data-i18n="editor.fromFilename">Fill from file name</label>
-              <input id="tool-pattern" type="text" value="%track% - %artist% - %title%" spellcheck="false" aria-describedby="tool-pattern-help">
-              <button class="eq-btn" id="tool-pattern-go" type="button" data-i18n="editor.apply">Apply</button>
-              <span class="muted tool-help" id="tool-pattern-help" data-i18n="editor.patternHelp">Use %title%, %artist%, %album%, %track% and %year%.</span>
-            </div>
-            <div class="tool-row">
-              <button class="eq-btn" id="tool-number" type="button" data-i18n="editor.autoNumber">Number tracks in list order</button>
-            </div>
-            <div class="tool-row">
-              <label for="tool-find" data-i18n="editor.find">Find</label>
-              <input id="tool-find" type="text">
-              <label for="tool-replace" data-i18n="editor.replace">Replace with</label>
-              <input id="tool-replace" type="text">
-              <select id="tool-find-field" aria-label="Field" data-i18n-attr="aria-label:editor.field"></select>
-              <label class="eq-switch"><input type="checkbox" id="tool-case-sensitive"><span data-i18n="editor.matchCase">Match case</span></label>
-              <button class="eq-btn" id="tool-find-go" type="button" data-i18n="editor.replaceAll">Replace</button>
-            </div>
-            <div class="tool-row">
-              <label for="tool-case" data-i18n="editor.case">Change case</label>
-              <select id="tool-case">
-                <option value="title" data-i18n="editor.caseTitle">Each Word Capitalised</option>
-                <option value="sentence" data-i18n="editor.caseSentence">First word capitalised</option>
-                <option value="upper" data-i18n="editor.caseUpper">UPPER CASE</option>
-                <option value="lower" data-i18n="editor.caseLower">lower case</option>
-              </select>
-              <select id="tool-case-field" aria-label="Field" data-i18n-attr="aria-label:editor.field"></select>
-              <button class="eq-btn" id="tool-case-go" type="button" data-i18n="editor.apply">Apply</button>
-            </div>
-            <p class="eq-error" id="tool-message" role="status"></p>
-          </details>
-          <h3 data-i18n="editor.preview">Preview</h3>
-          <ul class="editor-preview" id="editor-preview"></ul>
-          <p class="eq-error" id="editor-error" role="alert"></p>
-          <div class="editor-actions">
-            <button class="eq-btn" id="editor-cancel" type="button" data-i18n="editor.cancel">Cancel</button>
-            <button class="primary" id="editor-save" type="button" data-i18n="editor.save">Save to files</button>
-          </div>
-        </form>
-      </dialog>
+
       <div class="toast" id="toast" role="status" hidden>
         <span id="toast-text"></span>
         <button class="eq-btn" id="toast-undo" type="button" data-i18n="editor.undo">Undo</button>
       </div>
-      <footer class="status muted">
-        <span id="app-version"></span>
-      </footer>
     </main>
+
+    <aside class="np-column idle" id="now-playing" aria-label="Now playing" data-i18n-attr="aria-label:player.nowPlaying">
+      <div class="np-art">
+        <img id="np-art" alt="" hidden>
+        <div class="np-art-empty" id="np-art-empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+        </div>
+        <div class="np-bar" id="np-bar" role="slider" aria-label="Position" tabindex="0" data-i18n-attr="aria-label:player.position"><div class="np-fill" id="np-fill"></div></div>
+      </div>
+      <div class="np-times"><span id="np-elapsed">0:00</span><span id="np-duration"></span></div>
+      <div class="np-controls">
+        <button class="icon-btn rate-btn" id="np-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+        </button>
+        <button class="icon-btn np-btn" id="np-prev" type="button" aria-label="Previous song" data-i18n-attr="aria-label:player.prev">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 20L9 12l10-8v16z"/><path d="M5 19V5"/></svg>
+        </button>
+        <button class="np-play paused" id="np-play" type="button" aria-label="Play" data-i18n-attr="aria-label:player.play">
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z"/></svg>
+        </button>
+        <button class="icon-btn np-btn" id="np-next" type="button" aria-label="Next song" data-i18n-attr="aria-label:player.next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4l10 8-10 8V4z"/><path d="M19 5v14"/></svg>
+        </button>
+        <button class="icon-btn rate-btn" id="np-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+        </button>
+      </div>
+      <div class="np-text">
+        <p class="np-title" id="np-title" dir="auto" data-i18n="player.nothing">Nothing playing</p>
+        <p class="np-artist" id="np-artist" dir="auto"></p>
+        <p class="np-format muted" id="np-format"></p>
+      </div>
+      <div class="np-tools">
+        <button class="eq-toggle" id="out-open" type="button" aria-expanded="false" aria-controls="out-panel" title="Output device and signal path"
+          data-i18n="output.open" data-i18n-attr="title:output.openTitle">Output</button>
+        <button class="eq-toggle" id="eq-open" type="button" aria-expanded="false" aria-controls="eq-panel" data-i18n="eq.open">EQ</button>
+        <input class="np-volume" id="np-volume" type="range" min="0" max="100" value="100" aria-label="Volume" data-i18n-attr="aria-label:player.volume">
+      </div>
+      <div class="up-next">
+        <span class="stat-label" data-i18n="player.upNext">UP NEXT</span>
+        <ul id="up-next"></ul>
+      </div>
+    </aside>
+
+    <section class="eq-panel" id="eq-panel" aria-label="Equalizer" data-i18n-attr="aria-label:eq.title" hidden>
+      <div class="eq-head">
+        <strong data-i18n="eq.title">Equalizer</strong>
+        <label class="eq-switch"><input type="checkbox" id="eq-enabled"><span data-i18n="eq.on">On</span></label>
+        <select id="eq-preset" aria-label="Preset" data-i18n-attr="aria-label:eq.preset"></select>
+        <button class="eq-btn" id="eq-save-open" type="button" data-i18n="eq.saveAs">Save as…</button>
+        <span class="eq-save" id="eq-save-row" hidden>
+          <input id="eq-save-name" type="text" maxlength="40" placeholder="My preset" aria-label="Preset name" data-i18n-attr="placeholder:eq.presetPlaceholder;aria-label:eq.presetName">
+          <button class="eq-btn" id="eq-save" type="button" data-i18n="eq.save">Save</button>
+        </span>
+        <button class="eq-btn" id="eq-delete" type="button" hidden data-i18n="eq.deletePreset">Delete preset</button>
+        <span class="eq-error" id="eq-error" role="alert"></span>
+      </div>
+      <div class="eq-sliders" id="eq-sliders"></div>
+      <p class="eq-clip" id="eq-clip" role="status" hidden></p>
+    </section>
+    <section class="eq-panel out-panel" id="out-panel" aria-label="Output" data-i18n-attr="aria-label:output.title" hidden>
+      <div class="eq-head">
+        <strong data-i18n="output.title">Output</strong>
+        <select id="out-device" aria-label="Output device" data-i18n-attr="aria-label:output.device"></select>
+        <span class="eq-error" id="out-error" role="alert"></span>
+      </div>
+      <label class="eq-switch out-exclusive"><input type="checkbox" id="out-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
+      <p class="out-note muted" id="out-exclusive-note" hidden data-i18n="output.exclusiveNote">Miu takes the device for itself: other apps are silent while it plays, and the Windows volume no longer applies — set the level with Miu's volume or on your amplifier.</p>
+      <p class="out-note eq-error" id="out-fallback" role="status" hidden data-i18n="output.fallback">Exclusive mode was refused (another app holds the device, or it takes no matching format), so Miu is playing in shared mode.</p>
+      <dl class="out-info">
+        <dt data-i18n="output.source">Source</dt><dd id="out-source" data-i18n="player.nothing">Nothing playing</dd>
+        <dt data-i18n="output.deviceLabel">Device</dt><dd id="out-device-info"></dd>
+        <dt data-i18n="output.path">Signal path</dt><dd id="out-path"></dd>
+      </dl>
+    </section>
+
+    <dialog class="editor" id="editor" aria-labelledby="editor-heading">
+      <form method="dialog" id="editor-form">
+        <h2 id="editor-heading"></h2>
+        <div class="editor-fields" id="editor-fields"></div>
+        <details class="editor-tools" id="editor-tools">
+          <summary data-i18n="editor.tools">Bulk tools</summary>
+          <div class="tool-row">
+            <label for="tool-pattern" data-i18n="editor.fromFilename">Fill from file name</label>
+            <input id="tool-pattern" type="text" value="%track% - %artist% - %title%" spellcheck="false" aria-describedby="tool-pattern-help">
+            <button class="eq-btn" id="tool-pattern-go" type="button" data-i18n="editor.apply">Apply</button>
+            <span class="muted tool-help" id="tool-pattern-help" data-i18n="editor.patternHelp">Use %title%, %artist%, %album%, %track% and %year%.</span>
+          </div>
+          <div class="tool-row">
+            <button class="eq-btn" id="tool-number" type="button" data-i18n="editor.autoNumber">Number tracks in list order</button>
+          </div>
+          <div class="tool-row">
+            <label for="tool-find" data-i18n="editor.find">Find</label>
+            <input id="tool-find" type="text">
+            <label for="tool-replace" data-i18n="editor.replace">Replace with</label>
+            <input id="tool-replace" type="text">
+            <select id="tool-find-field" aria-label="Field" data-i18n-attr="aria-label:editor.field"></select>
+            <label class="eq-switch"><input type="checkbox" id="tool-case-sensitive"><span data-i18n="editor.matchCase">Match case</span></label>
+            <button class="eq-btn" id="tool-find-go" type="button" data-i18n="editor.replaceAll">Replace</button>
+          </div>
+          <div class="tool-row">
+            <label for="tool-case" data-i18n="editor.case">Change case</label>
+            <select id="tool-case">
+              <option value="title" data-i18n="editor.caseTitle">Each Word Capitalised</option>
+              <option value="sentence" data-i18n="editor.caseSentence">First word capitalised</option>
+              <option value="upper" data-i18n="editor.caseUpper">UPPER CASE</option>
+              <option value="lower" data-i18n="editor.caseLower">lower case</option>
+            </select>
+            <select id="tool-case-field" aria-label="Field" data-i18n-attr="aria-label:editor.field"></select>
+            <button class="eq-btn" id="tool-case-go" type="button" data-i18n="editor.apply">Apply</button>
+          </div>
+          <p class="eq-error" id="tool-message" role="status"></p>
+        </details>
+        <h3 data-i18n="editor.preview">Preview</h3>
+        <ul class="editor-preview" id="editor-preview"></ul>
+        <p class="eq-error" id="editor-error" role="alert"></p>
+        <div class="editor-actions">
+          <button class="eq-btn" id="editor-cancel" type="button" data-i18n="editor.cancel">Cancel</button>
+          <button class="primary" id="editor-save" type="button" data-i18n="editor.save">Save to files</button>
+        </div>
+      </form>
+    </dialog>
   </div>
 </body>
 </html>

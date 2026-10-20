@@ -12,17 +12,17 @@
       {
         "label": "main",
         "title": "Miu Music",
-        "width": 1100,
-        "height": 720,
-        "minWidth": 720,
-        "minHeight": 480
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1000,
+        "minHeight": 600
       },
       {
         "label": "mini",
         "url": "mini.html",
         "title": "Miu Music",
-        "width": 340,
-        "height": 176,
+        "width": 380,
+        "height": 200,
         "resizable": false,
         "maximizable": false,
         "visible": false,

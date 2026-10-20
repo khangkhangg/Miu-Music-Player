@@ -140,9 +140,9 @@ pub fn set_ui_language(db: &Db, code: &str) -> std::result::Result<(), String> {
 const THEME: &str = "theme";
 pub const THEMES: [&str; 3] = ["system", "light", "dark"];
 
-/// Light, dark or following Windows (default and fallback: "system").
+/// Light, dark or following Windows (default and fallback: "dark", the redesign's look).
 pub fn theme(db: &Db) -> String {
-    db.setting_json::<String>(THEME).ok().flatten().filter(|s| THEMES.contains(&s.as_str())).unwrap_or_else(|| "system".into())
+    db.setting_json::<String>(THEME).ok().flatten().filter(|s| THEMES.contains(&s.as_str())).unwrap_or_else(|| "dark".into())
 }
 
 /// Every user-facing setting at once, for the settings page (F5.5).
@@ -424,7 +424,7 @@ mod schema_tests {
     fn a_fresh_install_has_these_defaults() {
         let s = all(&Db::open_in_memory().unwrap());
         assert_eq!(s, AppSettings {
-            theme: "system".into(),
+            theme: "dark".into(),
             language: "auto".into(),
             mini_on_minimize: true,
             mini_on_top: true,

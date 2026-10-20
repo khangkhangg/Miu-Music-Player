@@ -1,28 +1,34 @@
+/* Mini player — redesign: cover on the left, title, visualizer and controls on the right. */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
-body { font-family: var(--font); background: var(--surface); color: var(--text); font-size: 13px; overflow: hidden; user-select: none; }
-.mini { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; height: 100%; }
-.mini-top { display: flex; align-items: flex-start; gap: 8px; }
+body { font-family: var(--font); background: var(--sidebar); color: var(--text); font-size: 13px; overflow: hidden; user-select: none; }
+button { font: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mini { display: grid; grid-template-columns: 120px minmax(0, 1fr); height: 100%; }
+.mini-art { background: var(--surface-raised); display: grid; place-items: center; overflow: hidden; }
+.mini-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mini-art-empty { width: 40px; height: 40px; fill: none; stroke: var(--text-muted); stroke-width: 1.2; }
+.mini-side { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 8px 14px; min-width: 0; }
+.mini-top { display: flex; align-items: flex-start; gap: 4px; }
 .mini-text { flex: 1; min-width: 0; }
 .mini-text p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-title { font-weight: 600; }
-.mini-artist { color: var(--text-muted); font-size: 12px; }
-.mini-bar { height: 4px; border-radius: 2px; background: var(--surface-muted); cursor: pointer; }
-.mini-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.mini-fill { height: 100%; width: 0; border-radius: 2px; background: var(--text-muted); }
-.mini-controls { display: flex; align-items: center; justify-content: space-between; }
-.mini-transport { display: flex; align-items: center; gap: 4px; }
-.icon-btn { font: inherit; background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: 6px; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; }
+.mini-title { font-weight: 500; font-size: 14px; }
+.mini-artist { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent-ink); }
+.icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: var(--radius); width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
 .icon-btn:hover { background: var(--surface-muted); color: var(--text); }
-.icon-btn:focus-visible, .mini-play:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.icon-btn svg, .mini-play svg { width: 14px; height: 14px; fill: currentColor; }
-.rate.on[data-act="like"] { color: var(--success); }
+.icon-btn svg { width: 14px; height: 14px; fill: currentColor; }
+.icon-btn svg.stroke { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.pin.on { color: var(--accent-ink); }
+.rate.on[data-act="like"] { color: var(--accent-ink); }
 .rate.on[data-act="dislike"] { color: var(--danger); }
-.mini-play { width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--text); color: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.mini-viz { width: 100%; height: 44px; display: block; cursor: pointer; flex: none; }
+.viz-off { font-size: 11px; color: var(--text-muted); background: none; border: 1px dashed var(--border); height: 44px; cursor: pointer; flex: none; }
+.viz-off:hover { color: var(--text); }
+.mini-bar { height: 3px; background: var(--surface-muted); cursor: pointer; flex: none; }
+.mini-fill { height: 100%; width: 0; background: var(--accent); }
+.mini-controls { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
+.mini-play { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; }
+.mini-play svg { width: 15px; height: 15px; fill: currentColor; }
 .mini-play .i-play, .mini-play.paused .i-pause { display: none; }
 .mini-play.paused .i-play { display: block; }
-.pin.on { color: var(--accent); }
-.mini-viz { width: 100%; height: 40px; display: block; cursor: pointer; }
-.mini-viz[hidden], .viz-off[hidden] { display: none; }
-.viz-off { font: inherit; font-size: 11px; color: var(--text-muted); background: none; border: 1px dashed var(--border); border-radius: var(--radius); height: 40px; cursor: pointer; }
-.viz-off:hover { color: var(--text); }

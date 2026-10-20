@@ -16,11 +16,13 @@ import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
+import { groupAlbums, groupArtists, upNext, libraryStats, splitTitle } from './library.js';
+import { formatDuration } from './songs.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
 } from './editor.js';
 
-const ROW_HEIGHT = 36;
+const ROW_HEIGHT = 46;
 let songs = [];
 let rawSongs = [];
 let shown = []; // rawSongs after the rating filter, in display order
@@ -32,7 +34,7 @@ let selection = { selected: new Set(), anchor: null };
 let playerState = null;
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
-let preference = 'system'; // the theme setting (F5.5)
+let preference = 'dark'; // the theme setting (F5.5); dark until the setting loads
 
 function applyTheme() {
   document.documentElement.dataset.theme = resolveTheme(preference, media.matches);
@@ -65,7 +67,7 @@ if (invoke) {
 
   scroller.addEventListener('dblclick', e => {
     const row = e.target.closest('.song-row');
-    if (row && !e.target.closest('button')) invoke('play_songs', { ids: shown.map(s => s.id), start: Number(row.dataset.index) });
+    if (row && !e.target.closest('button')) playList(shown.map(s => s.id), Number(row.dataset.index));
   });
   scroller.addEventListener('click', e => {
     const btn = e.target.closest('button[data-act]');
@@ -144,6 +146,9 @@ function loadSongs() {
     rawSongs = sortSongs(list, SORT_LOCALE);
     songsById = new Map(list.map(s => [s.id, s]));
     refreshList();
+    renderStats();
+    renderLibraryViews();
+    renderUpNext();
   });
 }
 
@@ -231,15 +236,24 @@ function showPlayer(event) {
   const songChanged = event?.songId !== playerState?.songId;
   playerState = event;
   const np = nowPlaying(event, songsById);
-  const bar = document.getElementById('now-playing');
-  bar.hidden = !np;
+  document.getElementById('now-playing').classList.toggle('idle', !np);
   if (songChanged) {
     renderSongs();
     updateRateButtons();
+    renderNowArt();
+    renderUpNext();
+    markCurrentTrack();
   }
-  if (!np) return;
-  document.getElementById('np-title').textContent = np.title;
-  document.getElementById('np-artist').textContent = np.artist;
+  const song = songsById.get(event?.songId);
+  document.getElementById('np-title').textContent = np ? np.title : t('player.nothing');
+  document.getElementById('np-artist').textContent = np ? np.artist : '';
+  document.getElementById('np-format').textContent = np && event.source ? sourceLabel(song?.format, event.source) : '';
+  if (!np) {
+    document.getElementById('np-fill').style.width = '0%';
+    document.getElementById('np-play').classList.add('paused');
+    renderOutputInfo();
+    return;
+  }
   document.getElementById('np-elapsed').textContent = np.elapsed;
   document.getElementById('np-duration').textContent = np.duration;
   document.getElementById('np-fill').style.width = `${np.progress * 100}%`;
@@ -249,10 +263,11 @@ function showPlayer(event) {
   renderOutputInfo();
 }
 
-const THUMB_UP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>';
-const THUMB_DOWN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>';
-
-const TRASH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h6v1h3v1.5H2V3h3zM3.5 6h9l-.8 8H4.3z"/></svg>';
+const THUMB_UP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
+const THUMB_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>';
+const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/></svg>';
+const NOTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>';
+const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>';
 
 function rateCell(rating, withDelete) {
   const span = document.createElement('span');
@@ -305,7 +320,10 @@ function renderSongs() {
     row.style.top = `${i * ROW_HEIGHT}px`;
     row.title = shown[i].path; // where the file is: tells copies apart
     if (selection.selected.has(s.id)) row.classList.add('selected');
-    row.append(cell(s.title, 'song-title'), cell(s.artist, 'muted'), cell(s.album, 'muted'), cell(s.quality, 'muted quality'), cell(s.duration, 'num muted'), rateCell(shown[i].rating, activeFilter === 'disliked'));
+    const main = document.createElement('span');
+    main.className = 'song-main';
+    main.append(cell(s.title, 'song-title'), cell(s.artist, 'song-artist'));
+    row.append(thumb(shown[i], 'song-thumb', 68), main, cell(s.album, 'album'), cell(s.quality, 'quality'), cell(s.duration, 'num'), rateCell(shown[i].rating, activeFilter === 'disliked'));
     rows.push(row);
   }
   spacer.replaceChildren(...rows);
@@ -668,7 +686,10 @@ function setupEditor() {
 }
 
 async function openEditor() {
-  const songs = selectedSongs();
+  return openEditorFor(selectedSongs());
+}
+
+async function openEditorFor(songs) {
   if (!songs.length) return;
   editing = await invoke('song_tags', { ids: songs.map(x => x.id) });
   const order = new Map(songs.map((x, i) => [x.id, i]));
@@ -770,11 +791,16 @@ let hasSongs = false;
 function showView(name) {
   view = name;
   const $ = id => document.getElementById(id);
+  const library = ['songs', 'albums', 'artists', 'page'].includes(name);
   $('settings-view').hidden = name !== 'settings';
+  $('empty-state').hidden = !library || hasSongs;
   $('song-view').hidden = name !== 'songs' || !hasSongs;
-  $('empty-state').hidden = name !== 'songs' || hasSongs;
-  $('nav-songs').classList.toggle('active', name === 'songs');
-  $('nav-settings').classList.toggle('active', name === 'settings');
+  $('albums-view').hidden = !['albums', 'artists'].includes(name) || !hasSongs;
+  $('album-page').hidden = name !== 'page' || !hasSongs;
+  const navOn = name === 'songs' ? { all: 'nav-songs', liked: 'nav-liked', disliked: 'nav-disliked' }[activeFilter] ?? 'nav-songs'
+    : name === 'page' ? (page?.kind === 'artist' ? 'nav-artists' : 'nav-albums') : `nav-${name}`;
+  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', id === navOn);
+  if (name === 'albums' || name === 'artists') renderTiles();
 }
 
 function showSettings(s) {
@@ -795,8 +821,24 @@ function setupSettings(languageSetting) {
   const $ = id => document.getElementById(id);
   $('language').value = languageSetting;
   $('language').addEventListener('change', () => invoke('set_ui_language', { language: $('language').value }));
-  $('nav-songs').addEventListener('click', e => { e.preventDefault(); showView('songs'); });
-  $('nav-settings').addEventListener('click', e => { e.preventDefault(); showView('settings'); });
+  const go = (id, fn) => $(id).addEventListener('click', e => { e.preventDefault(); fn(); });
+  const songsWith = filter => () => { activeFilter = filter; refreshList(); showView('songs'); };
+  go('nav-songs', songsWith('all'));
+  go('nav-liked', songsWith('liked'));
+  go('nav-disliked', songsWith('disliked'));
+  go('nav-albums', () => showView('albums'));
+  go('nav-artists', () => showView('artists'));
+  go('nav-settings', () => showView('settings'));
+  $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));
+  $('album-play').addEventListener('click', () => { if (page) playList(page.songs.map(x => x.id), 0); });
+  $('album-edit').addEventListener('click', () => {
+    if (!page) return;
+    selection = { selected: new Set(page.songs.map(x => x.id)), anchor: null };
+    openEditorFor(page.songs);
+  });
+  const playTrack = li => { if (li && page) playList(page.songs.map(x => x.id), Number(li.dataset.index)); };
+  $('track-list').addEventListener('click', e => { if (e.target.closest('.track-play')) playTrack(e.target.closest('.track')); });
+  $('track-list').addEventListener('dblclick', e => { if (!e.target.closest('button')) playTrack(e.target.closest('.track')); });
   const reload = () => invoke('app_settings').then(showSettings);
   $('set-theme').addEventListener('change', () => invoke('set_app_setting', { name: 'theme', value: $('set-theme').value }).then(showSettings));
   const conversion = () => invoke('set_app_setting', { name: 'conversion', value: { lossless: $('set-lossless').value, hiRes: $('set-hires').value } })
@@ -846,3 +888,185 @@ function renderWizard() {
   for (const step of w.steps) box.querySelector(`[data-step="${step.id}"]`).dataset.state = step.state;
   document.getElementById('wizard-phone-body').textContent = t(w.hint === 'trust' ? 'device.trust' : 'wizard.phoneBody');
 }
+
+// ---- Redesign: art, stats, albums and artists, album page, up next ----
+let queueIds = []; // what play_songs was last given, to show what comes next
+let page = null; // the album or artist page on show: { kind, title, artist, songs, coverId, year }
+
+function playList(ids, start) {
+  queueIds = ids;
+  invoke('play_songs', { ids, start });
+}
+
+/** Cover thumbnail address for a song (served by the miuart: protocol, cached on disk). */
+function artUrl(id, size) {
+  return window.__TAURI__.core.convertFileSrc(`${id}-${size}`, 'miuart');
+}
+
+/** A box with the song's cover, or a note icon when it has none (or it fails to load). */
+function thumb(song, cls, size) {
+  const box = document.createElement('span');
+  box.className = cls;
+  const placeholder = () => { box.innerHTML = NOTE; }; // constant markup
+  if (song?.hasArtwork) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = artUrl(song.id, size);
+    img.addEventListener('error', placeholder, { once: true });
+    box.append(img);
+  } else {
+    placeholder();
+  }
+  return box;
+}
+
+function renderStats() {
+  const st = libraryStats(rawSongs);
+  const fmt = new Intl.NumberFormat();
+  document.getElementById('stat-songs').textContent = fmt.format(st.songs);
+  document.getElementById('stat-liked').textContent = fmt.format(st.liked);
+}
+
+function renderLibraryViews() {
+  if (view === 'albums' || view === 'artists') renderTiles();
+  if (view === 'page' && page) {
+    // Keep the page in step with edits and rescans.
+    const fresh = (page.kind === 'artist' ? groupArtists(rawSongs, SORT_LOCALE).find(a => a.name === page.title)
+      : groupAlbums(rawSongs, SORT_LOCALE).find(a => a.key === page.key));
+    if (fresh) openPage(page.kind, fresh, false);
+  }
+}
+
+/** Album or artist tiles: cover · info, then info · cover on the next row (like the mockup). */
+function renderTiles() {
+  const artists = view === 'artists';
+  const items = artists ? groupArtists(rawSongs, SORT_LOCALE) : groupAlbums(rawSongs, SORT_LOCALE);
+  document.getElementById('grid-heading').textContent = t(artists ? 'nav.artists' : 'nav.albums');
+  document.getElementById('grid-summary').textContent = t(artists ? 'library.artists' : 'library.albums', { n: items.length });
+  const box = document.getElementById('tiles');
+  const cols = Math.max(2, Math.floor(box.clientWidth / 170 / 2) * 2) || 4;
+  box.style.setProperty('--tile-cols', cols);
+  const cells = [];
+  items.forEach((item, i) => {
+    const row = Math.floor((i * 2) / cols);
+    const open = () => openPage(artists ? 'artist' : 'album', item);
+    const name = artists ? item.name : item.title;
+    const cover = document.createElement('button');
+    cover.type = 'button';
+    cover.className = 'tile tile-cover';
+    cover.setAttribute('aria-label', artists ? name : `${name} — ${item.artist}`);
+    cover.addEventListener('click', open);
+    cover.append(thumb(item.coverId != null ? { id: item.coverId, hasArtwork: true } : null, 'tile-art', 320));
+    const info = document.createElement('button');
+    info.type = 'button';
+    info.className = 'tile tile-info';
+    info.addEventListener('click', open);
+    const [l1, l2] = splitTitle(name);
+    const sub = artists ? '' : item.artist;
+    const stat = (label, value) => {
+      const span = document.createElement('span');
+      const small = document.createElement('small');
+      small.className = 'stat-label';
+      small.textContent = label;
+      const b = document.createElement('b');
+      b.textContent = value ?? '–';
+      span.append(small, b);
+      return span;
+    };
+    const stats = document.createElement('span');
+    stats.className = 'tile-stats';
+    stats.append(stat(t('tile.songs'), item.count), artists ? stat(t('tile.albums'), item.albums) : stat(t('tile.year'), item.year));
+    info.append(cell(l1, 'tile-line1'), cell(l2, 'tile-line2'), cell(sub, 'tile-sub'), stats);
+    cells.push(...(row % 2 === 0 ? [cover, info] : [info, cover]));
+  });
+  box.replaceChildren(...cells);
+}
+
+function openPage(kind, item, scroll = true) {
+  const artist = kind === 'artist';
+  page = { kind, key: item.key, title: artist ? item.name : item.title, artist: artist ? '' : item.artist, songs: item.songs, coverId: item.coverId, year: item.year };
+  const $ = id => document.getElementById(id);
+  const [l1, l2] = splitTitle(page.title);
+  $('hero-line1').textContent = l1;
+  $('hero-line2').textContent = l2;
+  $('hero-artist').textContent = page.artist;
+  $('hero-kicker').textContent = artist ? t('page.artist') : (page.year ? t('page.albumYear', { year: page.year }) : t('page.album'));
+  $('album-back-label').textContent = t(artist ? 'nav.artists' : 'nav.albums');
+  const cover = $('hero-cover');
+  cover.replaceChildren(thumb(page.coverId != null ? { id: page.coverId, hasArtwork: true } : null, 'hero-art', 320));
+  const bg = $('hero-bg');
+  bg.hidden = page.coverId == null;
+  if (page.coverId != null) bg.src = artUrl(page.coverId, 160);
+  const total = page.songs.reduce((sum, x) => sum + (x.durationMs ?? 0), 0);
+  const liked = page.songs.filter(x => x.rating === 1).length;
+  $('album-facts').textContent = t('page.facts', { songs: t('count.songs', { n: page.songs.length }), time: formatDuration(total), liked });
+  $('track-list').replaceChildren(...page.songs.map((x, i) => {
+    const li = document.createElement('li');
+    li.className = 'track';
+    li.dataset.index = i;
+    li.dataset.id = x.id;
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'track-play';
+    play.setAttribute('aria-label', t('page.play', { title: x.title }));
+    play.innerHTML = PLAY; // constant markup
+    const name = document.createElement('span');
+    name.className = 'track-name';
+    name.dir = 'auto';
+    const title = document.createElement('span');
+    title.textContent = x.title;
+    const sep = document.createElement('span');
+    sep.className = 'track-sep';
+    sep.textContent = ' — ';
+    const who = document.createElement('span');
+    who.className = 'track-artist';
+    who.textContent = x.artist || t('song.unknownArtist');
+    name.append(title, sep, who);
+    const row = songRow(x);
+    li.append(play, name, cell(row.quality, 'track-format'), rateCell(x.rating, false), cell(row.duration, 'track-time'));
+    return li;
+  }));
+  markCurrentTrack();
+  showView('page');
+  if (scroll) $('album-page').scrollTop = 0;
+}
+
+function markCurrentTrack() {
+  for (const li of document.querySelectorAll('#track-list .track')) li.classList.toggle('current', Number(li.dataset.id) === playerState?.songId);
+}
+
+function renderNowArt() {
+  const song = songsById.get(playerState?.songId);
+  const img = document.getElementById('np-art');
+  const empty = document.getElementById('np-art-empty');
+  const has = Boolean(song?.hasArtwork);
+  img.hidden = !has;
+  empty.hidden = has;
+  if (has) {
+    img.onerror = () => { img.hidden = true; empty.hidden = false; };
+    img.src = artUrl(song.id, 640);
+  }
+}
+
+function renderUpNext() {
+  const list = upNext(queueIds, playerState?.songId, songsById, 4);
+  document.getElementById('up-next').replaceChildren(...list.map(x => {
+    const li = document.createElement('li');
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.append(cell(x.title), cell(x.artist || t('song.unknownArtist')));
+    li.append(thumb(x, 'thumb', 72), text, cell(formatDuration(x.durationMs), 'time'));
+    return li;
+  }));
+  document.querySelector('.up-next').hidden = list.length === 0;
+}
+
+// Ratings change in place on the album page too.
+document.getElementById('track-list')?.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  e.stopPropagation();
+  rate(Number(btn.closest('.track').dataset.id), btn.dataset.act);
+}, true);
+window.addEventListener('resize', () => { if (view === 'albums' || view === 'artists') renderTiles(); });

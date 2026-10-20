@@ -1,44 +1,58 @@
+/* Redesign (2026-10-20): charcoal panels or warm paper, one yellow accent. Fills use --accent;
+   text in the accent colour uses --accent-ink, which stays readable on light surfaces. */
 :root {
-  --font: "Segoe UI Variable", "Segoe UI", system-ui, "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Leelawadee UI", sans-serif;
-  --radius: 8px;
-  --radius-card: 12px;
+  --font: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", "Leelawadee UI", sans-serif;
+  --radius: 6px;
+  --radius-card: 10px;
   --space: 8px;
-  --bg: #f6f6f4;
-  --surface: #ffffff;
-  --surface-muted: #efeeea;
-  --text: #1c1c1a;
-  --text-muted: #6b6a65;
+  --bg: #dcdad4;
+  --sidebar: #f6f5f2;
+  --surface: #ecebe7;
+  --surface-raised: #ffffff;
+  --surface-muted: #e2e0da;
+  --text: #1e1e24;
+  --text-muted: #5f5f6b;
   --border: rgba(0, 0, 0, 0.1);
-  --accent: #3b6fd8;
-  --on-accent: #ffffff;
+  --accent: #f2c12e;
+  --accent-ink: #7a5400;
+  --on-accent: #1c1c22;
   --success: #2f7a3a;
   --danger: #b3362f;
+  --shadow: 0 8px 20px rgba(60, 50, 20, 0.16);
 }
 
 :root[data-theme="dark"] {
-  --bg: #1a1a19;
-  --surface: #242423;
-  --surface-muted: #2e2e2c;
-  --text: #ecebe6;
-  --text-muted: #a3a29c;
-  --border: rgba(255, 255, 255, 0.12);
-  --accent: #6e98ec;
-  --on-accent: #0f1a2e;
+  --bg: #1c1c22;
+  --sidebar: #24242c;
+  --surface: #2a2a33;
+  --surface-raised: #33333d;
+  --surface-muted: #3b3b46;
+  --text: #f1f1f4;
+  --text-muted: #a9a9b7;
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #f2c12e;
+  --accent-ink: #f2c12e;
+  --on-accent: #1c1c22;
   --success: #74c27f;
-  --danger: #ec8a83;
+  --danger: #ff8a7a;
+  --shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #1a1a19;
-    --surface: #242423;
-    --surface-muted: #2e2e2c;
-    --text: #ecebe6;
-    --text-muted: #a3a29c;
-    --border: rgba(255, 255, 255, 0.12);
-    --accent: #6e98ec;
-    --on-accent: #0f1a2e;
+    --bg: #1c1c22;
+    --sidebar: #24242c;
+    --surface: #2a2a33;
+    --surface-raised: #33333d;
+    --surface-muted: #3b3b46;
+    --text: #f1f1f4;
+    --text-muted: #a9a9b7;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #f2c12e;
+    --accent-ink: #f2c12e;
+    --on-accent: #1c1c22;
     --success: #74c27f;
-    --danger: #ec8a83;
+    --danger: #ff8a7a;
+    --shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   }
 }

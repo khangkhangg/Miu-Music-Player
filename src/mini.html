@@ -10,40 +10,44 @@
 </head>
 <body>
   <div class="mini">
-    <div class="mini-top">
-      <div class="mini-text">
-        <p class="mini-title" id="mini-title" dir="auto" data-i18n="player.nothing">Nothing playing</p>
-        <p class="mini-artist" id="mini-artist" dir="auto" data-i18n="mini.hint">Double-click a song in Miu Music</p>
-      </div>
-      <button class="icon-btn pin" id="mini-pin" type="button" aria-pressed="true" aria-label="Stop keeping on top" title="Stop keeping on top" data-i18n-attr="aria-label:mini.pinOn;title:mini.pinOn">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1h4v1.5l-.7.5v4l2.2 2.5V11H8.75v4h-1.5v-4H4.5V9.5L6.7 7V3L6 2.5z"/></svg>
-      </button>
-      <button class="icon-btn" id="mini-open" type="button" aria-label="Open the full window" title="Open the full window" data-i18n-attr="aria-label:mini.openFull;title:mini.openFull">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5h-1.5V4.6L8.6 8.5 7.5 7.4l3.9-3.9H9zM2 4h5v1.5H3.5v7h7V9H12v5H2z"/></svg>
-      </button>
+    <div class="mini-art">
+      <img id="mini-art" alt="" hidden>
+      <svg class="mini-art-empty" id="mini-art-empty" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
     </div>
-    <canvas class="mini-viz" id="mini-viz" title="Click to change the visualizer style" aria-hidden="true" data-i18n-attr="title:mini.vizStyle"></canvas>
-    <button class="viz-off" id="viz-off" type="button" hidden data-i18n="mini.showViz">Show visualizer</button>
-    <div class="mini-bar" id="mini-bar" role="slider" aria-label="Position" tabindex="0" data-i18n-attr="aria-label:player.position"><div class="mini-fill" id="mini-fill"></div></div>
-    <div class="mini-controls">
-      <button class="icon-btn rate" id="mini-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h3v7H2zM6 9V3.5L7.5 2H13l1.5 5.5V9H10l.8 3.2L9.5 14 6 9z"/></svg>
-      </button>
-      <div class="mini-transport">
+    <div class="mini-side">
+      <div class="mini-top">
+        <div class="mini-text">
+          <p class="mini-title" id="mini-title" dir="auto" data-i18n="player.nothing">Nothing playing</p>
+          <p class="mini-artist" id="mini-artist" dir="auto" data-i18n="mini.hint">Double-click a song in Miu Music</p>
+        </div>
+        <button class="icon-btn pin" id="mini-pin" type="button" aria-pressed="true" aria-label="Stop keeping on top" title="Stop keeping on top" data-i18n-attr="aria-label:mini.pinOn;title:mini.pinOn">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1h4v1.5l-.7.5v4l2.2 2.5V11H8.75v4h-1.5v-4H4.5V9.5L6.7 7V3L6 2.5z"/></svg>
+        </button>
+        <button class="icon-btn" id="mini-open" type="button" aria-label="Open the full window" title="Open the full window" data-i18n-attr="aria-label:mini.openFull;title:mini.openFull">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5h-1.5V4.6L8.6 8.5 7.5 7.4l3.9-3.9H9zM2 4h5v1.5H3.5v7h7V9H12v5H2z"/></svg>
+        </button>
+      </div>
+      <canvas class="mini-viz" id="mini-viz" title="Click to change the visualizer style" aria-hidden="true" data-i18n-attr="title:mini.vizStyle"></canvas>
+      <button class="viz-off" id="viz-off" type="button" hidden data-i18n="mini.showViz">Show visualizer</button>
+      <div class="mini-bar" id="mini-bar" role="slider" aria-label="Position" tabindex="0" data-i18n-attr="aria-label:player.position"><div class="mini-fill" id="mini-fill"></div></div>
+      <div class="mini-controls">
+        <button class="icon-btn rate" id="mini-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip">
+          <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+        </button>
         <button class="icon-btn" id="mini-prev" type="button" aria-label="Previous song" data-i18n-attr="aria-label:player.prev">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg>
+          <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 20L9 12l10-8v16z"/><path d="M5 19V5"/></svg>
         </button>
         <button class="mini-play paused" id="mini-play" type="button" aria-label="Play" data-i18n-attr="aria-label:player.play">
-          <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
-          <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z"/></svg>
         </button>
         <button class="icon-btn" id="mini-next" type="button" aria-label="Next song" data-i18n-attr="aria-label:player.next">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg>
+          <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4l10 8-10 8V4z"/><path d="M19 5v14"/></svg>
+        </button>
+        <button class="icon-btn rate" id="mini-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like">
+          <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
         </button>
       </div>
-      <button class="icon-btn rate" id="mini-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 7h3v7H2zM6 7v5.5L7.5 14H13l1.5-5.5V7H10l.8-3.2L9.5 2 6 7z"/></svg>
-      </button>
     </div>
   </div>
 </body>
