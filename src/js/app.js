@@ -11,6 +11,8 @@ import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 import { t, startInLanguage } from './i18n.js';
+import { planSummary } from './sync.js';
+import { formatBytes } from './device.js';
 import { select } from './selection.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
@@ -54,6 +56,7 @@ if (invoke) {
   window.__TAURI__.event.listen('library-changed', e => {
     showFolders(e.payload);
     loadSongs();
+    showSyncPreview();
   });
   const scroller = document.getElementById('song-scroll');
   scroller.addEventListener('scroll', () => requestAnimationFrame(renderSongs), { passive: true });
@@ -93,7 +96,7 @@ if (invoke) {
     });
   }
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
-  window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); });
+  window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); showSyncPreview(); });
   document.getElementById('np-play').addEventListener('click', () =>
     invoke(playerState?.playing ? 'player_pause' : 'player_resume'));
   document.getElementById('np-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));
@@ -382,6 +385,24 @@ function showDevices(devices) {
     storage.querySelector('.storage-used').style.width = `${card.storage.usedPercent}%`;
     storage.querySelector('.storage-label').textContent = card.storage.label;
   }
+  lastDevices = devices;
+  showSyncPreview();
+}
+
+// ---- Sync preview (F5.3): what a sync would change on the connected phone ----
+let lastDevices = [];
+
+function showSyncPreview() {
+  const box = document.getElementById('sync-box');
+  const phone = (lastDevices ?? []).find(d => d.trusted && d.udid);
+  box.hidden = !phone;
+  if (!phone) return;
+  invoke('sync_preview', { udid: phone.udid, freeBytes: phone.info?.freeBytes ?? null }).then(p => {
+    document.getElementById('sync-plan').textContent = planSummary(p.plan);
+    const short = document.getElementById('sync-shortage');
+    short.hidden = !p.shortage;
+    if (p.shortage) short.textContent = t('sync.noSpace', { need: formatBytes(p.shortage.need), available: formatBytes(p.shortage.available) });
+  }).catch(() => { box.hidden = true; });
 }
 
 function showPrereqNotice(report) {

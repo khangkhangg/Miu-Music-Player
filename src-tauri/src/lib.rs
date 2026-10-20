@@ -98,6 +98,7 @@ pub fn run() {
             library::service::song_tags,
             library::service::save_edits,
             library::service::undo_edit,
+            sync::service::sync_preview,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

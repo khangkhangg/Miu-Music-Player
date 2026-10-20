@@ -172,5 +172,15 @@
   "editor.saved.other": "Saved {n} songs.",
   "editor.failed": "{n} could not be saved: {reasons}",
   "editor.undo": "Undo",
-  "editor.undone": "Tags put back."
+  "editor.undone": "Tags put back.",
+  "sync.add": "+{n} add",
+  "sync.remove": "{n} remove",
+  "sync.replace": "{n} replace",
+  "sync.update": "{n} update",
+  "sync.upToDate": "Up to date",
+  "sync.etaSeconds": "About {n} s left",
+  "sync.etaMinutes": "About {n} min left",
+  "sync.button": "Sync",
+  "sync.unavailable": "Sending songs to the Music app is not working yet: Apple’s authorisation step (Grappa) is still unsolved. The plan above shows what would change.",
+  "sync.noSpace": "Not enough space on the iPhone: needs {need}, {available} available."
 }

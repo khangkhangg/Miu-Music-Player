@@ -133,6 +133,12 @@ button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .toast { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; background: var(--text); color: var(--surface); padding: 8px 14px; border-radius: var(--radius); font-size: 13px; z-index: 10; }
 .toast[hidden], #edit-tags[hidden] { display: none; }
 .toast .eq-btn { color: var(--surface); border-color: currentColor; }
+.sync-box { margin-top: 8px; font-size: 12px; }
+.sync-box[hidden], .sync-shortage[hidden] { display: none; }
+.sync-plan { margin: 0 0 6px; }
+.sync-shortage { margin: 0 0 6px; color: var(--danger); }
+.sync-btn { width: 100%; }
+.sync-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .disliked-banner { display: flex; align-items: center; gap: 12px; margin: 0 20px 10px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--danger); background: var(--surface-muted); font-size: 12px; }
 .disliked-banner[hidden], .delete-result[hidden] { display: none; }
 .disliked-banner p { margin: 0; flex: 1; line-height: 1.5; }

@@ -172,5 +172,15 @@
   "editor.saved.other": "Đã lưu {n} bài hát.",
   "editor.failed": "{n} bài không lưu được: {reasons}",
   "editor.undo": "Hoàn tác",
-  "editor.undone": "Đã khôi phục thẻ cũ."
+  "editor.undone": "Đã khôi phục thẻ cũ.",
+  "sync.add": "+{n} thêm",
+  "sync.remove": "{n} xóa",
+  "sync.replace": "{n} thay",
+  "sync.update": "{n} cập nhật",
+  "sync.upToDate": "Đã đồng bộ",
+  "sync.etaSeconds": "Còn khoảng {n} giây",
+  "sync.etaMinutes": "Còn khoảng {n} phút",
+  "sync.button": "Đồng bộ",
+  "sync.unavailable": "Chưa gửi được bài hát sang ứng dụng Nhạc: bước xác thực của Apple (Grappa) vẫn chưa giải quyết được. Kế hoạch ở trên cho biết những gì sẽ thay đổi.",
+  "sync.noSpace": "iPhone không đủ dung lượng: cần {need}, còn {available}."
 }
