@@ -31,6 +31,7 @@
         <a class="nav-item" id="nav-albums" href="#" data-i18n="nav.albums">Albums</a>
         <a class="nav-item" id="nav-artists" href="#" data-i18n="nav.artists">Artists</a>
         <a class="nav-item" id="nav-podcasts" href="#" data-i18n="nav.podcasts">Podcasts</a>
+        <a class="nav-item" id="nav-audiobooks" href="#" data-i18n="nav.audiobooks">Audiobooks</a>
         <a class="nav-item" id="nav-liked" href="#" data-i18n="filters.liked">Liked</a>
         <a class="nav-item" id="nav-disliked" href="#" data-i18n="filters.disliked">Disliked</a>
         <a class="nav-item" id="nav-settings" href="#" data-i18n="nav.settings">Settings</a>
@@ -268,6 +269,66 @@
           <span class="muted" id="show-facts"></span>
         </div>
         <ol class="track-list" id="episode-list"></ol>
+      </section>
+
+      <section class="grid-view" id="books-view" hidden>
+        <header class="view-header">
+          <h1 data-i18n="nav.audiobooks">Audiobooks</h1>
+          <span class="muted" id="books-summary"></span>
+          <div class="seg" role="tablist" aria-label="Audiobooks" data-i18n-attr="aria-label:nav.audiobooks">
+            <button type="button" role="tab" class="seg-btn active" id="tab-books-mine" aria-selected="true" data-i18n="book.tabMine">Your books</button>
+            <button type="button" role="tab" class="seg-btn" id="tab-books-find" aria-selected="false" data-i18n="book.tabFind">Find on LibriVox</button>
+          </div>
+        </header>
+        <div class="discover" id="book-find" hidden>
+          <div class="discover-bar">
+            <label class="setting book-language"><span data-i18n="book.language">Language</span>
+              <select id="book-language"></select></label>
+            <form class="discover-search" id="book-search">
+              <label class="search-box">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input class="search" id="book-term" type="search" placeholder="Search LibriVox by title or author" aria-label="Search LibriVox by title or author" dir="auto"
+                  data-i18n-attr="placeholder:book.search;aria-label:book.search">
+              </label>
+            </form>
+          </div>
+          <p class="muted discover-status" id="book-status" role="status"></p>
+          <div class="tile-scroll"><div class="tiles" id="book-found-tiles"></div></div>
+          <p class="muted book-about" data-i18n="book.about">Free public-domain audiobooks from LibriVox, read by volunteers.</p>
+        </div>
+        <div class="mine" id="book-mine">
+          <p class="eq-error podcast-error" id="book-error" role="alert"></p>
+          <p class="muted podcast-empty" id="book-empty" data-i18n="book.empty">No audiobooks yet. Find free ones on LibriVox.</p>
+          <div class="tile-scroll"><div class="tiles" id="book-tiles"></div></div>
+        </div>
+      </section>
+
+      <section class="album-page" id="book-page" hidden>
+        <div class="album-hero">
+          <img class="hero-bg" id="book-bg" alt="" hidden>
+          <div class="hero-shade"></div>
+          <button class="back-btn" id="book-back" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            <span data-i18n="nav.audiobooks">Audiobooks</span>
+          </button>
+          <div class="hero-body">
+            <div class="hero-cover" id="book-cover"></div>
+            <div class="hero-text">
+              <span class="hero-kicker" data-i18n="book.kicker">Audiobook</span>
+              <h1 class="hero-title"><span class="light" id="book-line1"></span> <span class="bold" id="book-line2"></span></h1>
+              <span class="hero-artist" id="book-author"></span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button class="primary" id="book-play" type="button"></button>
+            <button class="ghost-btn" id="book-remove-download" type="button" data-i18n="book.removeDownload">Remove download</button>
+            <button class="ghost-btn" id="book-remove" type="button" data-i18n="book.remove">Remove from library</button>
+          </div>
+        </div>
+        <div class="show-options">
+          <span class="muted" id="book-facts"></span>
+        </div>
+        <ol class="track-list" id="chapter-list"></ol>
       </section>
 
       <section class="settings-view" id="settings-view" hidden>

@@ -15,7 +15,8 @@ import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLa
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
-import { episodeMeta, episodeState, markSubscribed } from './podcasts.js';
+import { episodeMeta, episodeState, markSubscribed, lengthLabel } from './podcasts.js';
+import { BOOK_LANGUAGES, languageName, bookMeta, bookAction, bookProgress, markAdded } from './audiobooks.js';
 import { language } from './i18n.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
@@ -893,15 +894,19 @@ function showView(name) {
   const library = ['songs', 'albums', 'artists', 'page'].includes(name);
   $('podcasts-view').hidden = name !== 'podcasts';
   $('show-page').hidden = name !== 'show';
+  $('books-view').hidden = name !== 'books';
+  $('book-page').hidden = name !== 'book';
   $('settings-view').hidden = name !== 'settings';
   $('empty-state').hidden = !library || hasSongs;
   $('song-view').hidden = name !== 'songs' || !hasSongs;
   $('albums-view').hidden = !['albums', 'artists'].includes(name) || !hasSongs;
   $('album-page').hidden = name !== 'page' || !hasSongs;
   const navOn = name === 'songs' ? { all: 'nav-songs', liked: 'nav-liked', disliked: 'nav-disliked' }[activeFilter] ?? 'nav-songs'
-    : name === 'page' ? (page?.kind === 'artist' ? 'nav-artists' : 'nav-albums') : name === 'show' ? 'nav-podcasts' : `nav-${name}`;
-  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-podcasts', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', id === navOn);
+    : name === 'page' ? (page?.kind === 'artist' ? 'nav-artists' : 'nav-albums') : name === 'show' ? 'nav-podcasts'
+    : name === 'books' || name === 'book' ? 'nav-audiobooks' : `nav-${name}`;
+  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-podcasts', 'nav-audiobooks', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', id === navOn);
   if (name === 'podcasts') loadPodcasts();
+  if (name === 'books') loadBooks();
   if (name === 'albums' || name === 'artists') renderTiles();
 }
 
@@ -933,6 +938,8 @@ function setupSettings(languageSetting) {
   go('nav-artists', () => showView('artists'));
   go('nav-podcasts', () => showView('podcasts'));
   setupPodcasts();
+  go('nav-audiobooks', () => showView('books'));
+  setupBooks();
   setupSync();
   go('nav-settings', () => showView('settings'));
   $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));
@@ -1538,4 +1545,233 @@ function setupTaskbar() {
   invoke('taskbar_init', { labels }).catch(() => {});
   const target = { prev: 'np-prev', play: 'np-play', next: 'np-next' };
   window.__TAURI__.event.listen('taskbar-button', e => document.getElementById(target[e.payload])?.click());
+}
+
+// ---- Audiobooks (Phase 8): LibriVox books; chapters download and play like podcast episodes ----
+let books = [];
+let openBook = null;
+let bookTerm = '';
+let bookLanguage = '';
+let foundBooks = [];
+let bookFindLoaded = false;
+
+function setupBooks() {
+  const $ = id => document.getElementById(id);
+  const tab = find => {
+    $('book-find').hidden = !find;
+    $('book-mine').hidden = find;
+    $('tab-books-mine').classList.toggle('active', !find);
+    $('tab-books-find').classList.toggle('active', find);
+    $('tab-books-mine').setAttribute('aria-selected', String(!find));
+    $('tab-books-find').setAttribute('aria-selected', String(find));
+    if (find && !bookFindLoaded) loadFoundBooks();
+  };
+  $('tab-books-mine').addEventListener('click', () => tab(false));
+  $('tab-books-find').addEventListener('click', () => tab(true));
+  $('book-language').replaceChildren(...BOOK_LANGUAGES.map(l => {
+    const o = document.createElement('option');
+    o.value = l;
+    o.textContent = languageName(l);
+    return o;
+  }));
+  $('book-language').addEventListener('change', () => { bookLanguage = $('book-language').value; loadFoundBooks(); });
+  $('book-search').addEventListener('submit', e => {
+    e.preventDefault();
+    bookTerm = $('book-term').value.trim();
+    loadFoundBooks();
+  });
+  $('book-term').addEventListener('input', () => {
+    if (!$('book-term').value.trim() && bookTerm) { bookTerm = ''; loadFoundBooks(); }
+  });
+  $('book-back').addEventListener('click', () => showView('books'));
+  $('book-play').addEventListener('click', () => {
+    if (!openBook) return;
+    if (bookAction(openBook) === 'download') {
+      invoke('audiobook_download', { id: openBook.id }).then(() => openBookPage(openBook.id, false));
+      return;
+    }
+    invoke('play_chapters', { book: openBook.id, start: null }).catch(err => { $('book-facts').textContent = String(err); });
+  });
+  $('book-remove-download').addEventListener('click', () => {
+    if (!openBook) return;
+    invoke('audiobook_remove_download', { id: openBook.id }).then(list => { books = list; openBookPage(openBook.id, false); });
+  });
+  $('book-remove').addEventListener('click', () => {
+    if (!openBook) return;
+    invoke('audiobook_remove', { id: openBook.id }).then(list => { renderBooks(list); showView('books'); });
+  });
+  window.__TAURI__.event.listen('podcasts-changed', () => {
+    if (view === 'book' && openBook) loadBooks().then(() => openBookPage(openBook.id, false));
+    else if (view === 'books') loadBooks();
+  });
+  window.__TAURI__.event.listen('podcast-download-failed', e => {
+    if (view === 'book') $('book-facts').textContent = t('podcast.downloadFailed', { reason: e.payload.error });
+  });
+}
+
+function loadBooks() {
+  return invoke('audiobook_list').then(renderBooks);
+}
+
+function renderBooks(list) {
+  books = list;
+  const $ = id => document.getElementById(id);
+  $('books-summary').textContent = t('book.count', { n: list.length });
+  $('book-empty').hidden = list.length > 0;
+  const box = $('book-tiles');
+  const cols = Math.max(2, Math.floor(box.clientWidth / 170 / 2) * 2) || 4;
+  box.style.setProperty('--tile-cols', cols);
+  const cells = [];
+  list.forEach((b, i) => {
+    const row = Math.floor((i * 2) / cols);
+    const open = () => openBookPage(b.id);
+    const cover = document.createElement('button');
+    cover.type = 'button';
+    cover.className = 'tile tile-cover';
+    cover.setAttribute('aria-label', b.title);
+    cover.addEventListener('click', open);
+    cover.append(remoteCover(b.artworkUrl, 'tile-art'));
+    const info = document.createElement('button');
+    info.type = 'button';
+    info.className = 'tile tile-info';
+    info.addEventListener('click', open);
+    const [l1, l2] = splitTitle(b.title);
+    const stat = (label, value) => {
+      const span = document.createElement('span');
+      const small = document.createElement('small');
+      small.className = 'stat-label';
+      small.textContent = label;
+      const v = document.createElement('b');
+      v.textContent = value;
+      span.append(small, v);
+      return span;
+    };
+    const stats = document.createElement('span');
+    stats.className = 'tile-stats';
+    stats.append(stat(t('book.chaptersLabel'), b.chapters), stat(t('book.listenedLabel'), b.finished));
+    info.append(cell(l1, 'tile-line1'), cell(l2, 'tile-line2'), cell(b.author ?? '', 'tile-sub'), stats);
+    cells.push(...(row % 2 === 0 ? [cover, info] : [info, cover]));
+  });
+  box.replaceChildren(...cells);
+}
+
+function openBookPage(id, scroll = true) {
+  const b = books.find(x => x.id === id);
+  if (!b) return Promise.resolve();
+  openBook = b;
+  const $ = el => document.getElementById(el);
+  const [l1, l2] = splitTitle(b.title);
+  $('book-line1').textContent = l1;
+  $('book-line2').textContent = l2;
+  $('book-author').textContent = b.author ?? '';
+  $('book-cover').replaceChildren(remoteCover(b.artworkUrl, 'hero-art'));
+  const bg = $('book-bg');
+  bg.hidden = !b.artworkUrl;
+  if (b.artworkUrl) { bg.referrerPolicy = 'no-referrer'; bg.src = b.artworkUrl; }
+  const action = bookAction(b);
+  $('book-play').textContent = action === 'resume'
+    ? t('book.resume', { chapter: b.resumeTitle ?? '', at: formatDuration(b.resumeMs) })
+    : t(`book.${action}`);
+  $('book-remove-download').hidden = !b.downloaded;
+  $('book-facts').textContent = [bookProgress(b), lengthLabel(b.durationMs)].filter(Boolean).join(' · ');
+  return invoke('audiobook_chapters', { id }).then(chapters => {
+    $('chapter-list').replaceChildren(...chapters.map((c, i) => {
+      const li = document.createElement('li');
+      li.className = ['episode', c.played ? 'played' : '', c.id === b.resumeChapter ? 'current' : ''].filter(Boolean).join(' ');
+      const title = cell(c.title || t('book.chapterNumber', { n: i + 1 }), 'episode-title');
+      const meta = cell(lengthLabel(c.durationMs), 'episode-meta');
+      li.append(title, chapterActions(b, c), meta);
+      return li;
+    }));
+    showView('book');
+    if (scroll) $('book-page').scrollTop = 0;
+  });
+}
+
+function chapterActions(b, c) {
+  const box = document.createElement('span');
+  box.className = 'episode-actions';
+  const button = (text, fn, cls = 'eq-btn') => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = cls;
+    el.textContent = text;
+    el.addEventListener('click', fn);
+    return el;
+  };
+  const refresh = () => loadBooks().then(() => openBookPage(b.id, false));
+  if (c.downloadPath) {
+    const resume = !c.played && c.positionMs > 5000;
+    box.append(button(resume ? t('podcast.resume', { at: formatDuration(c.positionMs) }) : t('podcast.play'),
+      () => invoke('play_chapters', { book: b.id, start: c.id }), 'primary'));
+  } else if (episodeState(c, pendingDownloads) === 'downloading') {
+    box.append(cell(t('podcast.downloading'), 'episode-state'));
+  } else {
+    box.append(button(t('podcast.download'), () => { pendingDownloads.add(c.id); invoke('podcast_download', { id: c.id }); refresh(); }));
+  }
+  box.append(button(t(c.played ? 'podcast.markUnplayed' : 'podcast.markPlayed'),
+    () => invoke('podcast_set_played', { id: c.id, played: !c.played }).then(refresh)));
+  return box;
+}
+
+function loadFoundBooks() {
+  const $ = id => document.getElementById(id);
+  bookFindLoaded = true;
+  $('book-status').textContent = t('podcast.loading');
+  const call = bookTerm
+    ? invoke('audiobook_search', { term: bookTerm, language: bookLanguage })
+    : invoke('audiobook_recent', { language: bookLanguage });
+  const asked = [bookTerm, bookLanguage].join('|');
+  return call
+    .then(found => {
+      if (asked !== [bookTerm, bookLanguage].join('|')) return; // a newer search is on its way
+      foundBooks = found;
+      const lang = languageName(bookLanguage);
+      $('book-status').textContent = !found.length
+        ? (bookLanguage ? t('book.noneIn', { language: lang }) : t('book.none'))
+        : bookTerm ? t('book.results', { n: found.length, term: bookTerm })
+        : bookLanguage ? t('book.recentIn', { language: lang }) : t('book.recent');
+      renderFoundBooks();
+    })
+    .catch(err => { $('book-status').textContent = t('book.failed', { reason: String(err) }); });
+}
+
+function renderFoundBooks() {
+  const box = document.getElementById('book-found-tiles');
+  const cols = Math.max(2, Math.floor(box.clientWidth / 170 / 2) * 2) || 4;
+  box.style.setProperty('--tile-cols', cols);
+  const cells = [];
+  markAdded(foundBooks, books).forEach((f, i) => {
+    const row = Math.floor((i * 2) / cols);
+    const cover = document.createElement('div');
+    cover.className = 'tile tile-cover';
+    cover.append(remoteCover(f.coverUrl, 'tile-art'));
+    const info = document.createElement('div');
+    info.className = 'tile tile-info';
+    info.title = f.description ?? '';
+    const [l1, l2] = splitTitle(f.title);
+    info.append(cell(l1, 'tile-line1'), cell(l2, 'tile-line2'), cell(bookMeta(f), 'tile-sub'));
+    if (f.added) {
+      info.append(cell(t('book.added'), 'subscribed'));
+    } else {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'primary subscribe';
+      add.textContent = t('book.add');
+      add.addEventListener('click', () => {
+        add.disabled = true;
+        add.textContent = t('book.adding');
+        invoke('audiobook_add', { book: f })
+          .then(list => { renderBooks(list); renderFoundBooks(); })
+          .catch(err => {
+            add.disabled = false;
+            add.textContent = t('book.add');
+            document.getElementById('book-status').textContent = t('book.failed', { reason: String(err) });
+          });
+      });
+      info.append(add);
+    }
+    cells.push(...(row % 2 === 0 ? [cover, info] : [info, cover]));
+  });
+  box.replaceChildren(...cells);
 }

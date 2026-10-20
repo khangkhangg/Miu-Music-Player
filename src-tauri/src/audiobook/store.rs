@@ -214,6 +214,22 @@ mod tests {
     }
 
     #[test]
+    fn a_librivox_chapter_feed_reads_like_a_podcast_feed_and_keeps_chapter_order() {
+        let rss = include_bytes!("fixtures/book_449.rss");
+        let (_, eps) = crate::podcast::feed::parse("https://librivox.org/rss/449", rss).unwrap();
+        assert_eq!(eps.len(), 26);
+        assert_eq!((eps[0].title.as_str(), eps[0].number, eps[0].duration_ms), ("Chapters 1-2", Some(1), Some(1_520_000)));
+        assert!(eps[0].audio_url.ends_with("treasure_island_01-02_stevenson_64kb.mp3"));
+        let db = Db::open_in_memory().unwrap();
+        let mut shuffled = eps.clone();
+        shuffled.reverse();
+        let id = add_book(&db, &book(), &shuffled, 1).unwrap();
+        let ch = chapters_of(&db, id).unwrap();
+        assert_eq!(ch.len(), 26);
+        assert_eq!((ch[0].title.as_str(), ch[25].title.as_str()), ("Chapters 1-2", eps[25].title.as_str()));
+    }
+
+    #[test]
     fn removing_a_book_takes_its_chapters_too() {
         let db = Db::open_in_memory().unwrap();
         let id = add_book(&db, &book(), &chapters(), 1).unwrap();
