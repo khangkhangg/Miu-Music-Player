@@ -400,3 +400,18 @@ Probe (read-only, no sync): the Store build declares a packaged COM ExeServer
 in HKCR, so create it by CLSID. Result: version 12.13.11.1, library 68 tracks, sources Library /
 Internet Radio / iTunes Store. iPhone **not plugged in** during the probe, so whether it appears
 as an `IITIPodSource` (kind 2) is still open (checklist S.1).
+
+### 2026-10-20 — probe with the iPhone 5s on USB (read-only)
+iTunes lists the phone through COM: source **'khang’s iPhone'**, kind 2 (`IITIPodSource`),
+29.8 GB, 23.27 GB free, playlists `khang’s iPhone` and `Music` with **69 tracks** (the 3uTools
+songs), plus empty Movies / TV Shows / Books / Audiobooks. Methods: `UpdateIPod`, `EjectIPod`,
+`GetITObjectIDs`. So option A is viable on this machine.
+
+Two ways forward with option A:
+1. **Playlist sync:** mirror liked songs into a library playlist "Miu Music", tell iTunes (once)
+   to sync that playlist, then `UpdateIPod`. Risk: iTunes replaces what is on the phone with its
+   own library's selection — the 69 3uTools songs would go unless they are also in the playlist.
+2. **Manual management:** with "Manually manage music" on for the phone in iTunes, the COM SDK lets
+   a host add a file straight to the device playlist (`IITUserPlaylist.AddFile`) and delete device
+   tracks one by one, leaving everything else alone. Needs one setting change in iTunes by the user;
+   to verify with one test song before relying on it.
