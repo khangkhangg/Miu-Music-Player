@@ -193,7 +193,8 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
   Verified in the app 2026-10-20 (import from another app with summary; export re-imports).
 - [x] **P.3 Offline downloads** — *Test first:* resumable download (Range), auto-download newest N per show, cleanup of played episodes after X days.
   Verified in the app 2026-10-20 (download with progress, remove, auto-download newest episodes).
-- [ ] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
+- [x] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
+  Verified in the app 2026-10-20 (Vietnam and US charts, search, subscribe; subscribed ones marked).
 - [ ] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
 - [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
 
