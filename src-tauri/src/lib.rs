@@ -6,6 +6,9 @@ pub mod podcast;
 pub mod settings;
 mod windows;
 pub mod sync;
+pub mod taskbar;
+#[cfg(windows)]
+pub mod taskbar_win;
 pub mod util;
 
 use serde::Serialize;
@@ -157,6 +160,8 @@ pub fn run() {
             windows::set_app_setting,
             windows::open_store_page,
             windows::open_mini,
+            windows::taskbar_init,
+            windows::taskbar_playing,
             windows::export_diagnostics,
         ])
         .run(tauri::generate_context!())

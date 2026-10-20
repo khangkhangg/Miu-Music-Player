@@ -146,3 +146,30 @@ pub fn open_mini(app: AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Previous / play-pause / next under the taskbar preview (Windows thumbnail toolbar).
+#[cfg(windows)]
+#[tauri::command]
+pub fn taskbar_init(labels: crate::taskbar_win::Labels, app: AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("main").ok_or("no main window")?;
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        if let Err(e) = crate::taskbar_win::init(&handle, hwnd, labels) {
+            log::warn!("taskbar buttons: {e}");
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Swap the middle taskbar button between play and pause.
+#[cfg(windows)]
+#[tauri::command]
+pub fn taskbar_playing(playing: bool, app: AppHandle) -> Result<(), String> {
+    app.run_on_main_thread(move || {
+        if let Err(e) = crate::taskbar_win::set_playing(playing) {
+            log::warn!("taskbar buttons: {e}");
+        }
+    })
+    .map_err(|e| e.to_string())
+}

@@ -64,6 +64,7 @@ if (invoke) {
   boot(35);
   window.__TAURI__.event.listen('library-progress', e => showWork(e.payload));
   setupSettings(languageSetting);
+  setupTaskbar();
   setupWizard();
   invoke('app_info').then(info => {
     document.getElementById('app-version').textContent = `${info.name} ${info.version}`;
@@ -271,6 +272,10 @@ function updateRateButtons() {
 }
 
 function showPlayer(event) {
+  if (Boolean(event?.playing) !== taskbarPlaying) {
+    taskbarPlaying = Boolean(event?.playing);
+    invoke('taskbar_playing', { playing: taskbarPlaying }).catch(() => {});
+  }
   const songChanged = event?.songId !== playerState?.songId || event?.episodeId !== playerState?.episodeId;
   playerState = event;
   const episode = event?.episodeId != null ? episodeInfo(event.episodeId) : null;
@@ -1523,4 +1528,14 @@ function renderSyncRule() {
   const on = hasSyncRule(syncRules, rule);
   button.setAttribute('aria-pressed', String(on));
   document.getElementById('album-sync-label').textContent = t(on ? 'album.alwaysSyncOn' : 'album.alwaysSync');
+}
+
+// ---- Taskbar preview buttons (previous, play/pause, next) ----
+let taskbarPlaying = false;
+
+function setupTaskbar() {
+  const labels = { prev: t('player.prev'), play: t('player.play'), pause: t('player.pause'), next: t('player.next') };
+  invoke('taskbar_init', { labels }).catch(() => {});
+  const target = { prev: 'np-prev', play: 'np-play', next: 'np-next' };
+  window.__TAURI__.event.listen('taskbar-button', e => document.getElementById(target[e.payload])?.click());
 }
