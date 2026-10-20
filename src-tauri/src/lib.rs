@@ -75,6 +75,10 @@ pub fn run() {
         .manage(player.clone())
         .manage(visualizer_on.clone())
         .manage(library::service::LastEdit::default())
+        .register_uri_scheme_protocol("miuart", {
+            let db = db.clone();
+            move |_ctx, request| library::service::art_response(&db, request.uri().path())
+        })
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
             windows::setup(app.handle(), db.clone());

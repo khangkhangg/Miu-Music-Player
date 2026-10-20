@@ -26,12 +26,18 @@ pub struct SongRow {
     pub path: String,
     /// Lowest song id among songs with the same audio (F3.6); `None` when there is no copy.
     pub duplicate_group: Option<i64>,
+    pub album_artist: Option<String>,
+    pub year: Option<i64>,
+    pub track_no: Option<i64>,
+    pub disc_no: Option<i64>,
+    pub has_artwork: bool,
 }
 
 pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
     let mut stmt = db
         .conn()
-        .prepare("SELECT id, path, title, artist, album, duration_ms, format, rating, sample_rate, bit_depth, bitrate_kbps FROM songs")?;
+        .prepare("SELECT id, path, title, artist, album, duration_ms, format, rating, sample_rate, bit_depth, bitrate_kbps,
+                  album_artist, year, track_no, disc_no, has_artwork FROM songs")?;
     let mut rows: Vec<SongRow> = stmt
         .query_map([], |r| {
             let path: String = r.get(1)?;
@@ -52,6 +58,11 @@ pub fn list_songs(db: &Db) -> rusqlite::Result<Vec<SongRow>> {
                 bitrate_kbps: r.get(10)?,
                 path,
                 duplicate_group: None,
+                album_artist: r.get(11)?,
+                year: r.get(12)?,
+                track_no: r.get(13)?,
+                disc_no: r.get(14)?,
+                has_artwork: r.get(15)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -227,5 +238,27 @@ mod rating_tests {
         set_rating(&db, id, Rating::Liked).unwrap();
         rescan_folder(&db, f.id, &f.path, 2).unwrap();
         assert_eq!(list_songs(&db).unwrap()[0].rating, 1);
+    }
+}
+
+#[cfg(test)]
+mod album_field_tests {
+    use super::*;
+    use crate::library::folders::add_folder;
+    use crate::library::scan::rescan_folder;
+    use crate::library::tags::fixtures::{silent_mp3, write_tags, Fields};
+    use lofty::tag::TagType;
+
+    #[test]
+    fn rows_carry_what_album_and_artist_views_need() {
+        let d = tempfile::tempdir().unwrap();
+        let p = silent_mp3(d.path(), "a.mp3");
+        write_tags(&p, TagType::Id3v2, &Fields { title: "Diễm xưa", artist: "Khánh Ly", album: "Diễm xưa", album_artist: "Khánh Ly",
+            genre: "", year: "1970", track: 3, track_total: 12, disc: 1, cover: true });
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 1).unwrap();
+        let s = list_songs(&db).unwrap().remove(0);
+        assert_eq!((s.album_artist.as_deref(), s.year, s.track_no, s.disc_no, s.has_artwork), (Some("Khánh Ly"), Some(1970), Some(3), Some(1), true));
     }
 }

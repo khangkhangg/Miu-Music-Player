@@ -227,3 +227,22 @@ pub fn undo_edit(app: AppHandle, db: State<'_, SharedDb>, last: State<'_, LastEd
     last.0.lock().map_err(|e| e.to_string())?.clear(); // undo is not itself undoable
     Ok(report)
 }
+
+/// `miuart` protocol (redesign): `/<song id>-<size>` → that song's cover thumbnail, or 404.
+pub fn art_response(db: &SharedDb, uri_path: &str) -> tauri::http::Response<Vec<u8>> {
+    let not_found = || tauri::http::Response::builder().status(404).body(Vec::new()).unwrap();
+    let Some((id, size)) = crate::library::art::parse_request(uri_path) else { return not_found() };
+    let row: Option<(String, i64)> = db.lock().ok().and_then(|d| {
+        d.conn().query_row("SELECT path, mtime FROM songs WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?))).ok()
+    });
+    let Some((path, mtime)) = row else { return not_found() };
+    let cache = crate::util::paths::local_appdata_root().join("MiuMusic").join("art");
+    match crate::library::art::cached_thumbnail(&cache, id, mtime, Path::new(&path), size) {
+        Ok(Some(jpg)) => tauri::http::Response::builder()
+            .header("Content-Type", "image/jpeg")
+            .header("Cache-Control", "max-age=86400")
+            .body(jpg)
+            .unwrap(),
+        _ => not_found(),
+    }
+}
