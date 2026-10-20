@@ -90,7 +90,7 @@ pub fn run() {
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db.clone(), library_watch);
             audio::eq_service::start(&db, &player);
-            audio::service::start(app.handle().clone(), player.clone());
+            audio::service::start(app.handle().clone(), player.clone(), db.clone());
             audio::visualizer::start(app.handle().clone(), player, visualizer_on);
             Ok(())
         })
@@ -121,6 +121,7 @@ pub fn run() {
             podcast::service::podcast_set_played,
             podcast::service::podcast_set_options,
             podcast::service::podcast_chart,
+            podcast::service::podcast_now,
             podcast::service::podcast_search,
             podcast::service::podcast_subscribe_found,
             audio::service::play_songs,
@@ -133,6 +134,7 @@ pub fn run() {
             audio::service::set_output,
             audio::service::set_exclusive,
             audio::service::player_shuffle,
+            audio::service::play_episode,
             audio::service::player_repeat,
             windows::open_main,
             audio::eq_service::eq_state,

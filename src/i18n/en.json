@@ -335,5 +335,10 @@
   "podcast.results.other": "{n} results for “{term}”",
   "podcast.topVn": "Top podcasts in Vietnam",
   "podcast.topUs": "Top podcasts in the United States",
-  "podcast.alreadySubscribed": "Subscribed"
+  "podcast.alreadySubscribed": "Subscribed",
+  "player.back15": "Back 15 seconds",
+  "player.fwd30": "Forward 30 seconds",
+  "podcast.play": "Play",
+  "podcast.resume": "Resume at {at}",
+  "podcast.downloadPlay": "Download & play"
 }

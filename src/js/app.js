@@ -3,7 +3,7 @@ import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
 import { folderItems, librarySummary, encodingOptions } from './folders.js';
 import { songRow, visibleRange } from './songs.js';
-import { nowPlaying, seekTarget, nextRepeat, repeatButton } from './player.js';
+import { nowPlaying, seekTarget, nextRepeat, repeatButton, skipTarget } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
@@ -125,10 +125,16 @@ if (invoke) {
     }
   });
   document.getElementById('np-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));
+  const skip = delta => () => {
+    const ep = playerState?.episodeId != null ? episodeInfo(playerState.episodeId) : null;
+    invoke('player_seek', { ms: skipTarget(playerState?.positionMs ?? 0, delta, ep?.durationMs) });
+  };
+  document.getElementById('np-back15').addEventListener('click', skip(-15_000));
+  document.getElementById('np-fwd30').addEventListener('click', skip(30_000));
   document.getElementById('np-next').addEventListener('click', () => invoke('player_skip', { by: 1 }));
   document.getElementById('np-bar').addEventListener('click', e => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const song = songsById.get(playerState?.songId);
+    const song = playerState?.episodeId != null ? episodeInfo(playerState.episodeId) : songsById.get(playerState?.songId);
     const ms = seekTarget((e.clientX - rect.left) / rect.width, song?.durationMs);
     if (ms != null) invoke('player_seek', { ms });
   });
@@ -264,9 +270,12 @@ function updateRateButtons() {
 }
 
 function showPlayer(event) {
-  const songChanged = event?.songId !== playerState?.songId;
+  const songChanged = event?.songId !== playerState?.songId || event?.episodeId !== playerState?.episodeId;
   playerState = event;
-  const np = nowPlaying(event, songsById);
+  const episode = event?.episodeId != null ? episodeInfo(event.episodeId) : null;
+  const np = episode ? nowPlaying({ ...event, songId: 'episode' }, new Map([['episode', episode]])) : nowPlaying(event, songsById);
+  for (const id of ['np-back15', 'np-fwd30']) document.getElementById(id).hidden = !episode;
+  for (const id of ['np-prev', 'np-next', 'np-shuffle', 'np-repeat']) document.getElementById(id).hidden = Boolean(episode);
   document.getElementById('now-playing').classList.toggle('idle', !np);
   const upNextChanged = (event?.upNext ?? []).join() !== (renderedUpNext ?? []).join();
   updateModeButtons();
@@ -1088,6 +1097,13 @@ function renderNowArt() {
   const song = songsById.get(playerState?.songId);
   const img = document.getElementById('np-art');
   const empty = document.getElementById('np-art-empty');
+  const episode = playerState?.episodeId != null ? episodeInfo(playerState.episodeId) : null;
+  if (episode) {
+    img.hidden = !episode.artworkUrl;
+    empty.hidden = Boolean(episode.artworkUrl);
+    if (episode.artworkUrl) { img.referrerPolicy = 'no-referrer'; img.src = episode.artworkUrl; }
+    return;
+  }
   const has = Boolean(song?.hasArtwork);
   img.hidden = !has;
   empty.hidden = has;
@@ -1181,6 +1197,10 @@ function setupPodcasts() {
   $('show-keep').addEventListener('change', saveOptions);
   window.__TAURI__.event.listen('podcasts-changed', e => {
     pendingDownloads.delete(e.payload);
+    if (playWhenDownloaded === e.payload) {
+      playWhenDownloaded = null;
+      invoke('play_episode', { id: e.payload }).catch(() => {});
+    }
     if (view === 'show' && openShow) loadPodcasts().then(() => openShowPage(openShow.id, false));
     else if (view === 'podcasts') loadPodcasts();
   });
@@ -1313,7 +1333,12 @@ function episodeActions(e) {
   const refreshShow = () => openShow && openShowPage(openShow.id, false);
   const state = episodeState(e, pendingDownloads);
   if (state === 'download') {
-    box.append(button('podcast.download', () => {
+    box.append(button('podcast.downloadPlay', () => {
+      pendingDownloads.add(e.id);
+      playWhenDownloaded = e.id;
+      invoke('podcast_download', { id: e.id });
+      refreshShow();
+    }), button('podcast.download', () => {
       pendingDownloads.add(e.id);
       invoke('podcast_download', { id: e.id });
       refreshShow();
@@ -1321,7 +1346,13 @@ function episodeActions(e) {
   } else if (state === 'downloading') {
     box.append(cell(t('podcast.downloading'), 'episode-state'));
   } else {
-    box.append(cell(t('podcast.downloaded'), 'episode-state'), button('podcast.removeDownload', () => invoke('podcast_delete_download', { id: e.id }).then(refreshShow)));
+    const resume = !e.played && e.positionMs > 5000;
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'primary';
+    play.textContent = resume ? t('podcast.resume', { at: formatDuration(e.positionMs) }) : t('podcast.play');
+    play.addEventListener('click', () => invoke('play_episode', { id: e.id }));
+    box.append(play, button('podcast.removeDownload', () => invoke('podcast_delete_download', { id: e.id }).then(refreshShow)));
   }
   box.append(button(e.played ? 'podcast.markUnplayed' : 'podcast.markPlayed', () => invoke('podcast_set_played', { id: e.id, played: !e.played }).then(() => loadPodcasts()).then(refreshShow)));
   return box;
@@ -1411,4 +1442,19 @@ function renderDiscover() {
     cells.push(...(row % 2 === 0 ? [cover, info] : [info, cover]));
   });
   box.replaceChildren(...cells);
+}
+
+// ---- Podcast playback (P.5) ----
+let playWhenDownloaded = null;
+const episodes = new Map(); // id → { title, artist, durationMs, artworkUrl } once fetched
+
+/** Title, show and artwork of the playing episode (fetched once, then the player view redraws). */
+function episodeInfo(id) {
+  if (episodes.has(id)) return episodes.get(id);
+  episodes.set(id, { title: '', artist: '', durationMs: null, artworkUrl: null });
+  invoke('podcast_now', { id }).then(n => {
+    episodes.set(id, { title: n.title, artist: n.show, durationMs: n.durationMs, artworkUrl: n.artworkUrl });
+    if (playerState?.episodeId === id) { showPlayer(playerState); renderNowArt(); }
+  }).catch(() => {});
+  return episodes.get(id);
 }

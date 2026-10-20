@@ -44,3 +44,12 @@ test('the repeat button says what it does now', () => {
   assert.deepEqual(repeatButton('all'), { pressed: true, one: false, label: 'Repeat: all songs' });
   assert.deepEqual(repeatButton('one'), { pressed: true, one: true, label: 'Repeat: this song' });
 });
+
+import { skipTarget } from '../../src/js/player.js';
+
+test('skip back 15 s and forward 30 s stay inside the episode', () => {
+  assert.equal(skipTarget(60_000, -15_000, 3_600_000), 45_000);
+  assert.equal(skipTarget(5_000, -15_000, 3_600_000), 0);
+  assert.equal(skipTarget(3_590_000, 30_000, 3_600_000), 3_599_000, 'not past the end');
+  assert.equal(skipTarget(10_000, 30_000, null), 40_000, 'length unknown');
+});

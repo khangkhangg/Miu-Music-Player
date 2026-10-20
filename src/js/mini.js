@@ -36,6 +36,13 @@ function showArt(song) {
   if (artFor === (song?.id ?? null)) return;
   artFor = song?.id ?? null;
   const img = $('mini-art');
+  if (song?.artworkUrl) {
+    img.hidden = false;
+    $('mini-art-empty').toggleAttribute('hidden', true);
+    img.referrerPolicy = 'no-referrer';
+    img.src = song.artworkUrl;
+    return;
+  }
   const has = Boolean(song?.hasArtwork);
   img.hidden = !has;
   $('mini-art-empty').toggleAttribute('hidden', has);
@@ -45,10 +52,25 @@ function showArt(song) {
   }
 }
 
+const episodes = new Map();
+
+/** The playing podcast episode as a song-like row (fetched once). */
+function episodeRow(id) {
+  if (!episodes.has(id)) {
+    episodes.set(id, { id: `episode-${id}`, title: '', artist: '', durationMs: null });
+    invoke('podcast_now', { id }).then(n => {
+      episodes.set(id, { id: `episode-${id}`, title: n.title, artist: n.show, durationMs: n.durationMs, artworkUrl: n.artworkUrl });
+      if (state?.episodeId === id) { artFor = undefined; show(state); }
+    }).catch(() => {});
+  }
+  return episodes.get(id);
+}
+
 function show(event) {
   state = event;
-  showArt(songsById.get(event?.songId));
-  const np = nowPlaying(event, songsById);
+  const episode = event?.episodeId != null ? episodeRow(event.episodeId) : null;
+  showArt(episode ?? songsById.get(event?.songId));
+  const np = episode ? nowPlaying({ ...event, songId: 'episode' }, new Map([['episode', episode]])) : nowPlaying(event, songsById);
   $('mini-title').textContent = np ? np.title : t('player.nothing');
   $('mini-artist').textContent = np ? np.artist : t('mini.hint');
   $('mini-fill').style.width = `${(np?.progress ?? 0) * 100}%`;
@@ -80,7 +102,8 @@ $('mini-like').addEventListener('click', () => rate('like'));
 $('mini-dislike').addEventListener('click', () => rate('dislike'));
 $('mini-bar').addEventListener('click', e => {
   const rect = e.currentTarget.getBoundingClientRect();
-  const ms = seekTarget((e.clientX - rect.left) / rect.width, songsById.get(state?.songId)?.durationMs);
+  const row = state?.episodeId != null ? episodeRow(state.episodeId) : songsById.get(state?.songId);
+  const ms = seekTarget((e.clientX - rect.left) / rect.width, row?.durationMs);
   if (ms != null) invoke('player_seek', { ms });
 });
 

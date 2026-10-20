@@ -35,3 +35,9 @@ export function repeatButton(mode) {
   const m = REPEATS.includes(mode) ? mode : 'off';
   return { pressed: m !== 'off', one: m === 'one', label: t({ off: 'player.repeatOff', all: 'player.repeatAll', one: 'player.repeatOne' }[m]) };
 }
+
+/** Position after skipping `delta` ms (−15 s / +30 s), kept inside the episode. */
+export function skipTarget(position, delta, duration) {
+  const to = Math.max(0, position + delta);
+  return duration ? Math.min(to, duration - 1000) : to;
+}

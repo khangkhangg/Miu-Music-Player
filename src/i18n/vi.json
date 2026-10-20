@@ -335,5 +335,10 @@
   "podcast.results.other": "{n} kết quả cho “{term}”",
   "podcast.topVn": "Podcast hàng đầu tại Việt Nam",
   "podcast.topUs": "Podcast hàng đầu tại Hoa Kỳ",
-  "podcast.alreadySubscribed": "Đã đăng ký"
+  "podcast.alreadySubscribed": "Đã đăng ký",
+  "player.back15": "Lùi 15 giây",
+  "player.fwd30": "Tới 30 giây",
+  "podcast.play": "Phát",
+  "podcast.resume": "Nghe tiếp từ {at}",
+  "podcast.downloadPlay": "Tải và phát"
 }

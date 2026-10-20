@@ -20,6 +20,8 @@ pub struct PlayerHandle {
     /// Song ids and paths of the current queue, by queue index.
     queue: Mutex<Vec<i64>>,
     paths: Mutex<Vec<PathBuf>>,
+    /// The podcast episode being played instead of songs (P.5).
+    episode: Mutex<Option<i64>>,
 }
 
 pub type SharedPlayer = Arc<PlayerHandle>;
@@ -41,6 +43,8 @@ pub struct PlayerEvent {
     pub repeat: Repeat,
     /// Song ids that play next, in order.
     pub up_next: Vec<i64>,
+    /// Set while a podcast episode plays (then `song_id` is empty).
+    pub episode_id: Option<i64>,
 }
 
 fn open(device: Option<&str>, exclusive: bool) -> Option<Player> {
@@ -56,7 +60,7 @@ fn open(device: Option<&str>, exclusive: bool) -> Option<Player> {
 impl PlayerHandle {
     /// `device`: the saved output device name, or `None` for the Windows default.
     pub fn new(device: Option<&str>, exclusive: bool) -> Self {
-        Self { player: Mutex::new(open(device, exclusive)), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()) }
+        Self { player: Mutex::new(open(device, exclusive)), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episode: Mutex::new(None) }
     }
 
     fn with<T>(&self, f: impl FnOnce(&Player) -> T) -> Option<T> {
@@ -79,10 +83,12 @@ impl PlayerHandle {
                 shuffle: false,
                 repeat: Repeat::Off,
                 up_next: Vec::new(),
+                episode_id: None,
             };
         };
         let queue = self.queue.lock().map(|q| q.clone()).unwrap_or_default();
-        let song_id = s.track.and_then(|t| queue.get(t).copied());
+        let episode_id = s.track.and(self.episode.lock().ok().and_then(|e| *e));
+        let song_id = if episode_id.is_some() { None } else { s.track.and_then(|t| queue.get(t).copied()) };
         let up_next = s.up_next.iter().filter_map(|&t| queue.get(t).copied()).collect();
         PlayerEvent {
             available: true,
@@ -98,13 +104,14 @@ impl PlayerHandle {
             shuffle: s.shuffle,
             repeat: s.repeat,
             up_next,
+            episode_id,
         }
     }
 
     /// Like `new`, but the device is opened on another thread: the app window does not wait for
     /// it. Until then the player reports "unavailable" and commands answer "no audio output device".
     pub fn new_deferred(device: Option<String>, exclusive: bool, shuffle: bool, repeat: Repeat) -> Arc<Self> {
-        let handle = Arc::new(Self { player: Mutex::new(None), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()) });
+        let handle = Arc::new(Self { player: Mutex::new(None), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episode: Mutex::new(None) });
         let h = handle.clone();
         std::thread::spawn(move || {
             if let Some(p) = open(device.as_deref(), exclusive) {
@@ -166,11 +173,20 @@ impl PlayerHandle {
 }
 
 /// Emit `player` events while something changes (every 250 ms at most).
-pub fn start(app: AppHandle, handle: SharedPlayer) {
+pub fn start(app: AppHandle, handle: SharedPlayer, db: SharedDb) {
     std::thread::spawn(move || {
         let mut last: Option<PlayerEvent> = None;
+        let mut saved_at = std::time::Instant::now();
         loop {
             let ev = handle.event();
+            // Podcast episodes remember where the listener is (every 10 s, and on pause).
+            if let Some(id) = ev.episode_id {
+                let paused_now = last.as_ref().is_some_and(|l| l.playing && !ev.playing);
+                if paused_now || (ev.playing && saved_at.elapsed() >= Duration::from_secs(10)) {
+                    save_episode_progress(&app, &db, id, ev.position_ms);
+                    saved_at = std::time::Instant::now();
+                }
+            }
             if last.as_ref() != Some(&ev) {
                 let _ = app.emit("player", &ev);
                 last = Some(ev);
@@ -178,6 +194,39 @@ pub fn start(app: AppHandle, handle: SharedPlayer) {
             std::thread::sleep(Duration::from_millis(250));
         }
     });
+}
+
+fn save_episode_progress(app: &AppHandle, db: &SharedDb, id: i64, position_ms: u64) {
+    let Ok(d) = db.lock() else { return };
+    let duration: Option<i64> = d.conn().query_row("SELECT duration_ms FROM episodes WHERE id = ?1", [id], |r| r.get(0)).ok().flatten();
+    let (position, played) = crate::podcast::policy::progress(position_ms, duration.map(|v| v as u64));
+    let was_played: bool = d.conn().query_row("SELECT played FROM episodes WHERE id = ?1", [id], |r| r.get(0)).unwrap_or(false);
+    let _ = crate::podcast::store::set_progress(&d, id, position, played || was_played, crate::util::time::now_unix());
+    if played && !was_played {
+        let _ = app.emit("podcasts-changed", id);
+    }
+}
+
+/// Play a downloaded podcast episode, resuming where the listener stopped.
+#[tauri::command]
+pub fn play_episode(id: i64, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    let (path, position, played): (Option<String>, i64, bool) = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        d.conn()
+            .query_row("SELECT download_path, position_ms, played FROM episodes WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map_err(|e| e.to_string())?
+    };
+    let path = PathBuf::from(path.ok_or("download the episode first")?);
+    *player.queue.lock().map_err(|e| e.to_string())? = Vec::new();
+    *player.paths.lock().map_err(|e| e.to_string())? = vec![path.clone()];
+    *player.episode.lock().map_err(|e| e.to_string())? = Some(id);
+    let resume = crate::podcast::policy::resume_at(position, played);
+    player.act(|p| {
+        p.play(vec![path], 0);
+        if let Some(ms) = resume {
+            p.seek(ms);
+        }
+    })
 }
 
 /// Play `ids` as a queue, starting at `start`.
@@ -192,6 +241,7 @@ pub fn play_songs(ids: Vec<i64>, start: usize, db: State<'_, SharedDb>, player: 
     let (queue, paths): (Vec<i64>, Vec<_>) = found.into_iter().unzip();
     *player.queue.lock().map_err(|e| e.to_string())? = queue;
     *player.paths.lock().map_err(|e| e.to_string())? = paths.clone();
+    *player.episode.lock().map_err(|e| e.to_string())? = None;
     player.act(|p| p.play(paths, start))
 }
 

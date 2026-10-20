@@ -339,3 +339,25 @@ pub async fn podcast_subscribe_found(apple_id: i64, feed_url: Option<String>, db
     };
     podcast_subscribe(url, db).await
 }
+
+/// Title, show and artwork of an episode, for the now-playing column (P.5).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NowEpisode {
+    title: String,
+    show: String,
+    artwork_url: Option<String>,
+    duration_ms: Option<i64>,
+}
+
+#[tauri::command]
+pub fn podcast_now(id: i64, db: State<'_, SharedDb>) -> Result<NowEpisode, String> {
+    let d = db.lock().map_err(|e| e.to_string())?;
+    d.conn()
+        .query_row(
+            "SELECT e.title, p.title, p.artwork_url, e.duration_ms FROM episodes e JOIN podcasts p ON p.id = e.podcast_id WHERE e.id = ?1",
+            [id],
+            |r| Ok(NowEpisode { title: r.get(0)?, show: r.get(1)?, artwork_url: r.get(2)?, duration_ms: r.get(3)? }),
+        )
+        .map_err(|e| e.to_string())
+}
