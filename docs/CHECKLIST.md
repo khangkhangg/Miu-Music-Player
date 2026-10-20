@@ -189,7 +189,8 @@ signing: Miu only drives iTunes through its documented COM automation interface.
 Added 2026-10-20. Default Discover charts: Vietnam and US.
 - [x] **P.1 Feeds and subscriptions** — *Test first:* RSS fixtures (iTunes tags, Vietnamese titles, missing fields) parse into a show and episodes; subscribing stores them; refreshing adds new episodes only.
   Verified in the app 2026-10-20 (subscribe by address, artwork, episodes, check for new episodes).
-- [ ] **P.2 OPML import / export** — *Test first:* an OPML file from another app subscribes to every feed; export round-trips.
+- [x] **P.2 OPML import / export** — *Test first:* an OPML file from another app subscribes to every feed; export round-trips.
+  Verified in the app 2026-10-20 (import from another app with summary; export re-imports).
 - [ ] **P.3 Offline downloads** — *Test first:* resumable download (Range), auto-download newest N per show, cleanup of played episodes after X days.
 - [ ] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
 - [ ] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
