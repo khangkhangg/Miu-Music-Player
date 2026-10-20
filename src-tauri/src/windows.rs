@@ -112,3 +112,11 @@ pub fn set_app_setting(name: String, value: serde_json::Value, app: AppHandle, d
     let _ = app.emit("settings-changed", &all);
     Ok(all)
 }
+
+/// Open the Apple Devices app's page in the Microsoft Store (the drivers Miu needs). The address is
+/// fixed here: the UI cannot ask to open anything else.
+#[tauri::command]
+pub fn open_store_page() -> Result<(), String> {
+    const APPLE_DEVICES: &str = "ms-windows-store://pdp/?productid=9NP83LWLPZ9K";
+    std::process::Command::new("explorer.exe").arg(APPLE_DEVICES).spawn().map(|_| ()).map_err(|e| e.to_string())
+}

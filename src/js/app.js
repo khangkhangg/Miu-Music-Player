@@ -12,6 +12,7 @@ import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
 import { t, startInLanguage } from './i18n.js';
 import { planSummary } from './sync.js';
+import { errorState } from './errors.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
 import {
@@ -411,6 +412,10 @@ function showPrereqNotice(report) {
   notice.querySelector('.notice-title').textContent = message.title;
   notice.querySelector('.notice-body').textContent = message.body;
   notice.querySelector('.notice-detail').textContent = message.detail;
+  const action = errorState('drivers-missing').action;
+  const btn = document.getElementById('prereq-action');
+  btn.textContent = action.label;
+  btn.onclick = () => invoke('open_store_page');
 }
 
 // ---- Equalizer panel (F7.7) ----
