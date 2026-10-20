@@ -67,18 +67,16 @@ pub struct PcSong {
 /// Phone songs with no copy on this PC: no library file of the same size, and none with the same
 /// title and a length within 2 s (a converted copy).
 pub fn phone_only<'a>(tracks: &'a [PhoneTrack], pc: &[PcSong]) -> Vec<&'a PhoneTrack> {
-    let fold = |t: &str| t.nfc().collect::<String>().to_lowercase();
-    let sizes: HashSet<u64> = pc.iter().map(|s| s.size).collect();
     tracks
         .iter()
-        .filter(|t| !sizes.contains(&t.size))
-        .filter(|t| {
-            let title = fold(&t.title);
-            !pc.iter().any(|s| {
-                fold(&s.title) == title && matches!((s.duration_ms, t.duration_ms), (Some(a), Some(b)) if (a - b).abs() <= 2_000)
-            })
-        })
+        .filter(|t| !pc.iter().any(|s| same_recording((&s.title, s.size, s.duration_ms), (&t.title, t.size, t.duration_ms))))
         .collect()
+}
+
+/// Two files hold the same recording: same size, or same title (any case) and length within 2 s.
+pub fn same_recording(a: (&str, u64, Option<i64>), b: (&str, u64, Option<i64>)) -> bool {
+    let fold = |t: &str| t.nfc().collect::<String>().to_lowercase();
+    a.1 == b.1 || (fold(a.0) == fold(b.0) && matches!((a.2, b.2), (Some(x), Some(y)) if (x - y).abs() <= 2_000))
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

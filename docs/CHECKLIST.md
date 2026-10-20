@@ -123,10 +123,14 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   2026-10-20: COM works by CLSID (packaged server, not in HKCR). With the 5s on USB iTunes lists it: 'khang’s iPhone', kind 2, 29.8 GB (23.3 free), 69 tracks, UpdateIPod available.
 - [x] **S.1b Sync safeguards** — *Test first:* read the phone's tracks from a backup; find phone songs with no PC copy (size, or title
   and length within 2 s) and copy them off read-only; before a sync flag phone songs missing from iTunes' view and IDs with a leading
-  zero byte; after a sync list songs added and removed. Tool: `sync-guard before [--itunes <view.json>]` / `after`
-  (`tools/itunes-view.ps1` writes the view until S.2's COM client exists). Built 2026-10-20; first run on the 5s: 65 phone-only
-  songs copied to `backupse51e30a5media` (770 MB), iTunes view matches all 69, `after` with no sync reports no change.
-- [ ] **S.2 Mirror liked songs into an iTunes playlist "Miu Music"** — *Test first:* against a fake iTunes, the playlist ends up holding exactly the liked set (adds, removes, no duplicates, converted copies for FLAC etc.).
+  zero byte; after a sync list songs added and removed. Tool: `sync-guard before` / `after` (iTunes' view read over COM since S.2).
+  Built 2026-10-20; first run on the 5s: 65 phone-only songs copied to `backups\e51e30a5\media` (770 MB), iTunes' view matches all
+  69, `after` with no sync reports no change.
+- [ ] **S.2 Mirror liked songs through iTunes (manual management)** — *Test first:* against a fake iTunes, the plan's steps become
+  adds (library AddFile, then device AddTrack), removals (device track Delete; already gone counts as done), and replace / tag
+  update as remove + add; songs needing conversion fail with a clear reason until ffmpeg is set up; liked songs already on the phone
+  (3uTools) are adopted (migration 12) — not sent twice, never removed by Miu. Real iTunes: `apple::itunes_com` (late-bound COM,
+  persistent ID = phone sync_id). Built 2026-10-20; machine test reads the 5s's 69 tracks with IDs matching the phone. Nothing sent yet.
 - [ ] **S.3 Start the device sync** — *Test first:* sync is only requested after the playlist matches; errors map to F5.6 messages. *Machine test:* `UpdateIPod` (or equivalent) syncs the iPhone.
 - [ ] **S.4 First-time guide** — iTunes must be told once to sync the "Miu Music" playlist. **Warn first:** iTunes replaces music synced by another library (the 69 songs 3uTools put on the phone).
 - [ ] **S.5 Verify** — reuse F4.5 (pull the device DB, compare per track).

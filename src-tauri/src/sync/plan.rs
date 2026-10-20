@@ -74,6 +74,8 @@ struct Sent {
     meta_hash: String,
     audio_hash: Option<String>,
     bytes: u64,
+    /// Found on the phone rather than sent by Miu: never removed.
+    adopted: bool,
 }
 
 /// The tags the phone shows, hashed: a change means the phone needs a metadata update.
@@ -89,6 +91,16 @@ fn meta_hash(r: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
         s.push('\u{1f}');
     }
     Ok(fnv64(s.as_bytes()))
+}
+
+/// Tag and audio hashes of the liked songs, as a sync records them.
+pub(crate) fn liked_hashes(db: &Db) -> rusqlite::Result<HashMap<i64, (String, Option<String>)>> {
+    let mut stmt = db.conn().prepare(
+        "SELECT id, title, artist, album, album_artist, genre, year, track_no, track_total, disc_no, audio_hash
+         FROM songs WHERE rating = 1",
+    )?;
+    let rows = stmt.query_map([], |r| Ok((r.get(0)?, (meta_hash(r)?, r.get(10)?))))?;
+    rows.collect()
 }
 
 fn liked_songs(db: &Db, policy: &Policy) -> rusqlite::Result<Vec<Liked>> {
@@ -113,9 +125,9 @@ fn liked_songs(db: &Db, policy: &Policy) -> rusqlite::Result<Vec<Liked>> {
 }
 
 fn sent(db: &Db, udid: &str) -> rusqlite::Result<HashMap<i64, Sent>> {
-    let mut stmt = db.conn().prepare("SELECT song_id, device_pid, meta_hash, audio_hash, bytes FROM synced WHERE udid = ?1")?;
+    let mut stmt = db.conn().prepare("SELECT song_id, device_pid, meta_hash, audio_hash, bytes, adopted FROM synced WHERE udid = ?1")?;
     let rows = stmt.query_map([udid], |r| {
-        Ok((r.get(0)?, Sent { device_pid: r.get::<_, Option<i64>>(1)?.map(|p| p as u64), meta_hash: r.get(2)?, audio_hash: r.get(3)?, bytes: r.get::<_, i64>(4)? as u64 }))
+        Ok((r.get(0)?, Sent { device_pid: r.get::<_, Option<i64>>(1)?.map(|p| p as u64), meta_hash: r.get(2)?, audio_hash: r.get(3)?, bytes: r.get::<_, i64>(4)? as u64, adopted: r.get(5)? }))
     })?;
     rows.collect()
 }
@@ -145,6 +157,9 @@ pub fn plan(db: &Db, udid: &str, policy: &Policy) -> rusqlite::Result<Plan> {
     let mut removals: Vec<(i64, Sent)> = on_phone.into_iter().collect();
     removals.sort_by_key(|(id, _)| *id);
     for (song_id, old) in removals {
+        if old.adopted {
+            continue;
+        }
         p.free_after_remove_bytes += old.bytes;
         p.steps.push(Step::Remove { song_id, device_pid: old.device_pid, bytes: old.bytes });
     }

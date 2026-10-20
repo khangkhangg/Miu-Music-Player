@@ -16,3 +16,5 @@ pub mod stage;
 #[cfg(windows)]
 pub mod syslog_relay;
 pub mod value;
+#[cfg(windows)]
+pub mod itunes_com;

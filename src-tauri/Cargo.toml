@@ -44,6 +44,7 @@ quick-xml = "0.41"
 winreg = "0.55"
 libloading = "0.8"
 windows-sys = { version = "0.60", features = ["Win32_System_LibraryLoader"] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }
 wasapi = "0.26.0"
 
 [dev-dependencies]

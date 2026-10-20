@@ -120,6 +120,8 @@ pub const MIGRATIONS: &[&str] = &[
         album TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (kind, artist, album)
      ) STRICT;",
+    // 12: songs found already on a phone (put there by 3uTools or iTunes): tracked, never removed
+    "ALTER TABLE synced ADD COLUMN adopted INTEGER NOT NULL DEFAULT 0;",
 ];
 
 #[derive(Debug, thiserror::Error)]

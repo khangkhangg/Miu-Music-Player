@@ -1,32 +1,33 @@
 //! Safeguards around an iTunes sync (Phase 4b, see `sync::guard`). Only reads from the phone.
 //!
-//! `cargo run --bin sync-guard -- before [--itunes <view.json>]`
+//! `cargo run --bin sync-guard -- before`
 //!   backs up the phone's music database, copies every phone song with no copy in Miu's library
-//!   into `%APPDATA%\MiuMusic\backups\<udid8>\media\`, and with `--itunes` checks iTunes' view of the
-//!   phone (from `tools/itunes-view.ps1`). Exit code 2 = do not sync.
+//!   into `%APPDATA%\MiuMusic\backups\<udid8>\media\`, and checks iTunes' view of the phone (read
+//!   over COM). Exit code 2 = do not sync.
 //! `cargo run --bin sync-guard -- after`
 //!   backs up again and lists what the sync added and removed. Exit code 2 = songs were removed.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use miu_music_lib::apple::afc::open_first_trusted;
+use miu_music_lib::apple::itunes_com::ITunesCom;
+use miu_music_lib::sync::itunes::ITunes;
 use miu_music_lib::sync::backup::{backup, latest_backup};
 use miu_music_lib::sync::guard::{copy_name, copy_off, diff, phone_only, phone_tracks, precheck, Concern, PcSong, PhoneTrack};
 use miu_music_lib::util::{paths, time};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let itunes = args.iter().position(|a| a == "--itunes").and_then(|i| args.get(i + 1)).map(PathBuf::from);
     match args.first().map(String::as_str) {
-        Some("before") => before(itunes.as_deref()),
+        Some("before") => before(),
         Some("after") => after(),
-        _ => fail("usage: sync-guard before [--itunes <view.json>] | after"),
+        _ => fail("usage: sync-guard before | after"),
     }
 }
 
-fn before(itunes: Option<&Path>) {
+fn before() {
     let (afc, udid) = open_first_trusted(Duration::from_secs(20)).unwrap_or_else(|e| fail(&e));
     let root = paths::backups_dir_in(&paths::appdata_root());
     let b = backup(&afc, &root, &udid, time::now_unix()).unwrap_or_else(|e| fail(&e.to_string()));
@@ -48,11 +49,8 @@ fn before(itunes: Option<&Path>) {
         println!("  could not copy {title}: {err}");
     }
 
-    let Some(view) = itunes else {
-        println!("(no --itunes view given: iTunes check skipped)");
-        return;
-    };
-    let ids = itunes_ids(view);
+    let itunes = ITunesCom::connect().unwrap_or_else(|e| fail(&e));
+    let ids: HashSet<i64> = itunes.device_tracks().unwrap_or_else(|e| fail(&e)).into_iter().map(|t| t.id).collect();
     println!("iTunes lists {} tracks on the phone", ids.len());
     let concerns = precheck(&tracks, &ids);
     for c in &concerns {
@@ -105,17 +103,6 @@ fn pc_songs(db: &Path) -> Vec<PcSong> {
     stmt.query_map([], |r| Ok(PcSong { title: r.get(0)?, size: r.get::<_, i64>(1)?.max(0) as u64, duration_ms: r.get(2)? }))
         .map(|rows| rows.flatten().collect())
         .unwrap_or_default()
-}
-
-/// Persistent IDs from `tools/itunes-view.ps1` output: `[{ "hex": "00995F8A14CDF8AF", … }, …]`.
-fn itunes_ids(path: &Path) -> HashSet<i64> {
-    let text = std::fs::read_to_string(path).unwrap_or_else(|e| fail(&e.to_string()));
-    let rows: Vec<serde_json::Value> = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap_or_else(|e| fail(&e.to_string()));
-    rows.iter()
-        .filter_map(|r| r["hex"].as_str())
-        .filter_map(|h| u64::from_str_radix(h, 16).ok())
-        .map(|v| v as i64)
-        .collect()
 }
 
 fn fail(msg: &str) -> ! {

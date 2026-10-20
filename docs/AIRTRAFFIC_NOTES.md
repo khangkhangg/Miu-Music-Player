@@ -482,3 +482,12 @@ copy in Miu's library and were copied to `%APPDATA%\MiuMusic\backups\e51e30a5\me
 (`<sync_id hex>.<ext>`, `index.json` with titles and phone paths). iTunes' view lists all 69 by
 sync_id; no IDs with a leading zero byte remain. Run both around every `UpdateIPod` until S.2/S.3
 call them automatically.
+
+### 2026-10-20 — iTunes COM from Rust (S.2)
+`apple::itunes_com::ITunesCom`: `CoCreateInstance` by CLSID with `CLSCTX_LOCAL_SERVER`, late-bound
+`IDispatch` (`GetIDsOfNames` + `Invoke`). `ITObjectPersistentIDHigh/Low` are **parameterised
+properties**: called as `DISPATCH_METHOD` they fail with `DISP_E_MEMBERNOTFOUND` (0x80020003); as
+`DISPATCH_PROPERTYGET | DISPATCH_METHOD` they work (PowerShell hides this). Read-only machine test: 69
+tracks on the 5s, IDs unique and equal to the phone's `item_store.sync_id` (e.g. Bông Cỏ Mây
+-941274682976370203). `Duration` is in whole seconds. `add` finds the new device track by diffing
+the device track IDs before and after `AddTrack` (confidence medium until the first real add).
