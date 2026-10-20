@@ -157,6 +157,7 @@ pub struct AppSettings {
     pub visualizer_style: String,
     pub conversion: crate::library::convert::Policy,
     pub exclusive_output: bool,
+    pub podcast_cleanup_days: Option<u32>,
 }
 
 pub fn all(db: &Db) -> AppSettings {
@@ -169,6 +170,7 @@ pub fn all(db: &Db) -> AppSettings {
         visualizer_style: visualizer_style(db),
         conversion: conversion_policy(db),
         exclusive_output: exclusive_output(db),
+        podcast_cleanup_days: podcast_cleanup_days(db),
     }
 }
 
@@ -193,8 +195,23 @@ pub fn change(db: &Db, name: &str, value: &serde_json::Value) -> std::result::Re
         "visualizerStyle" => set_visualizer_style(db, &get::<String>(value)?),
         "conversion" => set_conversion_policy(db, &get(value)?).map_err(db_err),
         "exclusiveOutput" => set_exclusive_output(db, get(value)?).map_err(db_err),
+        "podcastCleanupDays" => set_podcast_cleanup_days(db, get(value)?).map_err(db_err),
         _ => Err(format!("unknown setting {name:?}")),
     }
+}
+
+const PODCAST_CLEANUP_DAYS: &str = "podcast_cleanup_days";
+
+/// Days after which a played episode's download is deleted; `None` = never (default: 7).
+pub fn podcast_cleanup_days(db: &Db) -> Option<u32> {
+    match db.setting_json::<Option<u32>>(PODCAST_CLEANUP_DAYS) {
+        Ok(Some(choice)) => choice,
+        _ => Some(7),
+    }
+}
+
+pub fn set_podcast_cleanup_days(db: &Db, days: Option<u32>) -> Result<()> {
+    db.set_setting_json(PODCAST_CLEANUP_DAYS, &days)
 }
 
 const SHUFFLE: &str = "shuffle";
@@ -453,6 +470,7 @@ mod schema_tests {
             visualizer_style: "bars".into(),
             conversion: Policy { hi_res: HiRes::Alac24_48, lossless: Lossless::Alac },
             exclusive_output: false,
+            podcast_cleanup_days: Some(7),
         });
     }
 
@@ -497,5 +515,26 @@ mod play_order_tests {
         set_shuffle(&db, true).unwrap();
         set_repeat(&db, Repeat::One).unwrap();
         assert_eq!((shuffle(&db), repeat(&db)), (true, Repeat::One));
+    }
+}
+
+#[cfg(test)]
+mod podcast_cleanup_tests {
+    use super::*;
+
+    #[test]
+    fn played_downloads_are_cleared_after_a_week_by_default() {
+        assert_eq!(podcast_cleanup_days(&Db::open_in_memory().unwrap()), Some(7));
+    }
+
+    #[test]
+    fn the_choice_including_never_is_remembered_through_the_settings_page() {
+        let db = Db::open_in_memory().unwrap();
+        change(&db, "podcastCleanupDays", &serde_json::json!(30)).unwrap();
+        assert_eq!(podcast_cleanup_days(&db), Some(30));
+        assert_eq!(all(&db).podcast_cleanup_days, Some(30));
+        change(&db, "podcastCleanupDays", &serde_json::json!(null)).unwrap();
+        assert_eq!(podcast_cleanup_days(&db), None, "never");
+        assert!(change(&db, "podcastCleanupDays", &serde_json::json!(-3)).is_err());
     }
 }

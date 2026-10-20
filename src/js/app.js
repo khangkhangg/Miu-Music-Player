@@ -15,7 +15,7 @@ import { planSummary } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
-import { episodeMeta } from './podcasts.js';
+import { episodeMeta, episodeState } from './podcasts.js';
 import { language } from './i18n.js';
 import { formatBytes } from './device.js';
 import { select } from './selection.js';
@@ -858,6 +858,7 @@ function showSettings(s) {
   $('set-lossless').value = s.conversion.lossless;
   $('set-hires').value = s.conversion.hiRes;
   $('set-exclusive').checked = s.exclusiveOutput;
+  $('set-podcast-cleanup').value = s.podcastCleanupDays == null ? 'never' : String(s.podcastCleanupDays);
 }
 
 function setupSettings(languageSetting) {
@@ -894,6 +895,10 @@ function setupSettings(languageSetting) {
   $('set-mini-top').addEventListener('change', e => invoke('set_mini_on_top', { on: e.target.checked }).then(reload));
   $('set-viz').addEventListener('change', e => invoke('set_visualizer_on', { on: e.target.checked }).then(reload));
   $('set-viz-style').addEventListener('change', e => invoke('set_visualizer_style', { style: e.target.value }).then(reload));
+  $('set-podcast-cleanup').addEventListener('change', e => {
+    const v = e.target.value;
+    invoke('set_app_setting', { name: 'podcastCleanupDays', value: v === 'never' ? null : Number(v) }).then(showSettings);
+  });
   $('set-exclusive').addEventListener('change', e => invoke('set_exclusive', { on: e.target.checked }).then(renderDevices).then(reload));
   $('export-diagnostics').addEventListener('click', async () => {
     const path = await window.__TAURI__.dialog.save({ defaultPath: 'MiuMusic-diagnostics.txt', filters: [{ name: t('settings.textFiles'), extensions: ['txt'] }] }); // i18n-ignore: file name
@@ -1166,6 +1171,22 @@ function setupPodcasts() {
       .catch(err => { $('podcast-error').textContent = String(err); });
   });
   $('show-back').addEventListener('click', () => showView('podcasts'));
+  const saveOptions = () => {
+    if (!openShow) return;
+    invoke('podcast_set_options', { id: openShow.id, autoDownload: $('show-auto').checked, keepLatest: Number($('show-keep').value) })
+      .then(list => { shows = list; openShow = list.find(x => x.id === openShow.id) ?? openShow; });
+  };
+  $('show-auto').addEventListener('change', saveOptions);
+  $('show-keep').addEventListener('change', saveOptions);
+  window.__TAURI__.event.listen('podcasts-changed', e => {
+    pendingDownloads.delete(e.payload);
+    if (view === 'show' && openShow) loadPodcasts().then(() => openShowPage(openShow.id, false));
+    else if (view === 'podcasts') loadPodcasts();
+  });
+  window.__TAURI__.event.listen('podcast-download-failed', e => {
+    pendingDownloads.delete(e.payload.id);
+    $('show-facts').textContent = t('podcast.downloadFailed', { reason: e.payload.error });
+  });
   $('show-refresh').addEventListener('click', () => {
     if (!openShow) return;
     $('show-refresh').disabled = true;
@@ -1259,16 +1280,48 @@ function openShowPage(id, scroll = true) {
   if (s.artworkUrl) { bg.referrerPolicy = 'no-referrer'; bg.src = s.artworkUrl; }
   return invoke('podcast_episodes', { id }).then(eps => {
     if (scroll) $('show-facts').textContent = t('podcast.facts', { n: eps.length, unplayed: eps.filter(e => !e.played).length });
+    $('show-auto').checked = Boolean(s.autoDownload);
+    $('show-keep').value = String(s.keepLatest ?? 3);
     $('episode-list').replaceChildren(...eps.map(e => {
       const li = document.createElement('li');
       li.className = e.played ? 'episode played' : 'episode';
       const title = cell(e.title, 'episode-title');
       const meta = cell(episodeMeta(e, language()), 'episode-meta');
-      const note = cell(t('podcast.downloadSoon'), 'episode-note');
-      li.append(title, note, meta);
+      li.append(title, episodeActions(e), meta);
       return li;
     }));
     showView('show');
     if (scroll) $('show-page').scrollTop = 0;
   });
+}
+
+// ---- Offline episodes (P.3) ----
+const pendingDownloads = new Set();
+
+function episodeActions(e) {
+  const box = document.createElement('span');
+  box.className = 'episode-actions';
+  const button = (key, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'eq-btn';
+    b.textContent = t(key);
+    b.addEventListener('click', fn);
+    return b;
+  };
+  const refreshShow = () => openShow && openShowPage(openShow.id, false);
+  const state = episodeState(e, pendingDownloads);
+  if (state === 'download') {
+    box.append(button('podcast.download', () => {
+      pendingDownloads.add(e.id);
+      invoke('podcast_download', { id: e.id });
+      refreshShow();
+    }));
+  } else if (state === 'downloading') {
+    box.append(cell(t('podcast.downloading'), 'episode-state'));
+  } else {
+    box.append(cell(t('podcast.downloaded'), 'episode-state'), button('podcast.removeDownload', () => invoke('podcast_delete_download', { id: e.id }).then(refreshShow)));
+  }
+  box.append(button(e.played ? 'podcast.markUnplayed' : 'podcast.markPlayed', () => invoke('podcast_set_played', { id: e.id, played: !e.played }).then(() => loadPodcasts()).then(refreshShow)));
+  return box;
 }

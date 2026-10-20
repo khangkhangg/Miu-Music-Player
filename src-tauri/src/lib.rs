@@ -69,6 +69,7 @@ pub fn run() {
     let saved_exclusive = db.lock().is_ok_and(|d| settings::exclusive_output(&d));
     let (saved_shuffle, saved_repeat) = db.lock().map(|d| (settings::shuffle(&d), settings::repeat(&d))).unwrap_or_default();
     let player: audio::service::SharedPlayer = audio::service::PlayerHandle::new_deferred(saved_output, saved_exclusive, saved_shuffle, saved_repeat);
+    let podcast_downloads: podcast::service::SharedDownloads = std::sync::Arc::new(podcast::service::Downloads::default());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(registry.clone())
@@ -77,12 +78,14 @@ pub fn run() {
         .manage(player.clone())
         .manage(visualizer_on.clone())
         .manage(library::service::LastEdit::default())
+        .manage(podcast_downloads.clone())
         .register_uri_scheme_protocol("miuart", {
             let db = db.clone();
             move |_ctx, request| library::service::art_response(&db, request.uri().path())
         })
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
+            podcast::service::start(app.handle().clone(), db.clone(), podcast_downloads.clone());
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db.clone(), library_watch);
             audio::eq_service::start(&db, &player);
@@ -112,6 +115,10 @@ pub fn run() {
             podcast::service::podcast_unsubscribe,
             podcast::service::podcast_import_opml,
             podcast::service::podcast_export_opml,
+            podcast::service::podcast_download,
+            podcast::service::podcast_delete_download,
+            podcast::service::podcast_set_played,
+            podcast::service::podcast_set_options,
             audio::service::play_songs,
             audio::service::player_pause,
             audio::service::player_resume,

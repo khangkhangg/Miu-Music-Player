@@ -16,3 +16,10 @@ test('finished or empty work hides the bar', () => {
 test('importing podcasts has its own label', () => {
   assert.equal(workState({ phase: 'import', done: 2, total: 5 }).text, 'Adding podcasts: 2 of 5');
 });
+
+test('a download shows the episode and the amount in megabytes', () => {
+  const w = workState({ phase: 'download', done: 12_000_000, total: 45_000_000, title: 'Tập 12' });
+  assert.deepEqual(w, { show: true, percent: 27, text: 'Downloading “Tập 12”: 12.0 MB of 45.0 MB' });
+  assert.equal(workState({ phase: 'download', done: 5_000_000, total: 0, title: 'x' }).text, 'Downloading “x”: 5.0 MB', 'size unknown');
+  assert.equal(workState({ phase: 'download', done: 0, total: 0 }).show, false, 'finished');
+});

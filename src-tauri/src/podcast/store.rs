@@ -18,6 +18,8 @@ pub struct ShowRow {
     pub last_checked: Option<i64>,
     pub episodes: i64,
     pub unplayed: i64,
+    pub auto_download: bool,
+    pub keep_latest: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -33,6 +35,8 @@ pub struct EpisodeRow {
     pub audio_url: String,
     pub position_ms: i64,
     pub played: bool,
+    /// When it was finished (seconds since 1970).
+    pub played_at: Option<i64>,
     pub download_path: Option<String>,
 }
 
@@ -92,12 +96,14 @@ pub fn list_shows(db: &Db) -> rusqlite::Result<Vec<ShowRow>> {
     let mut stmt = db.conn().prepare(
         "SELECT p.id, p.feed_url, p.title, p.author, p.artwork_url, p.last_checked,
                 (SELECT count(*) FROM episodes e WHERE e.podcast_id = p.id),
-                (SELECT count(*) FROM episodes e WHERE e.podcast_id = p.id AND e.played = 0)
+                (SELECT count(*) FROM episodes e WHERE e.podcast_id = p.id AND e.played = 0),
+                p.auto_download, p.keep_latest
          FROM podcasts p ORDER BY p.title COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(ShowRow { id: r.get(0)?, feed_url: r.get(1)?, title: r.get(2)?, author: r.get(3)?, artwork_url: r.get(4)?,
-                     last_checked: r.get(5)?, episodes: r.get(6)?, unplayed: r.get(7)? })
+                     last_checked: r.get(5)?, episodes: r.get(6)?, unplayed: r.get(7)?,
+                     auto_download: r.get(8)?, keep_latest: r.get(9)? })
     })?;
     rows.collect()
 }
@@ -105,20 +111,25 @@ pub fn list_shows(db: &Db) -> rusqlite::Result<Vec<ShowRow>> {
 /// A show's episodes, newest first.
 pub fn list_episodes(db: &Db, podcast_id: i64) -> rusqlite::Result<Vec<EpisodeRow>> {
     let mut stmt = db.conn().prepare(
-        "SELECT id, podcast_id, guid, title, description, published, duration_ms, audio_url, position_ms, played, download_path
+        "SELECT id, podcast_id, guid, title, description, published, duration_ms, audio_url, position_ms, played, download_path, played_at
          FROM episodes WHERE podcast_id = ?1 ORDER BY published DESC, id DESC",
     )?;
     let rows = stmt.query_map([podcast_id], |r| {
         Ok(EpisodeRow { id: r.get(0)?, podcast_id: r.get(1)?, guid: r.get(2)?, title: r.get(3)?, description: r.get(4)?,
                         published: r.get(5)?, duration_ms: r.get(6)?, audio_url: r.get(7)?, position_ms: r.get(8)?,
-                        played: r.get(9)?, download_path: r.get(10)? })
+                        played: r.get(9)?, download_path: r.get(10)?, played_at: r.get(11)? })
     })?;
     rows.collect()
 }
 
-/// Where the listener is in an episode, and whether it is finished.
-pub fn set_progress(db: &Db, episode_id: i64, position_ms: u64, played: bool) -> rusqlite::Result<()> {
-    db.conn().execute("UPDATE episodes SET position_ms = ?1, played = ?2 WHERE id = ?3", params![position_ms as i64, played, episode_id])?;
+/// Where the listener is in an episode, and whether it is finished (finishing records `now`).
+pub fn set_progress(db: &Db, episode_id: i64, position_ms: u64, played: bool, now: u64) -> rusqlite::Result<()> {
+    db.conn().execute(
+        "UPDATE episodes SET position_ms = ?1, played = ?2,
+             played_at = CASE WHEN ?2 THEN COALESCE(played_at, ?3) ELSE NULL END
+         WHERE id = ?4",
+        params![position_ms as i64, played, now as i64, episode_id],
+    )?;
     Ok(())
 }
 
@@ -137,6 +148,37 @@ pub fn validators(db: &Db, id: i64) -> rusqlite::Result<Option<(String, Option<S
 
 pub fn set_validators(db: &Db, id: i64, etag: Option<&str>, last_modified: Option<&str>) -> rusqlite::Result<()> {
     db.conn().execute("UPDATE podcasts SET etag = ?1, last_modified = ?2 WHERE id = ?3", params![etag, last_modified, id])?;
+    Ok(())
+}
+
+/// What the downloader needs to know about one episode.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EpisodeFile {
+    pub id: i64,
+    pub podcast_id: i64,
+    pub title: String,
+    pub audio_url: String,
+    pub audio_type: Option<String>,
+    pub download_path: Option<String>,
+}
+
+pub fn episode(db: &Db, id: i64) -> rusqlite::Result<Option<EpisodeFile>> {
+    db.conn()
+        .query_row("SELECT id, podcast_id, title, audio_url, audio_type, download_path FROM episodes WHERE id = ?1", [id], |r| {
+            Ok(EpisodeFile { id: r.get(0)?, podcast_id: r.get(1)?, title: r.get(2)?, audio_url: r.get(3)?, audio_type: r.get(4)?, download_path: r.get(5)? })
+        })
+        .optional()
+}
+
+/// Where the episode's audio is on disk (`None` = not downloaded).
+pub fn set_download(db: &Db, id: i64, path: Option<&str>) -> rusqlite::Result<()> {
+    db.conn().execute("UPDATE episodes SET download_path = ?1 WHERE id = ?2", params![path, id])?;
+    Ok(())
+}
+
+/// Download new episodes on their own, keeping the newest `keep_latest`.
+pub fn set_show_options(db: &Db, id: i64, auto_download: bool, keep_latest: u32) -> rusqlite::Result<()> {
+    db.conn().execute("UPDATE podcasts SET auto_download = ?1, keep_latest = ?2 WHERE id = ?3", params![auto_download, keep_latest, id])?;
     Ok(())
 }
 
@@ -183,7 +225,7 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let id = subscribe(&db, &show("Show"), &[ep("1", 100)], 1).unwrap();
         let first = list_episodes(&db, id).unwrap()[0].id;
-        set_progress(&db, first, 42_000, false).unwrap();
+        set_progress(&db, first, 42_000, false, 1).unwrap();
         let added = refresh(&db, id, &show("Show (renamed)"), &[ep("1", 100), ep("2", 200)], 5).unwrap();
         assert_eq!(added, 1);
         let eps = list_episodes(&db, id).unwrap();
@@ -199,7 +241,7 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let id = subscribe(&db, &show("Show"), &[ep("1", 1), ep("2", 2)], 1).unwrap();
         let e = list_episodes(&db, id).unwrap()[0].id;
-        set_progress(&db, e, 60_000, true).unwrap();
+        set_progress(&db, e, 60_000, true, 1).unwrap();
         assert_eq!(list_shows(&db).unwrap()[0].unplayed, 1);
     }
 
@@ -210,5 +252,53 @@ mod tests {
         unsubscribe(&db, id).unwrap();
         assert!(list_shows(&db).unwrap().is_empty());
         assert!(list_episodes(&db, id).unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod offline_tests {
+    use super::*;
+    use crate::library::db::Db;
+    use crate::podcast::feed::{Episode, Show};
+
+    fn setup() -> (Db, i64, i64) {
+        let db = Db::open_in_memory().unwrap();
+        let show = Show { feed_url: "https://x/f".into(), title: "S".into(), author: None, description: None, artwork_url: None, link: None, language: None };
+        let ep = Episode { guid: "1".into(), title: "E".into(), description: None, published: Some(1), duration_ms: None,
+                           audio_url: "https://x/1.mp3".into(), audio_type: Some("audio/mpeg".into()), audio_bytes: None, season: None, number: None };
+        let id = subscribe(&db, &show, &[ep], 1).unwrap();
+        let e = list_episodes(&db, id).unwrap()[0].id;
+        (db, id, e)
+    }
+
+    #[test]
+    fn shows_do_not_auto_download_until_asked_and_keep_three() {
+        let (db, id, _) = setup();
+        let s = &list_shows(&db).unwrap()[0];
+        assert_eq!((s.auto_download, s.keep_latest), (false, 3));
+        set_show_options(&db, id, true, 5).unwrap();
+        let s = &list_shows(&db).unwrap()[0];
+        assert_eq!((s.auto_download, s.keep_latest), (true, 5));
+    }
+
+    #[test]
+    fn a_download_is_recorded_and_can_be_cleared() {
+        let (db, _, e) = setup();
+        set_download(&db, e, Some(r"C:\podcasts\1\1.mp3")).unwrap();
+        let row = episode(&db, e).unwrap().unwrap();
+        assert_eq!(row.download_path.as_deref(), Some(r"C:\podcasts\1\1.mp3"));
+        assert_eq!(row.audio_type.as_deref(), Some("audio/mpeg"));
+        set_download(&db, e, None).unwrap();
+        assert_eq!(episode(&db, e).unwrap().unwrap().download_path, None);
+    }
+
+    #[test]
+    fn finishing_records_the_time_once_and_unplaying_clears_it() {
+        let (db, id, e) = setup();
+        set_progress(&db, e, 10, true, 100).unwrap();
+        set_progress(&db, e, 10, true, 200).unwrap();
+        assert_eq!(list_episodes(&db, id).unwrap()[0].played_at, Some(100), "first finish counts");
+        set_progress(&db, e, 0, false, 300).unwrap();
+        assert_eq!(list_episodes(&db, id).unwrap()[0].played_at, None);
     }
 }

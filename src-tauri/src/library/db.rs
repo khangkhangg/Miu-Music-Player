@@ -109,6 +109,10 @@ pub const MIGRATIONS: &[&str] = &[
          UNIQUE (podcast_id, guid)
      ) STRICT;
      CREATE INDEX episodes_podcast ON episodes(podcast_id, published);",
+    // 10: offline listening (P.3): when an episode was finished, per-show auto-download
+    "ALTER TABLE episodes ADD COLUMN played_at INTEGER;
+     ALTER TABLE podcasts ADD COLUMN auto_download INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE podcasts ADD COLUMN keep_latest INTEGER NOT NULL DEFAULT 3;",
 ];
 
 #[derive(Debug, thiserror::Error)]

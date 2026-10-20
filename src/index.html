@@ -222,7 +222,14 @@
             <button class="ghost-btn" id="show-unsubscribe" type="button" data-i18n="podcast.unsubscribe">Unsubscribe</button>
           </div>
         </div>
-        <p class="album-facts muted" id="show-facts"></p>
+        <div class="show-options">
+          <label class="setting check"><input type="checkbox" id="show-auto"><span data-i18n="podcast.autoDownload">Download new episodes automatically</span></label>
+          <label class="setting"><span data-i18n="podcast.keepLatest">Keep the newest</span>
+            <select id="show-keep">
+              <option value="1">1</option><option value="3">3</option><option value="5">5</option><option value="10">10</option>
+            </select></label>
+          <span class="muted" id="show-facts"></span>
+        </div>
         <ol class="track-list" id="episode-list"></ol>
       </section>
 
@@ -274,6 +281,17 @@
             <legend data-i18n="settings.playback">Playback on this PC</legend>
             <label class="setting check"><input type="checkbox" id="set-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
             <p class="muted setting-note" data-i18n="output.exclusiveNote">Miu takes the device for itself.</p>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="nav.podcasts">Podcasts</legend>
+            <label class="setting"><span data-i18n="settings.podcastCleanup">Delete downloads of played episodes</span>
+              <select id="set-podcast-cleanup">
+                <option value="0" data-i18n="cleanup.now">Right after playing</option>
+                <option value="1" data-i18n="cleanup.day">After 1 day</option>
+                <option value="7" data-i18n="cleanup.week">After 7 days</option>
+                <option value="30" data-i18n="cleanup.month">After 30 days</option>
+                <option value="never" data-i18n="cleanup.never">Never</option>
+              </select></label>
           </fieldset>
           <fieldset>
             <legend data-i18n="settings.help">Help</legend>

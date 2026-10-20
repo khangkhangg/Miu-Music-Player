@@ -20,3 +20,9 @@ export function episodeMeta(e, locale, timeZone) {
   if (len) parts.push(len);
   return parts.join(' · ');
 }
+
+/** 'download', 'downloading' (asked for, not on disk yet) or 'downloaded'. */
+export function episodeState(e, pending) {
+  if (e.downloadPath) return 'downloaded';
+  return pending.has(e.id) ? 'downloading' : 'download';
+}

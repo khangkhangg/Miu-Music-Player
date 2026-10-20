@@ -15,3 +15,11 @@ test('an episode line shows its date and length', () => {
   assert.equal(episodeMeta({ published: null, durationMs: 2_730_000 }, 'en', 'UTC'), '46 min');
   assert.equal(episodeMeta(e, 'vi', 'UTC'), '19 thg 10, 2026 · 1 h 2 min');
 });
+
+import { episodeState } from '../../src/js/podcasts.js';
+
+test('an episode is downloadable, downloading, or on this PC', () => {
+  assert.equal(episodeState({ id: 1, downloadPath: null }, new Set()), 'download');
+  assert.equal(episodeState({ id: 1, downloadPath: null }, new Set([1])), 'downloading');
+  assert.equal(episodeState({ id: 1, downloadPath: 'C:/p/1.mp3' }, new Set([1])), 'downloaded');
+});
