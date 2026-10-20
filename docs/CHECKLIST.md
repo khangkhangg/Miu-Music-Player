@@ -198,6 +198,7 @@ Added 2026-10-20. Default Discover charts: Vietnam and US.
 - [x] **P.5 Podcast playback** — *Test first:* resume position per episode, played state, skip back 15 s / forward 30 s.
   Verified in the app 2026-10-20 (play, resume, skip 15/30, now playing and mini player show the episode).
 - [ ] **P.6 Playback speed** (optional) — time-stretch without pitch change.
+  Skipped 2026-10-20 at the user's request.
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
