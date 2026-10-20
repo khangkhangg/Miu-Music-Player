@@ -187,7 +187,8 @@ signing: Miu only drives iTunes through its documented COM automation interface.
 
 ## Phase 7 – Podcasts
 Added 2026-10-20. Default Discover charts: Vietnam and US.
-- [ ] **P.1 Feeds and subscriptions** — *Test first:* RSS fixtures (iTunes tags, Vietnamese titles, missing fields) parse into a show and episodes; subscribing stores them; refreshing adds new episodes only.
+- [x] **P.1 Feeds and subscriptions** — *Test first:* RSS fixtures (iTunes tags, Vietnamese titles, missing fields) parse into a show and episodes; subscribing stores them; refreshing adds new episodes only.
+  Verified in the app 2026-10-20 (subscribe by address, artwork, episodes, check for new episodes).
 - [ ] **P.2 OPML import / export** — *Test first:* an OPML file from another app subscribes to every feed; export round-trips.
 - [ ] **P.3 Offline downloads** — *Test first:* resumable download (Range), auto-download newest N per show, cleanup of played episodes after X days.
 - [ ] **P.4 Discover** — *Test first:* Apple top charts (vn, us) and Apple search results parse into subscribable shows.
