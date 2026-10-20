@@ -11,8 +11,9 @@ use crate::library::convert::Action;
 /// Encodes audio and copies tags; the real one runs ffmpeg and lofty, tests use a fake.
 pub trait Transcoder {
     fn encode(&self, src: &Path, dst: &Path, action: Action) -> Result<(), String>;
-    /// Copy tags and artwork from `src` into the converted file `dst`.
-    fn retag(&self, src: &Path, dst: &Path) -> Result<(), String>;
+    /// Copy tags and artwork from `src` into the converted file `dst`; `cover` (an image file) is
+    /// added when `src` has no picture of its own.
+    fn retag(&self, src: &Path, dst: &Path, cover: Option<&Path>) -> Result<(), String>;
 }
 
 /// ffmpeg arguments for one conversion, or `None` when the file goes as it is.
@@ -86,7 +87,7 @@ impl Cache {
 
     /// The converted copy of `src`. `audio_key` identifies the audio (the song's audio hash),
     /// `tags_key` its current tags: a new `tags_key` re-tags the copy without re-encoding.
-    pub fn converted(&self, t: &dyn Transcoder, src: &Path, audio_key: &str, tags_key: &str, action: Action) -> Result<PathBuf, String> {
+    pub fn converted(&self, t: &dyn Transcoder, src: &Path, audio_key: &str, tags_key: &str, action: Action, cover: Option<&Path>) -> Result<PathBuf, String> {
         let io = |e: std::io::Error| e.to_string();
         std::fs::create_dir_all(&self.dir).map_err(io)?;
         let name = crate::library::fingerprint::fnv64(format!("{audio_key}\u{1f}{action:?}").as_bytes());
@@ -94,7 +95,7 @@ impl Cache {
         let tags_file = self.dir.join(format!("{name}.tags"));
         if !file.is_file() {
             let partial = self.dir.join(format!("{name}.partial.m4a"));
-            let encoded = t.encode(src, &partial, action).and_then(|_| t.retag(src, &partial));
+            let encoded = t.encode(src, &partial, action).and_then(|_| t.retag(src, &partial, cover));
             if let Err(e) = encoded {
                 let _ = std::fs::remove_file(&partial);
                 return Err(e);
@@ -105,7 +106,7 @@ impl Cache {
             let _ = std::fs::File::options().write(true).open(&file).and_then(|f| f.set_modified(std::time::SystemTime::now()));
             return Ok(file);
         } else {
-            t.retag(src, &file)?;
+            t.retag(src, &file, cover)?;
         }
         std::fs::write(&tags_file, tags_key).map_err(io)?;
         Ok(file)
@@ -136,14 +137,19 @@ impl Transcoder for Ffmpeg {
         Err(format!("ffmpeg: {}", err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("failed")))
     }
 
-    fn retag(&self, src: &Path, dst: &Path) -> Result<(), String> {
+    fn retag(&self, src: &Path, dst: &Path, cover: Option<&Path>) -> Result<(), String> {
         use lofty::config::WriteOptions;
         use lofty::file::TaggedFileExt;
-        use lofty::tag::{TagExt, TagType};
+        use lofty::picture::{MimeType, Picture, PictureType};
+        use lofty::tag::{Tag, TagExt, TagType};
         let file = lofty::read_from_path(src).map_err(|e| e.to_string())?;
-        let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else { return Ok(()) };
-        let mut tag = tag.clone();
+        let mut tag = file.primary_tag().or_else(|| file.first_tag()).cloned().unwrap_or_else(|| Tag::new(TagType::Mp4Ilst));
         tag.re_map(TagType::Mp4Ilst);
+        if tag.picture_count() == 0 {
+            if let Some(jpg) = cover.and_then(|c| std::fs::read(c).ok()) {
+                tag.push_picture(Picture::new_unchecked(PictureType::CoverFront, Some(MimeType::Jpeg), None, jpg));
+            }
+        }
         tag.save_to_path(dst, WriteOptions::default()).map_err(|e| e.to_string())
     }
 }
@@ -217,7 +223,7 @@ mod tests {
             std::fs::write(dst, format!("{} as {action:?}", src.display())).unwrap();
             if self.fail { Err("ffmpeg: Invalid data found when processing input".into()) } else { Ok(()) }
         }
-        fn retag(&self, _src: &Path, _dst: &Path) -> Result<(), String> {
+        fn retag(&self, _src: &Path, _dst: &Path, _cover: Option<&Path>) -> Result<(), String> {
             *self.retags.borrow_mut() += 1;
             Ok(())
         }
@@ -230,8 +236,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache { dir: dir.path().join("cache") };
         let t = Fake::default();
-        let a = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC).unwrap();
-        let b = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC).unwrap();
+        let a = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC, None).unwrap();
+        let b = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC, None).unwrap();
         assert_eq!(a, b);
         assert!(a.is_file() && a.extension().unwrap() == "m4a");
         assert_eq!((*t.encodes.borrow(), *t.retags.borrow()), (1, 1));
@@ -242,8 +248,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache { dir: dir.path().to_path_buf() };
         let t = Fake::default();
-        cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC).unwrap();
-        cache.converted(&t, Path::new("a.flac"), "audio1", "tags2", ALAC).unwrap();
+        cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC, None).unwrap();
+        cache.converted(&t, Path::new("a.flac"), "audio1", "tags2", ALAC, None).unwrap();
         assert_eq!((*t.encodes.borrow(), *t.retags.borrow()), (1, 2));
     }
 
@@ -252,9 +258,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache { dir: dir.path().to_path_buf() };
         let t = Fake::default();
-        let a = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC).unwrap();
-        let b = cache.converted(&t, Path::new("a.flac"), "audio2", "tags1", ALAC).unwrap();
-        let c = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", Action::Alac { bits: 24, rate: 48_000 }).unwrap();
+        let a = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC, None).unwrap();
+        let b = cache.converted(&t, Path::new("a.flac"), "audio2", "tags1", ALAC, None).unwrap();
+        let c = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", Action::Alac { bits: 24, rate: 48_000 }, None).unwrap();
         assert_eq!(*t.encodes.borrow(), 3);
         assert!(a != b && a != c && b != c);
     }
@@ -269,9 +275,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache { dir: dir.path().to_path_buf() };
         let t = Fake::default();
-        let old = cache.converted(&t, Path::new("a.flac"), "old", "t", ALAC).unwrap();
-        let mid = cache.converted(&t, Path::new("b.flac"), "mid", "t", ALAC).unwrap();
-        let new = cache.converted(&t, Path::new("c.flac"), "new", "t", ALAC).unwrap();
+        let old = cache.converted(&t, Path::new("a.flac"), "old", "t", ALAC, None).unwrap();
+        let mid = cache.converted(&t, Path::new("b.flac"), "mid", "t", ALAC, None).unwrap();
+        let new = cache.converted(&t, Path::new("c.flac"), "new", "t", ALAC, None).unwrap();
         age(&old, 300);
         age(&mid, 200);
         age(&new, 100);
@@ -287,11 +293,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache { dir: dir.path().to_path_buf() };
         let t = Fake::default();
-        let a = cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC).unwrap();
-        let b = cache.converted(&t, Path::new("b.flac"), "b", "t", ALAC).unwrap();
+        let a = cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC, None).unwrap();
+        let b = cache.converted(&t, Path::new("b.flac"), "b", "t", ALAC, None).unwrap();
         age(&a, 300);
         age(&b, 100);
-        cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC).unwrap();
+        cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC, None).unwrap();
         cache.trim(std::fs::metadata(&a).unwrap().len()).unwrap();
         assert!(a.exists() && !b.exists(), "a was just used");
     }
@@ -301,7 +307,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache { dir: dir.path().to_path_buf() };
         let t = Fake { fail: true, ..Default::default() };
-        let err = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC).unwrap_err();
+        let err = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC, None).unwrap_err();
         assert!(err.contains("Invalid data"), "{err}");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "no partial or finished file left");
     }
@@ -331,7 +337,7 @@ mod tests {
         tag.save_to_path(&flac, lofty::config::WriteOptions::default()).unwrap();
 
         let cache = Cache { dir: dir.path().join("cache") };
-        let out = cache.converted(&ff, &flac, "audio", "tags", Action::Alac { bits: 24, rate: 48_000 }).unwrap();
+        let out = cache.converted(&ff, &flac, "audio", "tags", Action::Alac { bits: 24, rate: 48_000 }, None).unwrap();
         let m4a = lofty::read_from_path(&out).unwrap();
         assert_eq!(m4a.file_type(), lofty::file::FileType::Mp4);
         let props = m4a.properties();

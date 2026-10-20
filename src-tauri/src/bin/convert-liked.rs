@@ -17,7 +17,7 @@ fn main() {
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())).unwrap_or_default();
     let ff = Ffmpeg { exe: ffmpeg_path(&exe_dir).unwrap_or_else(|| fail("ffmpeg sidecar not found next to this tool")) };
     let cache = Cache { dir: paths::local_appdata_root().join("MiuMusic").join("cache") };
-    let convert = |s: &SongSource| cache.converted(&ff, &s.path, &s.audio_key, &s.tags_key, s.action);
+    let convert = |s: &SongSource| cache.converted(&ff, &s.path, &s.audio_key, &s.tags_key, s.action, s.cover.as_deref());
 
     let songs = miu_music_lib::library::songs::list_songs(&db).unwrap_or_else(|e| fail(&e.to_string()));
     let (mut ok, mut failed) = (0, 0);

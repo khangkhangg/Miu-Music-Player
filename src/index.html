@@ -189,6 +189,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4"/><path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M6 21v-4h4"/></svg>
               <span id="album-sync-label" data-i18n="album.alwaysSync">Always sync</span>
             </button>
+            <button class="ghost-btn" id="album-art" type="button" data-i18n="album.findArt" hidden>Find artwork</button>
             <button class="ghost-btn" id="album-edit" type="button" data-i18n="album.editTags">Edit tags</button>
           </div>
         </div>
@@ -390,6 +391,12 @@
                 <option value="30" data-i18n="cleanup.month">After 30 days</option>
                 <option value="never" data-i18n="cleanup.never">Never</option>
               </select></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="settings.covers">Album covers</legend>
+            <div class="setting"><span data-i18n="settings.coversNote">Look up covers online for albums that have none (iTunes and MusicBrainz, free). Your music files are not changed.</span>
+              <button class="eq-btn" id="covers-find" type="button" data-i18n="settings.coversFind">Find missing covers</button></div>
+            <p class="muted setting-note" id="covers-result" role="status"></p>
           </fieldset>
           <fieldset>
             <legend data-i18n="settings.help">Help</legend>

@@ -77,3 +77,8 @@ export function syncRuleFor(page) {
 export function hasSyncRule(rules, rule) {
   return Boolean(rule) && rules.some((r) => r.kind === rule.kind && r.artist === rule.artist && (r.album ?? null) === (rule.album ?? null));
 }
+
+/** Whether an album page should offer "Find artwork": an album with an artist and no cover yet. */
+export function needsArtwork(page) {
+  return page?.kind === 'album' && Boolean(page.title) && Boolean(page.artist) && page.coverId == null;
+}

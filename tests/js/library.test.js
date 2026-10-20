@@ -76,3 +76,13 @@ test('a page shows whether its rule is on', () => {
   assert.equal(hasSyncRule(rules, { kind: 'artist', artist: 'Khánh Ly', album: null }), false);
   assert.equal(hasSyncRule(rules, null), false);
 });
+
+import { needsArtwork } from '../../src/js/library.js';
+
+test('the album page offers to find a cover only for albums without one', () => {
+  assert.equal(needsArtwork({ kind: 'album', title: 'Diễm Xưa', artist: 'Khánh Ly', coverId: null }), true);
+  assert.equal(needsArtwork({ kind: 'album', title: 'Diễm Xưa', artist: 'Khánh Ly', coverId: 12 }), false);
+  assert.equal(needsArtwork({ kind: 'album', title: 'Diễm Xưa', artist: '', coverId: null }), false, 'no artist to search with');
+  assert.equal(needsArtwork({ kind: 'artist', title: 'Khánh Ly', artist: '', coverId: null }), false);
+  assert.equal(needsArtwork(null), false);
+});

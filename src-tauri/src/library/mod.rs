@@ -1,4 +1,5 @@
 pub mod art;
+pub mod artfetch;
 pub mod convert;
 pub mod db;
 pub mod duplicates;

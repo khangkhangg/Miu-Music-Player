@@ -122,7 +122,16 @@ pub const MIGRATIONS: &[&str] = &[
      ) STRICT;",
     // 12: songs found already on a phone (put there by 3uTools or iTunes): tracked, never removed
     "ALTER TABLE synced ADD COLUMN adopted INTEGER NOT NULL DEFAULT 0;",
-    // 13: audiobooks (Phase 8): LibriVox books live beside podcasts; their chapters are episodes
+    // 13: covers found online for albums without one (file NULL = looked up, nothing found)
+    "CREATE TABLE album_art (
+        artist TEXT NOT NULL,
+        album TEXT NOT NULL,
+        source TEXT,
+        file TEXT,
+        checked_at INTEGER NOT NULL,
+        PRIMARY KEY (artist, album)
+     ) STRICT;",
+    // 14: audiobooks (Phase 8): LibriVox books live beside podcasts; their chapters are episodes
     "ALTER TABLE podcasts ADD COLUMN kind TEXT NOT NULL DEFAULT 'podcast' CHECK (kind IN ('podcast', 'audiobook'));",
 ];
 
