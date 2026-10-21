@@ -96,3 +96,9 @@ export function offsetLabel(offset) {
   if (!offset) return t('output.noDelay');
   return t(offset > 0 ? 'output.secondWaits' : 'output.firstWaits', { ms: Math.abs(offset) });
 }
+
+/** Balance in dB: positive turns the second output down, negative the first. */
+export function balanceLabel(db) {
+  if (!db) return t('output.balanceEven');
+  return t(db > 0 ? 'output.secondQuieter' : 'output.firstQuieter', { db: Math.abs(db) });
+}

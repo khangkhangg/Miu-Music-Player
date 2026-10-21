@@ -50,6 +50,20 @@ pub fn route(samples: &[f32], from: usize, to: usize, side: Side) -> Vec<f32> {
     samples.chunks_exact(from).flat_map(|f| std::iter::repeat(f[pick]).take(to)).collect()
 }
 
+/// How far the balance can turn one output down, dB.
+pub const MAX_BALANCE_DB: f32 = 24.0;
+
+/// Level of the first and second output for a balance in dB: positive turns the second output
+/// down by that much, negative the first. The louder one always stays at full level.
+pub fn balance_gains(balance_db: f32) -> [f32; 2] {
+    if balance_db.is_nan() {
+        return [1.0, 1.0];
+    }
+    let db = balance_db.clamp(-MAX_BALANCE_DB, MAX_BALANCE_DB);
+    let down = 10f32.powf(-db.abs() / 20.0);
+    if db > 0.0 { [1.0, down] } else if db < 0.0 { [down, 1.0] } else { [1.0, 1.0] }
+}
+
 /// Delays a stream by a number of frames that can change while it plays: a longer delay inserts
 /// silence, a shorter one skips audio. `reset` (after a seek) starts over with the full delay.
 pub struct DelayLine {
@@ -127,16 +141,23 @@ pub struct DriftController {
     smoothed: f64,
     integral: f64,
     correction: f64,
+    /// A jump for the second output, waiting to be taken (seconds; + skip ahead, - hold).
+    step: Option<f64>,
+    /// No new step before the first output has played this far (seconds since the restart).
+    step_ok_at: f64,
 }
 
 const KP: f64 = 0.1;
 const KI: f64 = 0.002;
 /// Smoothing of the measured error (seconds): the counters move in whole device buffers.
 const SMOOTH_S: f64 = 1.0;
+/// Gaps above this are closed by a step; after one, wait this long (seconds) before the next.
+const STEP_S: f64 = 0.005;
+const STEP_GAP_S: f64 = 1.0;
 
 impl DriftController {
     pub fn new(rate1: u32, rate2: u32) -> Self {
-        Self { rate1: rate1 as f64, rate2: rate2 as f64, last: None, played1: 0.0, played2: 0.0, smoothed: 0.0, integral: 0.0, correction: 0.0 }
+        Self { rate1: rate1 as f64, rate2: rate2 as f64, last: None, played1: 0.0, played2: 0.0, smoothed: 0.0, integral: 0.0, correction: 0.0, step: None, step_ok_at: 0.0 }
     }
 
     /// Both outputs start the music again together (play, seek): measure from here. The clock
@@ -146,6 +167,8 @@ impl DriftController {
         self.played1 = 0.0;
         self.played2 = 0.0;
         self.smoothed = 0.0;
+        self.step = None;
+        self.step_ok_at = 0.0;
     }
 
     /// Frames each device has consumed (since their last reset), as of now: the counter plus the
@@ -167,10 +190,18 @@ impl DriftController {
         let raw = self.played2 - self.played1;
         let a = (dt / SMOOTH_S).min(1.0);
         self.smoothed += (raw - self.smoothed) * a;
+        // A gap bigger than drift could make (a speaker that started late, a dropout) is closed in
+        // one step, not learnt as a clock difference.
+        if self.smoothed.abs() > STEP_S && self.played1 >= self.step_ok_at {
+            self.step = Some(-raw);
+            self.smoothed = 0.0;
+            self.step_ok_at = self.played1 + STEP_GAP_S;
+            return self.correction;
+        }
         // Integrate only while the correction is not pinned at its limit (no wind-up).
         let next_integral = self.integral + self.smoothed * dt;
         let c = KP * self.smoothed + KI * next_integral;
-        if c.abs() < MAX_CORRECTION {
+        if c.abs() < MAX_CORRECTION && self.smoothed.abs() < STEP_S {
             self.integral = next_integral;
         }
         self.correction = c.clamp(-MAX_CORRECTION, MAX_CORRECTION);
@@ -191,6 +222,12 @@ impl DriftController {
     /// than `ppm`, which also carries the moment-to-moment phase correction).
     pub fn clock_ppm(&self) -> f64 {
         (KI * self.integral).clamp(-MAX_CORRECTION, MAX_CORRECTION) * 1e6
+    }
+
+    /// A jump the second output should make now, if any (seconds): positive = skip that much
+    /// audio, negative = play that much silence first.
+    pub fn take_step(&mut self) -> Option<f64> {
+        self.step.take()
     }
 
     pub fn lost_sync(&self) -> bool {
@@ -377,11 +414,19 @@ mod tests {
     /// the real one, extrapolates each counter from its last callback at the nominal rate.
     /// Returns (controller, worst error in the last minute, seconds).
     fn simulate(rate1: u32, rate2: u32, ppm: f64, minutes: f64) -> (DriftController, f64) {
+        simulate_with(rate1, rate2, ppm, minutes, 0.0)
+    }
+
+    /// Like `simulate`, with the second device starting `late_s` after the first, and the
+    /// controller's phase steps applied the way the renderer does: skipping ahead counts the
+    /// skipped frames as played, holding plays silence that is not counted.
+    fn simulate_with(rate1: u32, rate2: u32, ppm: f64, minutes: f64, late_s: f64) -> (DriftController, f64) {
         let mut c = DriftController::new(rate1, rate2);
         let (chunk1, chunk2) = (rate1 as u64 / 100, rate2 as u64 / 100);
         let (mut f1, mut f2) = (0u64, 0u64);
-        let (mut t1, mut t2) = (0.0f64, 0.0f64); // when each device next asks for audio
+        let (mut t1, mut t2) = (0.0f64, late_s); // when each device next asks for audio
         let (mut seen1, mut seen2) = (0.0f64, 0.0f64); // when the last callback was noted
+        let mut nudge = 0i64; // frames for the second device: + skip ahead, - hold
         let mut seed = 12345u64;
         let mut wobble = move || {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -399,17 +444,43 @@ mod tests {
                 t1 += chunk1 as f64 / rate1 as f64;
             }
             while t2 <= now {
-                f2 += chunk2;
+                let held = if nudge < 0 { (-nudge).min(chunk2 as i64) } else { 0 };
+                nudge += held;
+                let skipped = nudge.max(0);
+                nudge -= skipped;
+                f2 += chunk2 - held as u64 + skipped as u64;
                 seen2 = t2 + wobble().abs();
                 t2 += chunk2 as f64 / (rate2 as f64 * (1.0 + ppm * 1e-6));
             }
             let at = |frames: u64, seen: f64, rate: u32, chunk: u64| frames as f64 - chunk as f64 + ((now - seen).max(0.0) * rate as f64).min(chunk as f64);
             c.update(at(f1, seen1, rate1, chunk1), at(f2, seen2, rate2, chunk2));
+            if let Some(s) = c.take_step() {
+                nudge += (s * rate2 as f64).round() as i64;
+            }
             if now > total - 60.0 {
                 worst = worst.max(c.error_s().abs());
             }
         }
         (c, worst)
+    }
+
+    #[test]
+    fn a_second_device_that_starts_late_is_stepped_into_line_not_mistaken_for_drift() {
+        let (c, worst) = simulate_with(44_100, 44_100, 0.0, 1.5, 0.025);
+        assert!(worst < 0.002, "worst {worst} s");
+        assert!(c.clock_ppm().abs() < 20.0, "a 25 ms late start is not a clock difference: {} ppm", c.clock_ppm());
+    }
+
+    #[test]
+    fn a_second_device_that_starts_early_waits_for_the_first() {
+        let mut c = DriftController::new(48_000, 48_000);
+        c.update(0.0, 0.0);
+        for i in 1..=40 {
+            c.update(i as f64 * 2_400.0, i as f64 * 2_400.0 + 960.0); // 20 ms ahead
+        }
+        let s = c.take_step().expect("a step");
+        assert!((s + 0.020).abs() < 0.003, "hold the second output about 20 ms: {s}");
+        assert!(c.take_step().is_none(), "one step at a time");
     }
 
     #[test]
@@ -435,9 +506,9 @@ mod tests {
 
     #[test]
     fn the_correction_never_exceeds_its_limit() {
-        let (c, _) = simulate(48_000, 48_000, 20_000.0, 2.0);
+        let (c, worst) = simulate(48_000, 48_000, 20_000.0, 2.0);
         assert!(c.ppm() <= MAX_CORRECTION * 1e6 + 1e-6);
-        assert!(c.lost_sync(), "2 % off cannot be followed; the engine must realign");
+        assert!(worst < 0.05, "2 % off cannot be followed smoothly, but steps keep it bounded: {worst}");
     }
 
     #[test]
@@ -445,7 +516,7 @@ mod tests {
         let mut c = DriftController::new(48_000, 48_000);
         c.update(0.0, 0.0);
         c.update(48_000.0, 0.0); // second device silent for a second
-        assert!(c.error_s() < -0.5);
+        assert!(c.take_step().is_some_and(|s| s > 0.9), "skip the second output ahead");
         c.update(0.0, 0.0); // both flushed (seek)
         c.update(4_800.0, 4_800.0);
         assert!(c.error_s().abs() < 1e-3, "fresh start, no error: {}", c.error_s());
@@ -533,5 +604,31 @@ mod click_pitch_tests {
         // On the "both" beat each output keeps its own pitch.
         assert!((pitch(&s, 2, 0, 2 * beat, rate) - first).abs() < 200.0);
         assert!((pitch(&s, 2, 1, 2 * beat, rate) - second).abs() < 200.0);
+    }
+}
+
+#[cfg(test)]
+mod balance_tests {
+    use super::*;
+
+    #[test]
+    fn centre_balance_leaves_both_at_full_level() {
+        assert_eq!(balance_gains(0.0), [1.0, 1.0]);
+    }
+
+    #[test]
+    fn positive_balance_turns_the_second_output_down_negative_the_first() {
+        let [a, b] = balance_gains(6.0);
+        assert_eq!(a, 1.0);
+        assert!((b - 0.501).abs() < 0.001, "-6 dB: {b}");
+        let [a, b] = balance_gains(-20.0);
+        assert!((a - 0.1).abs() < 0.001, "-20 dB: {a}");
+        assert_eq!(b, 1.0);
+    }
+
+    #[test]
+    fn balance_is_kept_within_its_range() {
+        assert_eq!(balance_gains(99.0), balance_gains(MAX_BALANCE_DB));
+        assert_eq!(balance_gains(f32::NAN), [1.0, 1.0]);
     }
 }

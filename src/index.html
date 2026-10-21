@@ -564,6 +564,12 @@
             <span class="out-note" id="out-dual-status" role="status"></span>
           </div>
           <p class="out-note muted" data-i18n="output.alignHelp">A low click on the first output, a high click on the second, then both together. Adjust until the clicks are evenly spaced and the two in the third beat land as one. The music waits meanwhile.</p>
+          <div class="out-offset">
+            <div class="out-offset-head"><label for="out-balance" data-i18n="output.balance">Balance</label><output id="out-balance-val" for="out-balance"></output></div>
+            <input type="range" id="out-balance" min="-24" max="24" step="0.5">
+            <div class="out-offset-ends muted"><span data-i18n="output.balanceFirst">First quieter</span><span data-i18n="output.balanceSecond">Second quieter</span></div>
+          </div>
+          <p class="out-note muted" data-i18n="output.balanceHelp">Speakers differ in loudness. Turn the louder one down until both sound even. Takes effect at once and is remembered for this pair.</p>
         </div>
         <p class="out-note muted" data-i18n="output.pairingTip">If both speakers can pair with each other (Bose Stereo or Party mode, JBL PartyBoost, Auracast), use that instead: speakers keep themselves in step far better than a PC can over Bluetooth.</p>
       </details>

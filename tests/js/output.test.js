@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel } from '../../src/js/output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel, balanceLabel } from '../../src/js/output.js';
 
 test('sample rates read like a spec sheet', () => {
   assert.deepEqual([44_100, 48_000, 96_000, 192_000, 88_200].map(rateLabel), ['44.1 kHz', '48 kHz', '96 kHz', '192 kHz', '88.2 kHz']);
@@ -97,4 +97,10 @@ test('the offset reads as which output waits and how long', () => {
   assert.equal(offsetLabel(0), 'No delay');
   assert.equal(offsetLabel(120), 'Second output waits 120 ms');
   assert.equal(offsetLabel(-35), 'First output waits 35 ms');
+});
+
+test('the balance reads as which output is quieter and by how much', () => {
+  assert.equal(balanceLabel(0), 'Even');
+  assert.equal(balanceLabel(6), 'Second output 6 dB quieter');
+  assert.equal(balanceLabel(-2.5), 'First output 2.5 dB quieter');
 });

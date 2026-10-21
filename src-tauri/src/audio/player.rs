@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -13,7 +13,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
 use crate::audio::decode::{AudioError, SourceFormat};
-use crate::audio::dual::{route, ClickTrack, DelayLine, DriftController, DualMode, Side, VarResampler};
+use crate::audio::dual::{balance_gains, route, ClickTrack, DelayLine, DriftController, DualMode, Side, VarResampler};
 use crate::audio::eq::{EqSettings, Equalizer};
 use crate::audio::order::{PlayOrder, Repeat};
 use crate::audio::pipeline::Feeder;
@@ -66,6 +66,8 @@ pub struct SecondOutput {
     pub mode: DualMode,
     /// Delay of the first and of the second output, ms (each 0..=MAX_DELAY_MS).
     pub delays_ms: [u32; 2],
+    /// Balance, dB: positive turns the second output down, negative the first.
+    pub balance_db: f32,
 }
 
 pub const MAX_DELAY_MS: u32 = 500;
@@ -105,6 +107,8 @@ enum Cmd {
     Mode(DualMode),
     /// Play the alignment clicks (true) or go back to the music (false).
     Align(bool),
+    /// Balance between the outputs, dB (see `balance_gains`).
+    Balance(f32),
     Stop,
 }
 
@@ -123,6 +127,8 @@ struct Shared {
     flushes: AtomicU64,
     /// The device reported an error (unplugged, switched off).
     lost: AtomicBool,
+    /// Frames to skip (+) or to hold with silence (-), set by the drift controller.
+    nudge: AtomicI64,
 }
 
 impl Shared {
@@ -137,6 +143,7 @@ impl Shared {
             last_frames: AtomicU64::new(0),
             flushes: AtomicU64::new(0),
             lost: AtomicBool::new(false),
+            nudge: AtomicI64::new(0),
         }
     }
 
@@ -189,6 +196,7 @@ impl Renderer {
             cb.played.store(0, Ordering::Release);
             cb.last_frames.store(0, Ordering::Relaxed);
             cb.flushes.fetch_add(1, Ordering::AcqRel);
+            cb.nudge.store(0, Ordering::Release);
         }
         if cb.paused.load(Ordering::Acquire) {
             out.fill(0.0);
@@ -201,23 +209,47 @@ impl Renderer {
                 self.eq_seen = g.0;
             }
         }
+        let ch = self.channels;
+        // A jump asked for by the drift controller: skip audio (counted as played, so the music
+        // position moves on) or hold with silence first (not counted). What does not fit carries over.
+        let nudge = cb.nudge.swap(0, Ordering::AcqRel);
+        let (mut skipped, mut hold) = (0u64, 0usize);
+        if nudge > 0 {
+            let n = (nudge as usize * ch).min(self.consumer.slots());
+            if let Ok(chunk) = self.consumer.read_chunk(n) {
+                chunk.commit_all();
+                skipped = (n / ch) as u64;
+            }
+            if nudge > skipped as i64 {
+                cb.nudge.fetch_add(nudge - skipped as i64, Ordering::AcqRel);
+            }
+        } else if nudge < 0 {
+            let frames = nudge.unsigned_abs() as usize;
+            let fit = frames.min(out.len() / ch);
+            hold = fit * ch;
+            if frames > fit {
+                cb.nudge.fetch_sub((frames - fit) as i64, Ordering::AcqRel);
+            }
+        }
+        out[..hold].fill(0.0);
+        let body = &mut out[hold..];
         let vol = f32::from_bits(cb.volume.load(Ordering::Relaxed));
-        let n = out.len().min(self.consumer.slots());
+        let n = body.len().min(self.consumer.slots());
         if let Ok(chunk) = self.consumer.read_chunk(n) {
             let (a, b) = chunk.as_slices();
-            for (o, s) in out.iter_mut().zip(a.iter().chain(b)) {
+            for (o, s) in body.iter_mut().zip(a.iter().chain(b)) {
                 *o = s * vol;
             }
             chunk.commit_all();
         }
-        self.eq.process(&mut out[..n]);
-        out[n..].fill(0.0);
+        self.eq.process(&mut body[..n]);
+        body[n..].fill(0.0);
         cb.stamp_ns.store(cb.epoch.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        cb.last_frames.store((n / self.channels) as u64, Ordering::Relaxed);
-        cb.played.fetch_add((n / self.channels) as u64, Ordering::AcqRel);
+        cb.last_frames.store((n / ch) as u64, Ordering::Relaxed);
+        cb.played.fetch_add((n / ch) as u64 + skipped, Ordering::AcqRel);
         if let Some(Ok(mut t)) = self.tap.as_ref().map(|t| t.try_lock()) {
             let undo = if vol > 1e-3 { 1.0 / vol } else { 0.0 };
-            for frame in out[..n].chunks_exact(self.channels) {
+            for frame in body[..n].chunks_exact(ch) {
                 t.push_back(frame.iter().sum::<f32>() / self.channels as f32 * undo);
             }
             let extra = t.len().saturating_sub(TAP_LEN);
@@ -314,6 +346,10 @@ impl Player {
         let _ = self.tx.send(Cmd::Mode(mode));
     }
     /// Alignment clicks on (the music pauses) or off (the music carries on where it was).
+    /// Turn one output down against the other (dB; positive = the second one). Instant.
+    pub fn set_balance(&self, balance_db: f32) {
+        let _ = self.tx.send(Cmd::Balance(balance_db));
+    }
     pub fn align(&self, on: bool) {
         let _ = self.tx.send(Cmd::Align(on));
     }
@@ -533,6 +569,10 @@ impl Second {
         }
         let c = self.drift.update(first.position(now, first_rate), self.shared.position(now, self.out.rate));
         self.resampler.set_correction(c);
+        if let Some(step) = self.drift.take_step() {
+            log::info!("second output {} {:.1} ms to line up", if step > 0.0 { "skips" } else { "waits" }, step.abs() * 1000.0);
+            self.shared.nudge.fetch_add((step * self.out.rate as f64).round() as i64, Ordering::AcqRel);
+        }
     }
 
     /// True once the device has taken no audio for `STALL` while the first one plays.
@@ -601,6 +641,9 @@ fn engine(
         }
     }
     let _ = ready.send(Ok(()));
+    // Miu's volume, and the balance between the outputs; each output plays at their product.
+    let mut master = 1.0f32;
+    let mut balance = second_cfg.as_ref().map_or(0.0, |c| c.balance_db);
 
     let first_rate = out.as_ref().map_or(0, |o| o.rate);
     let mut delay1 = DelayLine::new(out.as_ref().map_or(2, |o| o.channels), if second.is_some() { delay_frames(second_cfg.as_ref().map_or(0, |c| c.delays_ms[0]), first_rate) } else { 0 });
@@ -662,12 +705,8 @@ fn engine(
                 Cmd::Stop => return,
                 Cmd::Pause => set_paused(true, &second),
                 Cmd::Resume => set_paused(false, &second),
-                Cmd::Volume(v) => {
-                    shared.volume.store(v.to_bits(), Ordering::Relaxed);
-                    if let Some(s) = second.as_ref() {
-                        s.shared.volume.store(v.to_bits(), Ordering::Relaxed);
-                    }
-                }
+                Cmd::Volume(v) => master = v,
+                Cmd::Balance(b) => balance = b,
                 Cmd::Seek(ms) => {
                     if let Some(track) = current {
                         restart_at = Some((track, ms));
@@ -838,6 +877,12 @@ fn engine(
             }
         }
 
+        let gains = if second.is_some() { balance_gains(balance) } else { [1.0, 1.0] };
+        shared.volume.store((master * gains[0]).to_bits(), Ordering::Relaxed);
+        if let Some(s) = second.as_ref() {
+            s.shared.volume.store((master * gains[1]).to_bits(), Ordering::Relaxed);
+        }
+
         // Fill the ring buffers, a few blocks per turn so commands and status stay responsive
         // even when decoding is slow (e.g. debug builds).
         let (side1, side2) = match (clicks.is_some(), second.is_some()) {
@@ -912,7 +957,7 @@ fn engine(
                 _ => 0,
             };
             s.playing = !shared.paused.load(Ordering::Acquire) && here.is_some() && !drained;
-            s.volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
+            s.volume = master;
             s.source = here.and_then(|(t, _)| formats.get(&t).copied());
             s.device_rate = out.as_ref().map_or(0, |o| o.rate);
             s.exclusive = out.as_ref().is_some_and(|o| o.exclusive);
@@ -1042,7 +1087,7 @@ mod dual_machine_tests {
             let f = if c == 0 { 440.0 } else { 660.0 };
             (2.0 * std::f32::consts::PI * f * i as f32 / 48_000.0).sin() * 0.3
         });
-        let second = SecondOutput { device: other.clone(), mode: DualMode::Split, delays_ms: [0, 0] };
+        let second = SecondOutput { device: other.clone(), mode: DualMode::Split, delays_ms: [0, 0], balance_db: 0.0 };
         let player = Player::start_with(first.as_deref(), false, Some(second)).expect("audio device");
         player.set_volume(0.05);
         player.play(vec![tone], 0);
@@ -1090,7 +1135,7 @@ mod dual_machine_tests {
     fn a_missing_second_output_leaves_one_playing() {
         let d = tempfile::tempdir().unwrap();
         let p = crate::audio::fixtures::wav(d.path(), "t.wav", 44_100, 1, 16, 44_100 * 2);
-        let second = SecondOutput { device: "No Such Speaker".into(), mode: DualMode::Split, delays_ms: [100, 0] };
+        let second = SecondOutput { device: "No Such Speaker".into(), mode: DualMode::Split, delays_ms: [100, 0], balance_db: 0.0 };
         let player = Player::start_with(None, false, Some(second)).expect("audio device");
         player.set_volume(0.05);
         player.play(vec![p], 0);
@@ -1205,6 +1250,39 @@ mod renderer_tests {
         assert_eq!(shared.position(stamp, 48_000), 0.0, "the buffer just handed over starts now");
         assert!((shared.position(stamp + Duration::from_millis(5), 48_000) - 240.0).abs() < 1.0);
         assert_eq!(shared.position(stamp + Duration::from_secs(3), 48_000), 480.0, "never beyond what was handed over");
+    }
+
+    #[test]
+    fn a_positive_nudge_skips_audio_and_counts_it_as_played() {
+        let (mut r, shared, _) = setup(&[0.1, 0.2, 0.3, 0.4, 0.5], 1);
+        shared.nudge.store(2, Ordering::Release);
+        let mut out = [9.0; 2];
+        r.render(&mut out);
+        assert_eq!(out, [0.3, 0.4]);
+        assert_eq!(shared.played.load(Ordering::Acquire), 4, "skipped frames count as played");
+        assert_eq!(shared.nudge.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn a_negative_nudge_plays_silence_first_without_counting_it() {
+        let (mut r, shared, _) = setup(&[0.1, 0.2, 0.3], 1);
+        shared.nudge.store(-3, Ordering::Release);
+        let mut out = [9.0; 2];
+        r.render(&mut out);
+        assert_eq!(out, [0.0, 0.0]);
+        assert_eq!(shared.nudge.load(Ordering::Acquire), -1, "the rest of the hold carries over");
+        r.render(&mut out);
+        assert_eq!(out, [0.0, 0.1]);
+        assert_eq!(shared.played.load(Ordering::Acquire), 1);
+    }
+
+    #[test]
+    fn a_flush_drops_a_pending_nudge() {
+        let (mut r, shared, _) = setup(&[0.5; 4], 1);
+        shared.nudge.store(-100, Ordering::Release);
+        shared.flush.store(true, Ordering::Release);
+        r.render(&mut [0.0; 2]);
+        assert_eq!(shared.nudge.load(Ordering::Acquire), 0);
     }
 
     #[test]

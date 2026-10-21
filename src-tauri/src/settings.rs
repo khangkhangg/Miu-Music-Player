@@ -151,6 +151,26 @@ pub fn set_dual_delays(db: &Db, first: &str, second: &str, delays: [u32; 2]) -> 
     db.set_setting_json(DUAL_DELAYS, &all)
 }
 
+const DUAL_BALANCE: &str = "dual_balance";
+
+/// Balance (dB) between `first` and `second` when they play together: positive turns the second
+/// one down. Remembered per pair, like the delays.
+pub fn dual_balance(db: &Db, first: &str, second: &str) -> f32 {
+    let all: std::collections::HashMap<String, f32> = db.setting_json(DUAL_BALANCE).ok().flatten().unwrap_or_default();
+    let (key, swapped) = pair_key(first, second);
+    let v = all.get(&key).copied().unwrap_or(0.0);
+    if swapped { -v } else { v }
+}
+
+pub fn set_dual_balance(db: &Db, first: &str, second: &str, balance_db: f32) -> Result<()> {
+    let mut all: std::collections::HashMap<String, f32> = db.setting_json(DUAL_BALANCE).ok().flatten().unwrap_or_default();
+    let (key, swapped) = pair_key(first, second);
+    let max = crate::audio::dual::MAX_BALANCE_DB;
+    let v = if balance_db.is_nan() { 0.0 } else { balance_db.clamp(-max, max) };
+    all.insert(key, if swapped { -v } else { v });
+    db.set_setting_json(DUAL_BALANCE, &all)
+}
+
 const CONVERSION: &str = "conversion";
 
 /// How songs are converted for the iPhone (default: ALAC, hi-res as ALAC 24/48).
@@ -623,5 +643,21 @@ mod podcast_cleanup_tests {
         change(&db, "podcastCleanupDays", &serde_json::json!(null)).unwrap();
         assert_eq!(podcast_cleanup_days(&db), None, "never");
         assert!(change(&db, "podcastCleanupDays", &serde_json::json!(-3)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod balance_tests {
+    use super::*;
+
+    #[test]
+    fn balance_is_remembered_per_pair_and_flips_with_the_order() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dual_balance(&db, "Klipsch", "Bose"), 0.0);
+        set_dual_balance(&db, "Klipsch", "Bose", 4.5).unwrap();
+        assert_eq!(dual_balance(&db, "Klipsch", "Bose"), 4.5);
+        assert_eq!(dual_balance(&db, "Bose", "Klipsch"), -4.5, "turning the second down = turning the first down the other way round");
+        set_dual_balance(&db, "Klipsch", "Bose", 80.0).unwrap();
+        assert_eq!(dual_balance(&db, "Klipsch", "Bose"), crate::audio::dual::MAX_BALANCE_DB);
     }
 }

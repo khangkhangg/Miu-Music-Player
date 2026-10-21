@@ -326,6 +326,8 @@ pub struct OutputState {
     second: Option<String>,
     dual_mode: DualMode,
     delays: [u32; 2],
+    /// Balance between the outputs, dB: positive turns the second one down.
+    balance: f32,
 }
 
 /// The first output's device name: the chosen one, or whichever is the Windows default now.
@@ -337,7 +339,12 @@ fn first_name(chosen: Option<String>) -> String {
 pub fn second_config(d: &crate::library::db::Db) -> Option<SecondOutput> {
     let device = crate::settings::second_output(d)?;
     let first = first_name(crate::settings::output_device(d));
-    Some(SecondOutput { delays_ms: crate::settings::dual_delays(d, &first, &device), mode: crate::settings::dual_mode(d), device })
+    Some(SecondOutput {
+        delays_ms: crate::settings::dual_delays(d, &first, &device),
+        balance_db: crate::settings::dual_balance(d, &first, &device),
+        mode: crate::settings::dual_mode(d),
+        device,
+    })
 }
 
 #[tauri::command]
@@ -350,6 +357,7 @@ pub fn output_state(db: State<'_, SharedDb>) -> Result<OutputState, String> {
         exclusive: crate::settings::exclusive_output(&d),
         dual_mode: crate::settings::dual_mode(&d),
         delays: second.as_ref().map_or([0, 0], |s| s.delays_ms),
+        balance: second.as_ref().map_or(0.0, |s| s.balance_db),
         second: second.map(|s| s.device),
     })
 }
@@ -412,6 +420,18 @@ pub fn set_dual_delays(delays: [u32; 2], db: State<'_, SharedDb>, player: State<
         crate::settings::set_dual_delays(&d, &first, &second, delays).map_err(|e| e.to_string())?;
     }
     player.act(|p| p.set_delays(delays))
+}
+
+/// Balance (dB) between the outputs, remembered for this pair of devices; takes effect at once.
+#[tauri::command]
+pub fn set_dual_balance(balance: f32, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        let second = crate::settings::second_output(&d).ok_or("choose a second output first")?;
+        let first = first_name(crate::settings::output_device(&d));
+        crate::settings::set_dual_balance(&d, &first, &second, balance).map_err(|e| e.to_string())?;
+    }
+    player.act(|p| p.set_balance(balance))
 }
 
 /// Alignment clicks on (the music waits) or off (the music carries on where it was).

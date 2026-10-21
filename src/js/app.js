@@ -9,7 +9,7 @@ import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel } from './output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
 import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
@@ -942,6 +942,21 @@ function setupSecondOutput() {
       nudged = setTimeout(apply, 400);
     });
   }
+  // A level change is instant (no restart), so it follows the slider while dragging.
+  const balance = $('out-balance');
+  let balanceAt = 0;
+  let balanceLast = null;
+  const sendBalance = () => invoke('set_dual_balance', { balance: Number(balance.value) }).catch(fail);
+  balance.addEventListener('input', () => {
+    $('out-balance-val').textContent = balanceLabel(Number(balance.value));
+    clearTimeout(balanceLast);
+    if (Date.now() - balanceAt > 100) { balanceAt = Date.now(); sendBalance(); }
+    else balanceLast = setTimeout(sendBalance, 120);
+  });
+  balance.addEventListener('dblclick', () => {
+    balance.value = '0';
+    balance.dispatchEvent(new Event('input'));
+  });
   $('out-align').addEventListener('click', () => {
     invoke('output_align', { on: !playerState?.aligning }).catch(fail);
   });
@@ -964,6 +979,8 @@ function renderSecond(state) {
   if (state.second) $('out-second-box').open = true;
   $('out-offset').value = String(offsetOf(state.delays));
   $('out-offset-val').textContent = offsetLabel(offsetOf(state.delays));
+  $('out-balance').value = String(state.balance);
+  $('out-balance-val').textContent = balanceLabel(state.balance);
 }
 
 // ---- Tag editor (F9) ----

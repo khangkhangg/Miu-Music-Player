@@ -195,7 +195,8 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   stereo split, delays, alignment clicks, offset held within ±2 ms over a minute. Machine test on two Bluetooth
   speakers (Klipsch The One + Bose SoundLink Flex, `MIU_TEST_OUTPUTS`): within ±0.1 ms over 15 s, clocks ~2 ppm apart.
   Alignment UI: one signed offset slider (±500 ms) with ±1/±10 ms nudges; clicks are low on the first output, high on
-  the second.
+  the second. Balance slider (±24 dB, remembered per pair) turns the louder speaker down. A speaker that starts late
+  (Bose waking up ~20 ms after the Klipsch) is stepped into line within a second instead of being learnt as drift.
 - [ ] **Manual:** line up the two Bluetooth speakers by ear with the clicks, then stereo split on music; switch the
   second speaker off mid-song (should drop to one output after ~2 s). Not tried yet.
 - [ ] **Manual:** listening test with FLAC 16/44.1 and 24/96 through speakers and a USB DAC.
