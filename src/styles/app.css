@@ -396,6 +396,10 @@ div.tile { cursor: default; }
 .out-info dt { color: var(--text-muted); }
 .out-info dd { margin: 0; overflow-wrap: anywhere; }
 .out-info dd.bit-perfect { color: var(--accent-ink); font-weight: 600; }
+.out-conn { display: block; }
+.out-conn::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--success); }
+.out-conn.fair::before { background: var(--accent); }
+.out-conn.poor::before { background: var(--danger); }
 .eq-sliders { display: flex; justify-content: space-between; gap: 4px; margin-top: 12px; }
 .eq-sliders.off { opacity: 0.45; }
 .eq-band { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; }

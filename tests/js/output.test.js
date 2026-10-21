@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel, balanceLabel } from '../../src/js/output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel, balanceLabel, connectionRows } from '../../src/js/output.js';
 
 test('sample rates read like a spec sheet', () => {
   assert.deepEqual([44_100, 48_000, 96_000, 192_000, 88_200].map(rateLabel), ['44.1 kHz', '48 kHz', '96 kHz', '192 kHz', '88.2 kHz']);
@@ -103,4 +103,24 @@ test('the balance reads as which output is quieter and by how much', () => {
   assert.equal(balanceLabel(0), 'Even');
   assert.equal(balanceLabel(6), 'Second output 6 dB quieter');
   assert.equal(balanceLabel(-2.5), 'First output 2.5 dB quieter');
+});
+
+test('connection rows show each playing output with its health and any battery level', () => {
+  const ev = {
+    deviceName: 'Headphones (Klipsch The One)', health: 'good',
+    second: { deviceName: 'Speakers (Bose Flex SoundLink)', health: 'fair' },
+  };
+  const batteries = { 'Speakers (Bose Flex SoundLink)': 40 };
+  assert.deepEqual(connectionRows(ev, batteries), [
+    { health: 'good', text: 'Klipsch The One: steady' },
+    { health: 'fair', text: 'Bose Flex SoundLink: a few dropouts · battery 40%' },
+  ]);
+});
+
+test('a low battery is called out, and one output shows one row', () => {
+  const ev = { deviceName: 'Speakers (Bose Flex SoundLink)', health: 'poor', second: null };
+  assert.deepEqual(connectionRows(ev, { 'Speakers (Bose Flex SoundLink)': 12 }), [
+    { health: 'poor', text: 'Bose Flex SoundLink: keeps dropping out · battery low (12%)' },
+  ]);
+  assert.deepEqual(connectionRows({ deviceName: '', health: 'good', second: null }, {}), []);
 });

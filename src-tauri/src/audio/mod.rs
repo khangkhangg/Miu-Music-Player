@@ -1,7 +1,9 @@
+pub mod bluetooth;
 pub mod decode;
 pub mod dual;
 pub mod eq;
 pub mod eq_service;
+pub mod health;
 pub mod exclusive;
 #[cfg(test)]
 pub mod fixtures;

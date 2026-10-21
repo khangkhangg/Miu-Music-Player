@@ -197,8 +197,12 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   Alignment UI: one signed offset slider (±500 ms) with ±1/±10 ms nudges; clicks are low on the first output, high on
   the second. Balance slider (±24 dB, remembered per pair) turns the louder speaker down. A speaker that starts late
   (Bose waking up ~20 ms after the Klipsch) is stepped into line within a second instead of being learnt as drift.
+  Connection row: per-output health over the last minute (late device callbacks, realignment jumps: steady / a few
+  dropouts / keeps dropping out) and battery level where Windows has one (Bose: 40 %). No signal strength: Windows
+  does not expose RSSI for connected Bluetooth audio devices.
 - [ ] **Manual:** line up the two Bluetooth speakers by ear with the clicks, then stereo split on music; switch the
-  second speaker off mid-song (should drop to one output after ~2 s). Not tried yet.
+  second speaker off mid-song (should drop to one output after ~2 s); walk a speaker out of range and watch the
+  connection row turn amber/red. Not tried yet.
 - [ ] **Manual:** listening test with FLAC 16/44.1 and 24/96 through speakers and a USB DAC.
 
 ## Phase 5c – Languages and metadata editing

@@ -9,7 +9,7 @@ import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel } from './output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel, connectionRows } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
 import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
@@ -865,6 +865,11 @@ function setupOutput() {
       .finally(() => { $('out-exclusive').disabled = false; });
   });
   setupSecondOutput();
+  // Battery levels change slowly: refresh them every minute while the panel is open.
+  setInterval(() => {
+    if ($('out-panel').hidden) return;
+    invoke('output_state').then(s => { if (outputState) outputState.batteries = s.batteries; renderOutputInfo(); }).catch(() => {});
+  }, 60_000);
   invoke('output_state').then(renderDevices);
 }
 
@@ -904,6 +909,14 @@ function renderOutputInfo() {
   $('out-path').textContent = path;
   $('out-path').classList.toggle('bit-perfect', path === t('output.bitPerfect'));
   $('out-dual-status').textContent = ev ? dualStatus(ev) : '';
+  const rows = ev ? connectionRows(ev, outputState?.batteries) : [];
+  $('out-connection').replaceChildren(...rows.map(r => {
+    const line = document.createElement('span');
+    line.className = `out-conn ${r.health}`;
+    line.textContent = r.text;
+    return line;
+  }));
+  $('out-connection-help').hidden = rows.every(r => r.health === 'good');
   $('out-align').setAttribute('aria-pressed', String(Boolean(ev?.aligning)));
   $('out-align').textContent = t(ev?.aligning ? 'output.alignStop' : 'output.align');
 }

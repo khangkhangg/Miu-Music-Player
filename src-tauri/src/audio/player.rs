@@ -15,6 +15,7 @@ use serde::Serialize;
 use crate::audio::decode::{AudioError, SourceFormat};
 use crate::audio::dual::{balance_gains, route, ClickTrack, DelayLine, DriftController, DualMode, Side, VarResampler};
 use crate::audio::eq::{EqSettings, Equalizer};
+use crate::audio::health::{Health, HealthLog};
 use crate::audio::order::{PlayOrder, Repeat};
 use crate::audio::pipeline::Feeder;
 use crate::audio::timeline::Timeline;
@@ -45,6 +46,8 @@ pub struct Status {
     pub second_lost: bool,
     /// The alignment clicks are playing instead of the music.
     pub aligning: bool,
+    /// How steady the first output has been over the last minute.
+    pub health: Health,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -57,6 +60,8 @@ pub struct SecondStatus {
     pub drift_ppm: f64,
     /// How far ahead (ms; negative: behind) the second output plays, after the delays.
     pub offset_ms: f64,
+    /// How steady the connection has been over the last minute.
+    pub health: Health,
 }
 
 /// A second output device and how it shares the music with the first (F7.9, shared mode only).
@@ -129,6 +134,8 @@ struct Shared {
     lost: AtomicBool,
     /// Frames to skip (+) or to hold with silence (-), set by the drift controller.
     nudge: AtomicI64,
+    /// Callbacks that came so late the listener hears a stutter (see `health::is_glitch`).
+    glitches: AtomicU64,
 }
 
 impl Shared {
@@ -144,6 +151,7 @@ impl Shared {
             flushes: AtomicU64::new(0),
             lost: AtomicBool::new(false),
             nudge: AtomicI64::new(0),
+            glitches: AtomicU64::new(0),
         }
     }
 
@@ -179,11 +187,14 @@ struct Renderer {
     eq_shared: EqShared,
     eq: Equalizer,
     eq_seen: u64,
+    rate: u32,
+    /// When the last playing callback ran and how many frames it handed over (none while paused).
+    prev: Option<(Instant, u64)>,
 }
 
 impl Renderer {
     fn new(consumer: rtrb::Consumer<f32>, rate: u32, channels: usize, shared: Arc<Shared>, tap: Option<Tap>, eq_shared: EqShared) -> Self {
-        Self { consumer, channels, shared, tap, eq_shared, eq: Equalizer::new(rate, channels), eq_seen: 0 }
+        Self { consumer, channels, shared, tap, eq_shared, eq: Equalizer::new(rate, channels), eq_seen: 0, rate, prev: None }
     }
 
     fn render(&mut self, out: &mut [f32]) {
@@ -200,7 +211,14 @@ impl Renderer {
         }
         if cb.paused.load(Ordering::Acquire) {
             out.fill(0.0);
+            self.prev = None;
             return;
+        }
+        let now = Instant::now();
+        if let Some((at, frames)) = self.prev.replace((now, (out.len() / self.channels) as u64)) {
+            if crate::audio::health::is_glitch(now - at, frames, self.rate) {
+                cb.glitches.fetch_add(1, Ordering::AcqRel);
+            }
         }
         // Never wait in the audio callback: new settings are picked up on a later call if busy.
         if let Ok(g) = self.eq_shared.try_lock() {
@@ -510,6 +528,9 @@ struct Second {
     wait: Option<(u64, u64)>,
     /// Frames played when last seen moving, and when: notices a device that stopped silently.
     progress: (u64, Instant),
+    /// Problems on this output (late callbacks, jumps to stay in line), and glitches counted so far.
+    health: HealthLog,
+    glitches_seen: u64,
 }
 
 impl Second {
@@ -525,6 +546,8 @@ impl Second {
             pending: Vec::new(),
             wait: None,
             progress: (0, Instant::now()),
+            health: HealthLog::default(),
+            glitches_seen: 0,
             in_rate,
             shared,
             out,
@@ -572,6 +595,7 @@ impl Second {
         if let Some(step) = self.drift.take_step() {
             log::info!("second output {} {:.1} ms to line up", if step > 0.0 { "skips" } else { "waits" }, step.abs() * 1000.0);
             self.shared.nudge.fetch_add((step * self.out.rate as f64).round() as i64, Ordering::AcqRel);
+            self.health.record(self.shared.epoch.elapsed().as_secs_f64());
         }
     }
 
@@ -585,13 +609,23 @@ impl Second {
         now.duration_since(self.progress.1) > STALL
     }
 
-    fn status(&self, mode: DualMode) -> SecondStatus {
+    /// Log any late callbacks this output's device had since the last look.
+    fn note_glitches(&mut self, t: f64) {
+        let now = self.shared.glitches.load(Ordering::Acquire);
+        for _ in self.glitches_seen..now {
+            self.health.record(t);
+        }
+        self.glitches_seen = now;
+    }
+
+    fn status(&mut self, mode: DualMode) -> SecondStatus {
         SecondStatus {
             device_name: self.out.name.clone(),
             device_rate: self.out.rate,
             mode,
             drift_ppm: (self.drift.clock_ppm() * 10.0).round() / 10.0,
             offset_ms: (self.drift.error_s() * 10_000.0).round() / 10.0,
+            health: self.health.level(self.shared.epoch.elapsed().as_secs_f64()),
         }
     }
 }
@@ -666,6 +700,8 @@ fn engine(
     let mut clicks: Option<ClickTrack> = None;
     let mut resume_after_clicks: Option<(usize, u64, bool)> = None;
     let (mut measured_at, mut realigned_at) = (epoch, epoch);
+    let mut health1 = HealthLog::default();
+    let mut seen1 = 0u64;
 
     loop {
         // Rate 0 until an exclusive device is open: the feeder then asks for the first file's rate.
@@ -877,6 +913,16 @@ fn engine(
             }
         }
 
+        // Connection health: late callbacks on either output, and jumps the second one needed.
+        let t = epoch.elapsed().as_secs_f64();
+        for _ in seen1..shared.glitches.load(Ordering::Acquire) {
+            health1.record(t);
+        }
+        seen1 = shared.glitches.load(Ordering::Acquire);
+        if let Some(s) = second.as_mut() {
+            s.note_glitches(t);
+        }
+
         let gains = if second.is_some() { balance_gains(balance) } else { [1.0, 1.0] };
         shared.volume.store((master * gains[0]).to_bits(), Ordering::Relaxed);
         if let Some(s) = second.as_ref() {
@@ -969,9 +1015,10 @@ fn engine(
             if s.device_name != name {
                 s.device_name = name.to_string();
             }
-            s.second = second.as_ref().map(|sec| sec.status(dual_mode));
+            s.second = second.as_mut().map(|sec| sec.status(dual_mode));
             s.second_lost = second_lost;
             s.aligning = clicks.is_some();
+            s.health = health1.level(t);
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -1283,6 +1330,29 @@ mod renderer_tests {
         shared.flush.store(true, Ordering::Release);
         r.render(&mut [0.0; 2]);
         assert_eq!(shared.nudge.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn a_callback_that_comes_far_too_late_counts_as_a_glitch() {
+        let (mut r, shared, _) = setup(&[0.5; 64], 1);
+        r.render(&mut [0.0; 4]);
+        r.render(&mut [0.0; 4]);
+        assert_eq!(shared.glitches.load(Ordering::Acquire), 0);
+        std::thread::sleep(Duration::from_millis(90));
+        r.render(&mut [0.0; 4]);
+        assert_eq!(shared.glitches.load(Ordering::Acquire), 1);
+    }
+
+    #[test]
+    fn a_pause_is_not_a_glitch() {
+        let (mut r, shared, _) = setup(&[0.5; 64], 1);
+        r.render(&mut [0.0; 4]);
+        shared.paused.store(true, Ordering::Release);
+        r.render(&mut [0.0; 4]);
+        std::thread::sleep(Duration::from_millis(90));
+        shared.paused.store(false, Ordering::Release);
+        r.render(&mut [0.0; 4]);
+        assert_eq!(shared.glitches.load(Ordering::Acquire), 0);
     }
 
     #[test]

@@ -53,6 +53,8 @@ pub struct PlayerEvent {
     pub second_lost: bool,
     /// The alignment clicks are playing.
     pub aligning: bool,
+    /// How steady the first output has been over the last minute.
+    pub health: crate::audio::health::Health,
 }
 
 fn open(device: Option<&str>, exclusive: bool, second: Option<SecondOutput>) -> Option<Player> {
@@ -95,6 +97,7 @@ impl PlayerHandle {
                 second: None,
                 second_lost: false,
                 aligning: false,
+                health: Default::default(),
             };
         };
         let queue = self.queue.lock().map(|q| q.clone()).unwrap_or_default();
@@ -119,6 +122,7 @@ impl PlayerHandle {
             second: s.second,
             second_lost: s.second_lost,
             aligning: s.aligning,
+            health: s.health,
         }
     }
 
@@ -328,6 +332,8 @@ pub struct OutputState {
     delays: [u32; 2],
     /// Balance between the outputs, dB: positive turns the second one down.
     balance: f32,
+    /// Battery level (percent) of outputs that report one, by device name.
+    batteries: std::collections::HashMap<String, u8>,
 }
 
 /// The first output's device name: the chosen one, or whichever is the Windows default now.
@@ -351,8 +357,12 @@ pub fn second_config(d: &crate::library::db::Db) -> Option<SecondOutput> {
 pub fn output_state(db: State<'_, SharedDb>) -> Result<OutputState, String> {
     let d = db.lock().map_err(|e| e.to_string())?;
     let second = second_config(&d);
+    let devices = output_devices();
+    let bluetooth = crate::audio::bluetooth::present_devices();
+    let batteries = devices.iter().filter_map(|o| Some((o.name.clone(), crate::audio::bluetooth::battery_for(&o.name, &bluetooth)?))).collect();
     Ok(OutputState {
-        devices: output_devices(),
+        batteries,
+        devices,
         chosen: crate::settings::output_device(&d),
         exclusive: crate::settings::exclusive_output(&d),
         dual_mode: crate::settings::dual_mode(&d),

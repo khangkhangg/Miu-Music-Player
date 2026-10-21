@@ -102,3 +102,22 @@ export function balanceLabel(db) {
   if (!db) return t('output.balanceEven');
   return t(db > 0 ? 'output.secondQuieter' : 'output.firstQuieter', { db: Math.abs(db) });
 }
+
+/** "Speakers (Bose Flex SoundLink)" → "Bose Flex SoundLink"; names without brackets stay as they are. */
+function speakerName(output) {
+  const m = /\((.+)\)$/.exec(output);
+  return m ? m[1].trim() : output;
+}
+
+const LOW_BATTERY = 20;
+
+/** One row per playing output: its connection health over the last minute, and battery if known. */
+export function connectionRows(ev, batteries = {}) {
+  const outputs = [[ev?.deviceName, ev?.health], [ev?.second?.deviceName, ev?.second?.health]];
+  return outputs.filter(([name]) => name).map(([name, health]) => {
+    const parts = [t(`output.health.${health}`)];
+    const battery = batteries[name];
+    if (battery != null) parts.push(t(battery < LOW_BATTERY ? 'output.batteryLow' : 'output.battery', { percent: battery }));
+    return { health, text: `${speakerName(name)}: ${parts.join(' · ')}` };
+  });
+}
