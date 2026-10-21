@@ -27,12 +27,14 @@
       </div>
 
       <nav class="nav" aria-label="Library" data-i18n-attr="aria-label:nav.library">
-        <a class="nav-item active" id="nav-songs" href="#" data-i18n="nav.songs">Songs</a>
+        <div class="nav-row"><a class="nav-item active" id="nav-songs" href="#" data-i18n="nav.songs">Songs</a>
+          <button class="nav-play" id="nav-songs-play" type="button" aria-label="Play all songs" title="Play all songs" data-i18n-attr="aria-label:nav.playAll;title:nav.playAll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z"/></svg></button></div>
         <a class="nav-item" id="nav-albums" href="#" data-i18n="nav.albums">Albums</a>
         <a class="nav-item" id="nav-artists" href="#" data-i18n="nav.artists">Artists</a>
         <a class="nav-item" id="nav-podcasts" href="#" data-i18n="nav.podcasts">Podcasts</a>
         <a class="nav-item" id="nav-audiobooks" href="#" data-i18n="nav.audiobooks">Audiobooks</a>
-        <a class="nav-item" id="nav-liked" href="#" data-i18n="filters.liked">Liked</a>
+        <div class="nav-row"><a class="nav-item" id="nav-liked" href="#" data-i18n="filters.liked">Liked</a>
+          <button class="nav-play" id="nav-liked-play" type="button" aria-label="Play liked songs" title="Play liked songs" data-i18n-attr="aria-label:nav.playLiked;title:nav.playLiked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z"/></svg></button></div>
         <a class="nav-item" id="nav-disliked" href="#" data-i18n="filters.disliked">Disliked</a>
         <a class="nav-item" id="nav-settings" href="#" data-i18n="nav.settings">Settings</a>
       </nav>
@@ -417,6 +419,10 @@
     <aside class="np-column idle" id="now-playing" aria-label="Now playing" data-i18n-attr="aria-label:player.nowPlaying">
       <div class="np-art">
         <img id="np-art" alt="" hidden>
+        <div class="art-rate" id="np-rate" hidden>
+          <button class="art-rate-btn" id="np-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>
+          <button class="art-rate-btn" id="np-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+        </div>
         <div class="np-art-empty" id="np-art-empty">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
         </div>

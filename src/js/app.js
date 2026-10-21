@@ -2,8 +2,8 @@ import { resolveTheme } from './theme.js';
 import { prereqMessage } from './prereq.js';
 import { deviceCard } from './device.js';
 import { folderItems, librarySummary, encodingOptions } from './folders.js';
-import { songRow, visibleRange } from './songs.js';
-import { nowPlaying, seekTarget, nextRepeat, repeatButton, skipTarget, playButtonAction } from './player.js';
+import { songRow, visibleRange, scrollToShow } from './songs.js';
+import { nowPlaying, seekTarget, nextRepeat, repeatButton, skipTarget, playButtonAction, startIndex } from './player.js';
 import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
@@ -116,15 +116,14 @@ if (invoke) {
   document.getElementById('np-shuffle').addEventListener('click', () => invoke('player_shuffle', { on: !playerState?.shuffle }));
   document.getElementById('np-repeat').addEventListener('click', () => invoke('player_repeat', { repeat: nextRepeat(playerState?.repeat) }));
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
-  window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); showSyncPreview(); });
+  window.__TAURI__.event.listen('song-rated', e => { if (applyRated(songsById, e.payload)) refreshList(); showSyncPreview(); updateRateButtons(); });
   document.getElementById('np-play').addEventListener('click', () => {
     const action = playButtonAction(playerState, shown.length);
     if (action === 'pause' || action === 'resume') {
       invoke(`player_${action}`);
     } else if (action === 'playList') {
       // Nothing queued yet: play the list on screen (from a random song when shuffle is on).
-      const start = playerState?.shuffle ? Math.floor(Math.random() * shown.length) : 0;
-      playList(shown.map(s => s.id), start);
+      playList(shown.map(s => s.id), startIndex(shown.length, playerState?.shuffle));
     }
   });
   document.getElementById('np-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));
@@ -252,6 +251,7 @@ function rate(id, act, fromPlayer = false) {
   invoke('rate_song', { id, rating }).then(() => {
     song.rating = rating;
     refreshList();
+    updateRateButtons();
     if (fromPlayer && rating === -1) invoke('player_skip', { by: 1 });
   });
 }
@@ -270,6 +270,46 @@ function updateModeButtons() {
 
 function updateRateButtons() {
   updateModeButtons();
+  const song = songsById.get(playerState?.songId);
+  document.getElementById('np-rate').hidden = !song;
+  document.getElementById('np-like').classList.toggle('on', song?.rating === 1);
+  document.getElementById('np-dislike').classList.toggle('on', song?.rating === -1);
+}
+
+/** Bring the playing song into view in the song list (only when it is out of view). */
+function revealPlaying() {
+  if (view !== 'songs') return;
+  const scroller = document.getElementById('song-scroll');
+  const index = shown.findIndex(s => s.id === playerState?.songId);
+  const top = scrollToShow(index, { scrollTop: scroller.scrollTop, height: scroller.clientHeight, rowHeight: ROW_HEIGHT });
+  if (top != null) scroller.scrollTo({ top, behavior: 'smooth' });
+}
+
+/** Little moving bars over the playing song's cover. */
+function eqBars() {
+  const bars = document.createElement('span');
+  bars.className = 'eq-bars';
+  bars.setAttribute('aria-hidden', 'true');
+  bars.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+  return bars;
+}
+
+/** A round play icon (built with DOM calls, so no markup strings). */
+function playIcon() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', 'M7 4l14 8-14 8z');
+  svg.append(path);
+  return svg;
+}
+
+/** Play every song of a list, from the top or a random one when shuffle is on. */
+function playAll(list) {
+  if (!list.length) return;
+  playList(list.map(s => s.id), startIndex(list.length, playerState?.shuffle));
 }
 
 function showPlayer(event) {
@@ -287,8 +327,10 @@ function showPlayer(event) {
   const upNextChanged = (event?.upNext ?? []).join() !== (renderedUpNext ?? []).join();
   updateModeButtons();
   if (upNextChanged) renderUpNext();
+  for (const row of document.querySelectorAll('.song-row.current')) row.classList.toggle('paused', !event?.playing);
   if (songChanged) {
     renderSongs();
+    revealPlaying();
     updateRateButtons();
     renderNowArt();
     renderUpNext();
@@ -370,7 +412,9 @@ function renderSongs() {
   for (let i = start; i < end; i++) {
     const s = songs[i];
     const row = document.createElement('div');
-    row.className = s.id === playerState?.songId ? 'song-row current' : 'song-row';
+    const current = s.id === playerState?.songId;
+    row.className = current ? 'song-row current' : 'song-row';
+    if (current && !playerState?.playing) row.classList.add('paused');
     row.dataset.index = i;
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
@@ -379,7 +423,9 @@ function renderSongs() {
     const main = document.createElement('span');
     main.className = 'song-main';
     main.append(cell(s.title, 'song-title'), cell(s.artist, 'song-artist'));
-    row.append(thumb(shown[i], 'song-thumb', 68), main, cell(s.album, 'album'), cell(s.quality, 'quality'), cell(s.duration, 'num'), rateCell(shown[i].rating, activeFilter === 'disliked'));
+    const art = thumb(shown[i], 'song-thumb', 68);
+    if (current) art.append(eqBars());
+    row.append(art, main, cell(s.album, 'album'), cell(s.quality, 'quality'), cell(s.duration, 'num'), rateCell(shown[i].rating, activeFilter === 'disliked'));
     rows.push(row);
   }
   spacer.replaceChildren(...rows);
@@ -932,6 +978,11 @@ function setupSettings(languageSetting) {
   const go = (id, fn) => $(id).addEventListener('click', e => { e.preventDefault(); fn(); });
   const songsWith = filter => () => { activeFilter = filter; refreshList(); showView('songs'); };
   go('nav-songs', songsWith('all'));
+  $('nav-songs-play').addEventListener('click', () => playAll(filterSongs(rawSongs, 'all')));
+  $('nav-liked-play').addEventListener('click', () => playAll(filterSongs(rawSongs, 'liked')));
+  for (const b of [$('np-like'), $('np-dislike')]) {
+    b.addEventListener('click', () => { if (playerState?.songId != null) rate(playerState.songId, b.dataset.act, true); });
+  }
   go('nav-liked', songsWith('liked'));
   go('nav-disliked', songsWith('disliked'));
   go('nav-albums', () => showView('albums'));
@@ -1103,12 +1154,22 @@ function renderTiles() {
     const row = Math.floor((i * 2) / cols);
     const open = () => openPage(artists ? 'artist' : 'album', item);
     const name = artists ? item.name : item.title;
-    const cover = document.createElement('button');
-    cover.type = 'button';
+    // The cover opens the page; its round button plays the whole album or artist.
+    const cover = document.createElement('div');
     cover.className = 'tile tile-cover';
+    cover.setAttribute('role', 'button');
+    cover.tabIndex = 0;
     cover.setAttribute('aria-label', artists ? name : `${name} — ${item.artist}`);
     cover.addEventListener('click', open);
-    cover.append(thumb(item.coverId != null ? { id: item.coverId, hasArtwork: true } : null, 'tile-art', 320));
+    cover.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'tile-play';
+    play.title = t('tile.play', { name });
+    play.setAttribute('aria-label', play.title);
+    play.append(playIcon());
+    play.addEventListener('click', e => { e.stopPropagation(); playAll(item.songs); });
+    cover.append(thumb(item.coverId != null ? { id: item.coverId, hasArtwork: true } : null, 'tile-art', 320), play);
     const info = document.createElement('button');
     info.type = 'button';
     info.className = 'tile tile-info';

@@ -1,6 +1,6 @@
 // Mini player window (F7.4). Logic lives in the tested modules; this is DOM glue.
 import { resolveTheme } from './theme.js';
-import { nowPlaying, seekTarget } from './player.js';
+import { nowPlaying, seekTarget, nextRepeat, repeatButton } from './player.js';
 import { nextRating, applyRated } from './ratings.js';
 import { fromBytes, geometry } from './visualizer.js';
 import { t, startInLanguage } from './i18n.js';
@@ -79,6 +79,15 @@ function show(event) {
   const rating = songsById.get(event?.songId)?.rating ?? 0;
   $('mini-like').classList.toggle('on', rating === 1);
   $('mini-dislike').classList.toggle('on', rating === -1);
+  $('mini-rate').hidden = event?.songId == null;
+  const shuffle = $('mini-shuffle');
+  shuffle.setAttribute('aria-pressed', String(Boolean(event?.shuffle)));
+  const repeat = repeatButton(event?.repeat);
+  const rb = $('mini-repeat');
+  rb.setAttribute('aria-pressed', String(repeat.pressed));
+  rb.classList.toggle('one', repeat.one);
+  rb.setAttribute('aria-label', repeat.label);
+  rb.title = repeat.label;
 }
 
 function rate(act) {
@@ -99,6 +108,8 @@ $('mini-play').addEventListener('click', () => invoke(state?.playing ? 'player_p
 $('mini-prev').addEventListener('click', () => invoke('player_skip', { by: -1 }));
 $('mini-next').addEventListener('click', () => invoke('player_skip', { by: 1 }));
 $('mini-like').addEventListener('click', () => rate('like'));
+$('mini-shuffle').addEventListener('click', () => invoke('player_shuffle', { on: !state?.shuffle }));
+$('mini-repeat').addEventListener('click', () => invoke('player_repeat', { repeat: nextRepeat(state?.repeat) }));
 $('mini-dislike').addEventListener('click', () => rate('dislike'));
 $('mini-bar').addEventListener('click', e => {
   const rect = e.currentTarget.getBoundingClientRect();

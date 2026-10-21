@@ -55,3 +55,15 @@ test('missing details shorten the label instead of showing blanks', () => {
 test('song rows carry the quality label', () => {
   assert.equal(songRow({ id: 1, title: 't', format: 'mp3', bitrateKbps: 128 }).quality, 'MP3 · 128 kbps');
 });
+
+import { scrollToShow } from '../../src/js/songs.js';
+
+test('the list scrolls just enough to show the playing song, and not at all when it is in view', () => {
+  const view = { height: 460, rowHeight: 46 };
+  assert.equal(scrollToShow(5, { ...view, scrollTop: 0 }), null, 'row 5 is visible');
+  assert.equal(scrollToShow(40, { ...view, scrollTop: 0 }), 40 * 46 - 460 / 2 + 23, 'below: centred');
+  assert.equal(scrollToShow(2, { ...view, scrollTop: 1000 }), 0, 'above, near the top: clamped to 0');
+  assert.equal(scrollToShow(9, { ...view, scrollTop: 0 }), null, 'ends exactly at the bottom edge: visible');
+  assert.equal(scrollToShow(10, { ...view, scrollTop: 10 }), 10 * 46 - 230 + 23, 'cut off at the bottom edge counts as hidden');
+  assert.equal(scrollToShow(-1, { ...view, scrollTop: 0 }), null, 'not in this list');
+});

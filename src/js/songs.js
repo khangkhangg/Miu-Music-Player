@@ -48,3 +48,11 @@ export function visibleRange({ scrollTop, height, rowHeight, total, overscan }) 
   const end = Math.max(start, Math.min(total, first + count + overscan));
   return { start, end };
 }
+
+/** New scrollTop that brings row `index` into view (centred), or null when it is fully visible already. */
+export function scrollToShow(index, { scrollTop, height, rowHeight }) {
+  if (index < 0) return null;
+  const top = index * rowHeight;
+  if (top >= scrollTop && top + rowHeight <= scrollTop + height) return null;
+  return Math.max(0, top - height / 2 + rowHeight / 2);
+}

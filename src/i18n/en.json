@@ -433,5 +433,8 @@
   "book.lang.Dutch": "Dutch",
   "book.lang.Russian": "Russian",
   "book.lang.Chinese": "Chinese",
-  "book.lang.Japanese": "Japanese"
+  "book.lang.Japanese": "Japanese",
+  "nav.playAll": "Play all songs",
+  "nav.playLiked": "Play liked songs",
+  "tile.play": "Play {name}"
 }

@@ -68,3 +68,12 @@ test('with nothing loaded, the play button plays the list on screen', () => {
   assert.equal(playButtonAction({ songId: null, episodeId: null, playing: false }, 10), 'playList');
   assert.equal(playButtonAction(null, 0), 'none');
 });
+
+import { startIndex } from '../../src/js/player.js';
+
+test('playing a whole list starts at the top, or at a random song when shuffle is on', () => {
+  assert.equal(startIndex(10, false, () => 0.99), 0);
+  assert.equal(startIndex(10, true, () => 0.55), 5);
+  assert.equal(startIndex(10, true, () => 0.999), 9, 'never past the end');
+  assert.equal(startIndex(0, true, () => 0.5), 0);
+});

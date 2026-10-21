@@ -47,3 +47,9 @@ export function playButtonAction(state, shownCount) {
   if (state?.songId != null || state?.episodeId != null) return state.playing ? 'pause' : 'resume';
   return shownCount > 0 ? 'playList' : 'none';
 }
+
+/** Where playing a whole list starts: the top, or a random song when shuffle is on. */
+export function startIndex(length, shuffle, random = Math.random) {
+  if (!shuffle || length <= 0) return 0;
+  return Math.min(length - 1, Math.floor(random() * length));
+}

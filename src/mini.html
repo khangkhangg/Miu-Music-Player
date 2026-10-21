@@ -12,6 +12,10 @@
   <div class="mini">
     <div class="mini-art">
       <img id="mini-art" alt="" hidden>
+      <div class="mini-rate" id="mini-rate">
+        <button class="rate-btn" id="mini-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>
+        <button class="rate-btn" id="mini-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+      </div>
       <svg class="mini-art-empty" id="mini-art-empty" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
     </div>
     <div class="mini-side">
@@ -25,8 +29,8 @@
       <button class="viz-off" id="viz-off" type="button" hidden data-i18n="mini.showViz">Show visualizer</button>
       <div class="mini-bar" id="mini-bar" role="slider" aria-label="Position" tabindex="0" data-i18n-attr="aria-label:player.position"><div class="mini-fill" id="mini-fill"></div></div>
       <div class="mini-controls">
-        <button class="icon-btn rate" id="mini-dislike" type="button" data-act="dislike" aria-label="Dislike and skip" title="Dislike and skip" data-i18n-attr="aria-label:player.dislikeSkip;title:player.dislikeSkip">
-          <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+        <button class="icon-btn mode-btn" id="mini-shuffle" type="button" aria-pressed="false" aria-label="Shuffle" title="Shuffle" data-i18n-attr="aria-label:player.shuffle;title:player.shuffle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
         </button>
         <button class="icon-btn" id="mini-prev" type="button" aria-label="Previous song" data-i18n-attr="aria-label:player.prev">
           <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 20L9 12l10-8v16z"/><path d="M5 19V5"/></svg>
@@ -38,8 +42,9 @@
         <button class="icon-btn" id="mini-next" type="button" aria-label="Next song" data-i18n-attr="aria-label:player.next">
           <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4l10 8-10 8V4z"/><path d="M19 5v14"/></svg>
         </button>
-        <button class="icon-btn rate" id="mini-like" type="button" data-act="like" aria-label="Like" title="Like" data-i18n-attr="aria-label:song.like;title:song.like">
-          <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+        <button class="icon-btn mode-btn" id="mini-repeat" type="button" aria-pressed="false" aria-label="Repeat: off" title="Repeat: off" data-i18n-attr="aria-label:player.repeatOff;title:player.repeatOff">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>
+          <span class="repeat-one" aria-hidden="true">1</span>
         </button>
       </div>
     </div>

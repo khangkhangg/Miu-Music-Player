@@ -433,5 +433,8 @@
   "book.lang.Dutch": "Tiếng Hà Lan",
   "book.lang.Russian": "Tiếng Nga",
   "book.lang.Chinese": "Tiếng Trung",
-  "book.lang.Japanese": "Tiếng Nhật"
+  "book.lang.Japanese": "Tiếng Nhật",
+  "nav.playAll": "Phát tất cả bài hát",
+  "nav.playLiked": "Phát các bài đã thích",
+  "tile.play": "Phát {name}"
 }
