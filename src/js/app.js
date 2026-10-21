@@ -9,7 +9,7 @@ import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus } from './output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
 import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
@@ -925,12 +925,22 @@ function setupSecondOutput() {
       .finally(() => { $('out-second').disabled = false; });
   });
   $('out-mode').addEventListener('change', e => invoke('set_dual_mode', { mode: e.target.value }).then(renderDevices).catch(fail));
-  const delays = () => [0, 1].map(i => Number($(`out-delay-${i}`).value));
-  for (const i of [0, 1]) {
-    const slider = $(`out-delay-${i}`);
-    slider.addEventListener('input', () => { $(`out-delay-${i}-val`).textContent = t('output.ms', { ms: slider.value }); });
-    // Applied on release: both outputs start again together with the new delays.
-    slider.addEventListener('change', () => invoke('set_dual_delays', { delays: delays() }).catch(fail));
+  const slider = $('out-offset');
+  const show = () => { $('out-offset-val').textContent = offsetLabel(Number(slider.value)); };
+  // Each change starts both outputs again together, so apply on release, and after a pause
+  // when nudging (several quick presses count as one change).
+  const apply = () => invoke('set_dual_delays', { delays: delaysFor(Number(slider.value)) }).catch(fail);
+  let nudged = null;
+  slider.addEventListener('input', show);
+  slider.addEventListener('change', apply);
+  for (const btn of document.querySelectorAll('[data-nudge]')) {
+    btn.setAttribute('aria-label', t('output.nudge', { ms: btn.dataset.nudge }));
+    btn.addEventListener('click', () => {
+      slider.value = String(Number(slider.value) + Number(btn.dataset.nudge));
+      show();
+      clearTimeout(nudged);
+      nudged = setTimeout(apply, 400);
+    });
   }
   $('out-align').addEventListener('click', () => {
     invoke('output_align', { on: !playerState?.aligning }).catch(fail);
@@ -952,10 +962,8 @@ function renderSecond(state) {
   $('out-mode').disabled = !state.second || state.exclusive;
   $('out-dual').hidden = !state.second || state.exclusive;
   if (state.second) $('out-second-box').open = true;
-  state.delays.forEach((ms, i) => {
-    $(`out-delay-${i}`).value = String(ms);
-    $(`out-delay-${i}-val`).textContent = t('output.ms', { ms });
-  });
+  $('out-offset').value = String(offsetOf(state.delays));
+  $('out-offset-val').textContent = offsetLabel(offsetOf(state.delays));
 }
 
 // ---- Tag editor (F9) ----

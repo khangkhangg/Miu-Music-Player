@@ -547,14 +547,23 @@
           </select>
         </div>
         <div id="out-dual" hidden>
-          <label class="out-delay"><span data-i18n="output.delayFirst">Delay, first output</span><input type="range" id="out-delay-0" min="0" max="500" step="5"><output id="out-delay-0-val"></output></label>
-          <label class="out-delay"><span data-i18n="output.delaySecond">Delay, second output</span><input type="range" id="out-delay-1" min="0" max="500" step="5"><output id="out-delay-1-val"></output></label>
-          <p class="out-note muted" data-i18n="output.delayHelp">Bluetooth speakers each lag by 100–300 ms, and Windows does not say how much. Delay the one that plays first until both line up; the delays are remembered for this pair.</p>
+          <div class="out-offset">
+            <div class="out-offset-head"><label for="out-offset" data-i18n="output.offset">Line up the outputs</label><output id="out-offset-val" for="out-offset"></output></div>
+            <input type="range" id="out-offset" min="-500" max="500" step="1">
+            <div class="out-offset-ends muted"><span data-i18n="output.offsetEarlier">First plays later</span><span data-i18n="output.offsetLater">Second plays later</span></div>
+            <div class="eq-head out-nudge">
+              <button class="eq-btn" type="button" data-nudge="-10">−10</button>
+              <button class="eq-btn" type="button" data-nudge="-1">−1</button>
+              <button class="eq-btn" type="button" data-nudge="1">+1</button>
+              <button class="eq-btn" type="button" data-nudge="10">+10</button>
+            </div>
+          </div>
+          <p class="out-note muted" data-i18n="output.delayHelp">Each Bluetooth speaker lags by 100–300 ms, speakers of different brands by different amounts, and Windows does not say how much. If the second output sounds late, slide left so the first one waits; if the first sounds late, slide right. Remembered for this pair of devices.</p>
           <div class="eq-head out-row">
             <button class="eq-btn" id="out-align" type="button" aria-pressed="false" data-i18n="output.align">Alignment clicks</button>
             <span class="out-note" id="out-dual-status" role="status"></span>
           </div>
-          <p class="out-note muted" data-i18n="output.alignHelp">Clicks play on the first output, then the second, then both together. Move the delays until they sound evenly spaced and the third is a single click. The music waits meanwhile.</p>
+          <p class="out-note muted" data-i18n="output.alignHelp">A low click on the first output, a high click on the second, then both together. Adjust until the clicks are evenly spaced and the two in the third beat land as one. The music waits meanwhile.</p>
         </div>
         <p class="out-note muted" data-i18n="output.pairingTip">If both speakers can pair with each other (Bose Stereo or Party mode, JBL PartyBoost, Auracast), use that instead: speakers keep themselves in step far better than a PC can over Bluetooth.</p>
       </details>

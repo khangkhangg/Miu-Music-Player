@@ -192,9 +192,12 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   learns the clock difference, variable resampler follows its correction, click track pattern; settings remember
   delays per device pair. Shared mode only. `#[ignore]` machine test plays a tone on two real outputs.
   Verified 2026-10-21 in the app on Klipsch The One (Bluetooth, 44.1 kHz) + LG HDR 4K (HDMI, 48 kHz): same sound and
-  stereo split, delays, alignment clicks, offset held within ±2 ms over a minute.
-- [ ] **Manual:** two Bluetooth speakers in stereo split by ear; switch the second speaker off mid-song (should drop to
-  one output after ~2 s). Neither has been tried yet.
+  stereo split, delays, alignment clicks, offset held within ±2 ms over a minute. Machine test on two Bluetooth
+  speakers (Klipsch The One + Bose SoundLink Flex, `MIU_TEST_OUTPUTS`): within ±0.1 ms over 15 s, clocks ~2 ppm apart.
+  Alignment UI: one signed offset slider (±500 ms) with ±1/±10 ms nudges; clicks are low on the first output, high on
+  the second.
+- [ ] **Manual:** line up the two Bluetooth speakers by ear with the clicks, then stereo split on music; switch the
+  second speaker off mid-song (should drop to one output after ~2 s). Not tried yet.
 - [ ] **Manual:** listening test with FLAC 16/44.1 and 24/96 through speakers and a USB DAC.
 
 ## Phase 5c – Languages and metadata editing

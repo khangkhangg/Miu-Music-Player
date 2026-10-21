@@ -248,8 +248,9 @@ impl VarResampler {
 
 /// Alignment aid: a click on the first output, then on the second, then on both together, then a
 /// rest; each beat `BEAT_MS` long. Channel 0 carries the first output's clicks and channel 1 the
-/// second's, to be played in stereo split. When the delays are right the clicks are evenly spaced
-/// and the third one sounds like a single click.
+/// second's, to be played in stereo split. The first output clicks low and the second an octave
+/// higher, so you can tell which speaker is early. When the delays are right the clicks are evenly
+/// spaced and the two on the third beat land as one.
 pub struct ClickTrack {
     rate: u32,
     channels: usize,
@@ -257,8 +258,9 @@ pub struct ClickTrack {
 }
 
 pub const BEAT_MS: u64 = 400;
-const CLICK_MS: f32 = 6.0;
-const CLICK_HZ: f32 = 2_000.0;
+const CLICK_MS: f32 = 8.0;
+/// Pitch of the first and second output's clicks.
+const CLICK_HZ: [f32; 2] = [1_200.0, 2_400.0];
 
 impl ClickTrack {
     pub fn new(rate: u32, channels: usize) -> Self {
@@ -281,16 +283,23 @@ impl ClickTrack {
         let mut out = Vec::with_capacity(frames * self.channels);
         for _ in 0..frames {
             let (n, into) = (self.pos / beat_len, self.pos % beat_len);
-            let v = if into < click_len {
-                let t = into as f32 / self.rate as f32;
-                (2.0 * std::f32::consts::PI * CLICK_HZ * t).sin() * 0.5 * (1.0 - into as f32 / click_len as f32)
-            } else {
-                0.0
-            };
             let (a, b) = Self::beat(n);
+            let tone = |hz: f32| {
+                if into >= click_len {
+                    return 0.0;
+                }
+                let t = into as f32 / self.rate as f32;
+                (2.0 * std::f32::consts::PI * hz * t).sin() * 0.5 * (1.0 - into as f32 / click_len as f32)
+            };
+            let first = if a { tone(CLICK_HZ[0]) } else { 0.0 };
+            let second = if b { tone(CLICK_HZ[1]) } else { 0.0 };
             for c in 0..self.channels {
-                let on = if c == 1 { b } else if c == 0 { a } else { false };
-                out.push(if on || (self.channels == 1 && (a || b)) { v } else { 0.0 });
+                out.push(match (self.channels, c) {
+                    (1, _) => (first + second) / 2.0,
+                    (_, 0) => first,
+                    (_, 1) => second,
+                    _ => 0.0,
+                });
             }
             self.pos += 1;
         }
@@ -499,5 +508,30 @@ mod tests {
         let mut parts = b.next(3_333);
         parts.extend(b.next(6_667));
         assert_eq!(whole, parts);
+    }
+}
+
+#[cfg(test)]
+mod click_pitch_tests {
+    use super::*;
+
+    /// Upward zero crossings in the first `CLICK_MS` after `start`, scaled to Hz.
+    fn pitch(samples: &[f32], channels: usize, ch: usize, start: usize, rate: u32) -> f32 {
+        let len = (rate as f32 * CLICK_MS / 1000.0) as usize;
+        let s: Vec<f32> = samples.chunks_exact(channels).skip(start).take(len).map(|f| f[ch]).collect();
+        let ups = s.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count() as f32;
+        ups / (len as f32 / rate as f32)
+    }
+
+    #[test]
+    fn each_output_clicks_at_its_own_pitch_so_you_can_tell_them_apart() {
+        let rate = 48_000;
+        let beat = (rate as u64 * BEAT_MS / 1000) as usize;
+        let s = ClickTrack::new(rate, 2).next(beat * 3);
+        let (first, second) = (pitch(&s, 2, 0, 0, rate), pitch(&s, 2, 1, beat, rate));
+        assert!(second > first * 1.4, "second {second} Hz should be clearly higher than first {first} Hz");
+        // On the "both" beat each output keeps its own pitch.
+        assert!((pitch(&s, 2, 0, 2 * beat, rate) - first).abs() < 200.0);
+        assert!((pitch(&s, 2, 1, 2 * beat, rate) - second).abs() < 200.0);
     }
 }

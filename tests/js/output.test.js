@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus } from '../../src/js/output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel } from '../../src/js/output.js';
 
 test('sample rates read like a spec sheet', () => {
   assert.deepEqual([44_100, 48_000, 96_000, 192_000, 88_200].map(rateLabel), ['44.1 kHz', '48 kHz', '96 kHz', '192 kHz', '88.2 kHz']);
@@ -81,4 +81,20 @@ test('the device actually playing is left out too, when the chosen first output 
   const devices = [{ name: 'Headphones', isDefault: true }, { name: 'LG HDR 4K', isDefault: false }];
   const opts = secondOptions({ devices, chosen: 'Bose Flex', second: null }, 'Headphones');
   assert.deepEqual(opts.map((o) => o.value), ['', 'LG HDR 4K']);
+});
+
+test('one signed offset sets the two delays: positive delays the second output, negative the first', () => {
+  assert.deepEqual(delaysFor(120), [0, 120]);
+  assert.deepEqual(delaysFor(-80), [80, 0]);
+  assert.deepEqual(delaysFor(0), [0, 0]);
+  assert.deepEqual(delaysFor(900), [0, 500], 'kept within half a second');
+  assert.equal(offsetOf([0, 120]), 120);
+  assert.equal(offsetOf([80, 0]), -80);
+  assert.equal(offsetOf([30, 100]), 70, 'older settings with both delays set read as their difference');
+});
+
+test('the offset reads as which output waits and how long', () => {
+  assert.equal(offsetLabel(0), 'No delay');
+  assert.equal(offsetLabel(120), 'Second output waits 120 ms');
+  assert.equal(offsetLabel(-35), 'First output waits 35 ms');
 });

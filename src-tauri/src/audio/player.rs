@@ -1014,34 +1014,61 @@ mod dual_machine_tests {
     use super::*;
     use crate::audio::fixtures::wav_with;
 
-    #[test]
-    #[ignore]
-    fn plays_a_tone_on_two_outputs() {
+    /// The two outputs to use: `MIU_TEST_OUTPUTS="first|second"` if set (e.g. two Bluetooth
+    /// speakers), else the default device and another one. Hands-Free (call) endpoints are never
+    /// picked: opening one switches a Bluetooth speaker into call mode.
+    fn two_outputs() -> Option<(Option<String>, String)> {
+        if let Ok(v) = std::env::var("MIU_TEST_OUTPUTS") {
+            let (a, b) = v.split_once('|').expect("MIU_TEST_OUTPUTS=\"first|second\"");
+            return Some((Some(a.to_string()), b.to_string()));
+        }
         let devices = output_devices();
         println!("{devices:?}");
         let default = devices.iter().find(|d| d.is_default).map(|d| d.name.clone());
-        let Some(other) = devices.iter().find(|d| Some(&d.name) != default.as_ref()) else {
+        let other = devices.iter().find(|d| Some(&d.name) != default.as_ref() && !d.name.contains("Hands-Free"))?;
+        Some((None, other.name.clone()))
+    }
+
+    #[test]
+    #[ignore]
+    fn plays_a_tone_on_two_outputs() {
+        let Some((first, other)) = two_outputs() else {
             println!("only one output device: nothing to test");
             return;
         };
         let d = tempfile::tempdir().unwrap();
         // 440 Hz on the left, 660 Hz on the right: in stereo split each output gets one of them.
-        let tone = wav_with(d.path(), "tone.wav", 48_000, 2, 16, 48_000 * 6, |i, c| {
+        let tone = wav_with(d.path(), "tone.wav", 48_000, 2, 16, 48_000 * 30, |i, c| {
             let f = if c == 0 { 440.0 } else { 660.0 };
             (2.0 * std::f32::consts::PI * f * i as f32 / 48_000.0).sin() * 0.3
         });
-        let second = SecondOutput { device: other.name.clone(), mode: DualMode::Split, delays_ms: [0, 0] };
-        let player = Player::start_with(None, false, Some(second)).expect("audio device");
+        let second = SecondOutput { device: other.clone(), mode: DualMode::Split, delays_ms: [0, 0] };
+        let player = Player::start_with(first.as_deref(), false, Some(second)).expect("audio device");
         player.set_volume(0.05);
         player.play(vec![tone], 0);
-        std::thread::sleep(Duration::from_millis(1_500));
+        // Bluetooth devices can take a moment to wake up.
+        let started = Instant::now();
+        while player.status().position_ms < 1_000 && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
         let s = player.status();
         println!("{s:?}");
         assert!(s.playing);
         assert!(!s.second_lost, "second output opened");
-        let sec = s.second.expect("second output playing");
-        assert_eq!(sec.device_name, other.name);
-        assert!(sec.offset_ms.abs() < 50.0, "outputs together: {} ms", sec.offset_ms);
+        let sec = s.second.clone().expect("second output playing");
+        assert_eq!(sec.device_name, other);
+
+        // Two device clocks over 15 s: the controller keeps them together.
+        let mut worst_late = 0.0f64;
+        for i in 0..15 {
+            std::thread::sleep(Duration::from_secs(1));
+            let sec = player.status().second.expect("still two outputs");
+            println!("{:>2} s: offset {:+.1} ms, clock {:+.1} ppm", i + 1, sec.offset_ms, sec.drift_ppm);
+            if i >= 5 {
+                worst_late = worst_late.max(sec.offset_ms.abs());
+            }
+        }
+        assert!(worst_late < 5.0, "outputs drifted apart: {worst_late} ms");
 
         player.set_delays([0, 120]);
         std::thread::sleep(Duration::from_millis(500));

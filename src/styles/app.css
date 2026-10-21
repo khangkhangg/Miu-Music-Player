@@ -383,8 +383,12 @@ div.tile { cursor: default; }
 .out-second summary { cursor: pointer; font-size: 13px; }
 .out-row { margin-top: 8px; }
 .out-row select { max-width: 100%; }
-.out-delay { display: grid; grid-template-columns: 150px 1fr 52px; align-items: center; gap: 8px; margin-top: 8px; }
-.out-delay output { text-align: right; font-variant-numeric: tabular-nums; }
+.out-offset { margin-top: 8px; }
+.out-offset-head { display: flex; justify-content: space-between; gap: 8px; }
+.out-offset-head output { font-variant-numeric: tabular-nums; font-weight: 600; }
+.out-offset input[type="range"] { width: 100%; margin: 6px 0 2px; }
+.out-offset-ends { display: flex; justify-content: space-between; font-size: 11px; }
+.out-nudge { justify-content: center; }
 #out-align[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .out-exclusive { margin-top: 10px; }
 .out-note { font-size: 12px; margin: 6px 0 0; }

@@ -78,3 +78,21 @@ export function dualStatus({ second, secondLost }) {
   const ms = Math.round(Math.abs(second.offsetMs));
   return t(second.offsetMs < 0 ? 'output.behind' : 'output.ahead', { ms, ppm: clock });
 }
+
+export const MAX_DELAY_MS = 500;
+
+/** One signed offset (ms) → [first, second] delays: positive makes the second output wait, negative the first. */
+export function delaysFor(offset) {
+  const ms = Math.min(MAX_DELAY_MS, Math.abs(Math.round(offset)));
+  return offset < 0 ? [ms, 0] : [0, ms];
+}
+
+/** The signed offset for saved [first, second] delays. */
+export function offsetOf([first, second]) {
+  return second - first;
+}
+
+export function offsetLabel(offset) {
+  if (!offset) return t('output.noDelay');
+  return t(offset > 0 ? 'output.secondWaits' : 'output.firstWaits', { ms: Math.abs(offset) });
+}
