@@ -7,12 +7,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
 use crate::audio::decode::{AudioError, SourceFormat};
+use crate::audio::dual::{route, ClickTrack, DelayLine, DriftController, DualMode, Side, VarResampler};
 use crate::audio::eq::{EqSettings, Equalizer};
 use crate::audio::order::{PlayOrder, Repeat};
 use crate::audio::pipeline::Feeder;
@@ -38,7 +39,36 @@ pub struct Status {
     pub repeat: Repeat,
     /// Queue indices that play next, in order (for "Up next").
     pub up_next: Vec<usize>,
+    /// The second output while it plays (F7.9).
+    pub second: Option<SecondStatus>,
+    /// A second output was asked for but could not be opened, or went away: one output plays.
+    pub second_lost: bool,
+    /// The alignment clicks are playing instead of the music.
+    pub aligning: bool,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecondStatus {
+    pub device_name: String,
+    pub device_rate: u32,
+    pub mode: DualMode,
+    /// How much faster the second device's clock runs (ppm), as learnt so far.
+    pub drift_ppm: f64,
+    /// How far ahead (ms; negative: behind) the second output plays, after the delays.
+    pub offset_ms: f64,
+}
+
+/// A second output device and how it shares the music with the first (F7.9, shared mode only).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SecondOutput {
+    pub device: String,
+    pub mode: DualMode,
+    /// Delay of the first and of the second output, ms (each 0..=MAX_DELAY_MS).
+    pub delays_ms: [u32; 2],
+}
+
+pub const MAX_DELAY_MS: u32 = 500;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,25 +100,54 @@ enum Cmd {
     Skip(i64),
     Shuffle(bool),
     Repeat(Repeat),
+    /// Delays of the first and second output, ms.
+    Delays([u32; 2]),
+    Mode(DualMode),
+    /// Play the alignment clicks (true) or go back to the music (false).
+    Align(bool),
     Stop,
 }
 
-/// State shared with the device callback.
+/// State shared with one device callback (each output has its own).
 struct Shared {
     paused: AtomicBool,
     flush: AtomicBool,
     volume: AtomicU32,
     played: AtomicU64,
+    /// When the callback last took audio (ns since `epoch`) and how many frames it took: lets the
+    /// drift controller tell where the device is between callbacks.
+    epoch: Instant,
+    stamp_ns: AtomicU64,
+    last_frames: AtomicU64,
+    /// Flushes handled so far (the engine waits for them after a seek before measuring drift).
+    flushes: AtomicU64,
+    /// The device reported an error (unplugged, switched off).
+    lost: AtomicBool,
 }
 
 impl Shared {
-    fn new() -> Self {
+    fn new(epoch: Instant) -> Self {
         Self {
             paused: AtomicBool::new(true),
             flush: AtomicBool::new(false),
             volume: AtomicU32::new(1.0f32.to_bits()),
             played: AtomicU64::new(0),
+            epoch,
+            stamp_ns: AtomicU64::new(0),
+            last_frames: AtomicU64::new(0),
+            flushes: AtomicU64::new(0),
+            lost: AtomicBool::new(false),
         }
+    }
+
+    /// Frames played as of `now`: the counter, less the last buffer, plus how far into it the
+    /// device should be (see `DriftController::update`).
+    fn position(&self, now: Instant, rate: u32) -> f64 {
+        let played = self.played.load(Ordering::Acquire) as f64;
+        let last = self.last_frames.load(Ordering::Relaxed) as f64;
+        let stamp = self.epoch + Duration::from_nanos(self.stamp_ns.load(Ordering::Relaxed));
+        let into = now.saturating_duration_since(stamp).as_secs_f64() * rate as f64;
+        (played - last + into.min(last)).max(0.0)
     }
 }
 
@@ -108,14 +167,15 @@ struct Renderer {
     consumer: rtrb::Consumer<f32>,
     channels: usize,
     shared: Arc<Shared>,
-    tap: Tap,
+    /// Only the first output feeds the visualizer.
+    tap: Option<Tap>,
     eq_shared: EqShared,
     eq: Equalizer,
     eq_seen: u64,
 }
 
 impl Renderer {
-    fn new(consumer: rtrb::Consumer<f32>, rate: u32, channels: usize, shared: Arc<Shared>, tap: Tap, eq_shared: EqShared) -> Self {
+    fn new(consumer: rtrb::Consumer<f32>, rate: u32, channels: usize, shared: Arc<Shared>, tap: Option<Tap>, eq_shared: EqShared) -> Self {
         Self { consumer, channels, shared, tap, eq_shared, eq: Equalizer::new(rate, channels), eq_seen: 0 }
     }
 
@@ -127,6 +187,8 @@ impl Renderer {
                 chunk.commit_all();
             }
             cb.played.store(0, Ordering::Release);
+            cb.last_frames.store(0, Ordering::Relaxed);
+            cb.flushes.fetch_add(1, Ordering::AcqRel);
         }
         if cb.paused.load(Ordering::Acquire) {
             out.fill(0.0);
@@ -150,8 +212,10 @@ impl Renderer {
         }
         self.eq.process(&mut out[..n]);
         out[n..].fill(0.0);
+        cb.stamp_ns.store(cb.epoch.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        cb.last_frames.store((n / self.channels) as u64, Ordering::Relaxed);
         cb.played.fetch_add((n / self.channels) as u64, Ordering::AcqRel);
-        if let Ok(mut t) = self.tap.try_lock() {
+        if let Some(Ok(mut t)) = self.tap.as_ref().map(|t| t.try_lock()) {
             let undo = if vol > 1e-3 { 1.0 / vol } else { 0.0 };
             for frame in out[..n].chunks_exact(self.channels) {
                 t.push_back(frame.iter().sum::<f32>() / self.channels as f32 * undo);
@@ -191,6 +255,12 @@ impl Player {
     /// `exclusive`, the device is taken over at each file's own rate when a song starts; if that
     /// is refused, playback continues in shared mode.
     pub fn start_on(device: Option<&str>, exclusive: bool) -> Result<Self, AudioError> {
+        Self::start_with(device, exclusive, None)
+    }
+
+    /// Like `start_on`, also playing on a `second` device (shared mode only; ignored in exclusive
+    /// mode). If the second device cannot be opened, the first one plays alone.
+    pub fn start_with(device: Option<&str>, exclusive: bool, second: Option<SecondOutput>) -> Result<Self, AudioError> {
         let device = device.map(str::to_string);
         let (tx, rx) = mpsc::channel();
         let status = Arc::new(Mutex::new(Status { volume: 1.0, ..Default::default() }));
@@ -200,7 +270,7 @@ impl Player {
         let (engine_status, engine_tap, engine_eq) = (status.clone(), tap.clone(), eq.clone());
         let engine_thread = std::thread::Builder::new()
             .name("audio-engine".into())
-            .spawn(move || engine(rx, engine_status, engine_tap, engine_eq, device, exclusive, ready_tx))
+            .spawn(move || engine(rx, engine_status, engine_tap, engine_eq, device, exclusive, second, ready_tx))
             .map_err(|e| AudioError(e.to_string()))?;
         ready_rx.recv().map_err(|_| AudioError("audio engine stopped".into()))??;
         Ok(Self { tx, status, tap, eq, engine: Some(engine_thread) })
@@ -235,6 +305,17 @@ impl Player {
     }
     pub fn set_repeat(&self, repeat: Repeat) {
         let _ = self.tx.send(Cmd::Repeat(repeat));
+    }
+    /// Delays (ms) of the first and second output, to line them up.
+    pub fn set_delays(&self, delays_ms: [u32; 2]) {
+        let _ = self.tx.send(Cmd::Delays(delays_ms.map(|d| d.min(MAX_DELAY_MS))));
+    }
+    pub fn set_dual_mode(&self, mode: DualMode) {
+        let _ = self.tx.send(Cmd::Mode(mode));
+    }
+    /// Alignment clicks on (the music pauses) or off (the music carries on where it was).
+    pub fn align(&self, on: bool) {
+        let _ = self.tx.send(Cmd::Align(on));
     }
     pub fn status(&self) -> Status {
         self.status.lock().map(|s| s.clone()).unwrap_or_default()
@@ -276,30 +357,61 @@ impl Out {
     fn is_empty(&self) -> bool {
         self.producer.slots() == self.producer.buffer().capacity()
     }
+
+    /// Copy as much of `src` into the ring buffer as fits; returns how many samples went in.
+    fn write(&mut self, src: &[f32]) -> usize {
+        let free = self.producer.slots().min(src.len());
+        if free == 0 {
+            return 0;
+        }
+        match self.producer.write_chunk(free) {
+            Ok(mut chunk) => {
+                let (a, b) = chunk.as_mut_slices();
+                a.copy_from_slice(&src[..a.len()]);
+                b.copy_from_slice(&src[a.len()..free]);
+                chunk.commit_all();
+                free
+            }
+            Err(_) => 0,
+        }
+    }
 }
 
 fn ring(rate: u32, channels: usize) -> (rtrb::Producer<f32>, rtrb::Consumer<f32>) {
     rtrb::RingBuffer::new(rate as usize * channels / 2) // ~0.5 s
 }
 
-fn open_shared(wanted: Option<&str>, shared: &Arc<Shared>, tap: &Tap, eq: &EqShared) -> Result<Out, AudioError> {
+/// Opens `wanted` in shared mode. With `or_default`, a device that is gone falls back to the
+/// Windows default; without, that is an error (a second output must never land on the first's).
+fn open_shared(wanted: Option<&str>, or_default: bool, shared: &Arc<Shared>, tap: Option<&Tap>, eq: &EqShared) -> Result<Out, AudioError> {
     let fail = |e: String| AudioError(e);
     let host = cpal::default_host();
     let named = wanted.and_then(|w| {
         let found = host.output_devices().ok()?.find(|d| d.name().ok().as_deref() == Some(w));
-        if found.is_none() {
+        if found.is_none() && or_default {
             log::warn!("output device {w:?} not found; using the default");
         }
         found
     });
-    let device = named.or_else(|| host.default_output_device()).ok_or_else(|| fail("no audio output device".into()))?;
+    let device = match named {
+        Some(d) => d,
+        None if or_default || wanted.is_none() => host.default_output_device().ok_or_else(|| fail("no audio output device".into()))?,
+        None => return Err(fail(format!("output device {:?} not found", wanted.unwrap_or_default()))),
+    };
     let config = device.default_output_config().map_err(|e| fail(e.to_string()))?;
     let rate = config.sample_rate().0;
     let channels = config.channels() as usize;
     let (producer, consumer) = ring(rate, channels);
-    let mut renderer = Renderer::new(consumer, rate, channels, shared.clone(), tap.clone(), eq.clone());
+    let mut renderer = Renderer::new(consumer, rate, channels, shared.clone(), tap.cloned(), eq.clone());
+    let watch = shared.clone();
+    let on_error = move |e: cpal::StreamError| {
+        log::warn!("audio output error: {e}");
+        if matches!(e, cpal::StreamError::DeviceNotAvailable) {
+            watch.lost.store(true, Ordering::Release);
+        }
+    };
     let stream = device
-        .build_output_stream(&config.config(), move |out: &mut [f32], _| renderer.render(out), |e| log::warn!("audio output error: {e}"), None)
+        .build_output_stream(&config.config(), move |out: &mut [f32], _| renderer.render(out), on_error, None)
         .map_err(|e| fail(e.to_string()))?;
     stream.play().map_err(|e| fail(e.to_string()))?;
     log::info!("audio output (shared): {rate} Hz, {channels} ch ({:?})", config.sample_format());
@@ -319,7 +431,7 @@ fn open_exclusive(wanted: Option<&str>, source_rate: u32, shared: &Arc<Shared>, 
     use crate::audio::exclusive::device;
     let (sink, opened, give) = device::open(wanted.map(str::to_string), source_rate, 2).map_err(AudioError)?;
     let (producer, consumer) = ring(opened.rate, opened.channels);
-    let mut renderer = Renderer::new(consumer, opened.rate, opened.channels, shared.clone(), tap.clone(), eq.clone());
+    let mut renderer = Renderer::new(consumer, opened.rate, opened.channels, shared.clone(), Some(tap.clone()), eq.clone());
     give.send(Box::new(move |out: &mut [f32]| renderer.render(out))).map_err(|_| AudioError("exclusive output stopped".into()))?;
     log::info!("audio output (exclusive): {} Hz, {:?}, {} ch on {}", opened.rate, opened.kind, opened.channels, opened.name);
     Ok(Out {
@@ -338,6 +450,113 @@ fn open_exclusive(_: Option<&str>, _: u32, _: &Arc<Shared>, _: &Tap, _: &EqShare
     Err(AudioError("exclusive mode needs Windows".into()))
 }
 
+fn delay_frames(ms: u32, rate: u32) -> usize {
+    ms.min(MAX_DELAY_MS) as usize * rate as usize / 1000
+}
+
+/// How long the second device may take no audio while playing before it counts as gone.
+const STALL: Duration = Duration::from_secs(2);
+/// How often the drift controller looks, and how soon after one realignment another may follow.
+const DRIFT_EVERY: Duration = Duration::from_millis(50);
+const REALIGN_GAP: Duration = Duration::from_secs(5);
+
+/// The second output (F7.9) and what feeds it: the music, at the first output's rate, goes through
+/// its own delay and a resampler whose ratio the drift controller nudges.
+struct Second {
+    out: Out,
+    shared: Arc<Shared>,
+    in_rate: u32,
+    delay: DelayLine,
+    resampler: VarResampler,
+    pending: Vec<f32>,
+    drift: DriftController,
+    /// Flush counts (first, second) to wait for after a restart before measuring again.
+    wait: Option<(u64, u64)>,
+    /// Frames played when last seen moving, and when: notices a device that stopped silently.
+    progress: (u64, Instant),
+}
+
+impl Second {
+    fn open(cfg: &SecondOutput, in_rate: u32, epoch: Instant, eq: &EqShared) -> Result<Self, AudioError> {
+        let shared = Arc::new(Shared::new(epoch));
+        let out = open_shared(Some(&cfg.device), false, &shared, None, eq)?;
+        let resampler = VarResampler::new(in_rate, out.rate, out.channels)?;
+        log::info!("second output: {} ({} Hz, {} ch), {:?}", out.name, out.rate, out.channels, cfg.mode);
+        Ok(Self {
+            delay: DelayLine::new(out.channels, delay_frames(cfg.delays_ms[1], in_rate)),
+            resampler,
+            drift: DriftController::new(in_rate, out.rate),
+            pending: Vec::new(),
+            wait: None,
+            progress: (0, Instant::now()),
+            in_rate,
+            shared,
+            out,
+        })
+    }
+
+    /// Both outputs start over together (play, seek, new delays): empty everything, put the full
+    /// delay first. Call before flushing the first output.
+    fn restart(&mut self, first: &Shared) -> Result<(), AudioError> {
+        self.wait = Some((first.flushes.load(Ordering::Acquire) + 1, self.shared.flushes.load(Ordering::Acquire) + 1));
+        self.pending.clear();
+        self.delay.reset();
+        self.resampler = VarResampler::new(self.in_rate, self.out.rate, self.out.channels)?;
+        self.resampler.set_correction(self.drift.clock_ppm() * 1e-6);
+        self.shared.flush.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    /// Music for this output: at the first output's rate, already routed to this output's channels.
+    fn push(&mut self, content: &[f32]) -> Result<(), AudioError> {
+        let delayed = self.delay.process(content);
+        self.pending.extend(self.resampler.process(&delayed)?);
+        Ok(())
+    }
+
+    fn write(&mut self) {
+        let n = self.out.write(&self.pending);
+        self.pending.drain(..n);
+        // The device stopped taking audio: do not hoard it (the stall check will notice).
+        if self.pending.len() > self.out.rate as usize * self.out.channels * 2 {
+            self.pending.clear();
+        }
+    }
+
+    fn measure(&mut self, first: &Shared, first_rate: u32, now: Instant) {
+        if let Some((a, b)) = self.wait {
+            if first.flushes.load(Ordering::Acquire) < a || self.shared.flushes.load(Ordering::Acquire) < b {
+                return;
+            }
+            self.wait = None;
+            self.drift.restart();
+        }
+        let c = self.drift.update(first.position(now, first_rate), self.shared.position(now, self.out.rate));
+        self.resampler.set_correction(c);
+    }
+
+    /// True once the device has taken no audio for `STALL` while the first one plays.
+    fn stalled(&mut self, now: Instant, playing: bool) -> bool {
+        let played = self.shared.played.load(Ordering::Acquire);
+        if !playing || played != self.progress.0 {
+            self.progress = (played, now);
+            return false;
+        }
+        now.duration_since(self.progress.1) > STALL
+    }
+
+    fn status(&self, mode: DualMode) -> SecondStatus {
+        SecondStatus {
+            device_name: self.out.name.clone(),
+            device_rate: self.out.rate,
+            mode,
+            drift_ppm: (self.drift.clock_ppm() * 10.0).round() / 10.0,
+            offset_ms: (self.drift.error_s() * 10_000.0).round() / 10.0,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn engine(
     rx: Receiver<Cmd>,
     status: Arc<Mutex<Status>>,
@@ -345,15 +564,17 @@ fn engine(
     eq: EqShared,
     wanted: Option<String>,
     mut exclusive: bool,
+    second_cfg: Option<SecondOutput>,
     ready: Sender<Result<(), AudioError>>,
 ) {
-    let shared = Arc::new(Shared::new());
+    let epoch = Instant::now();
+    let shared = Arc::new(Shared::new(epoch));
     let wanted = wanted.as_deref();
     // Exclusive mode opens the device when a song starts, at that song's rate.
     let mut out = if exclusive {
         None
     } else {
-        match open_shared(wanted, &shared, &tap, &eq) {
+        match open_shared(wanted, true, &shared, Some(&tap), &eq) {
             Ok(o) => Some(o),
             Err(e) => {
                 let _ = ready.send(Err(e));
@@ -361,8 +582,28 @@ fn engine(
             }
         }
     };
+    // The second output: shared mode only, never on the first one's device.
+    let mut dual_mode = second_cfg.as_ref().map_or(DualMode::Same, |c| c.mode);
+    let mut second: Option<Second> = None;
+    let mut second_lost = false;
+    if let (Some(cfg), Some(o)) = (second_cfg.as_ref(), out.as_ref()) {
+        if cfg.device == o.name {
+            log::warn!("second output is the same device as the first; playing on one");
+            second_lost = true;
+        } else {
+            match Second::open(cfg, o.rate, epoch, &eq) {
+                Ok(s) => second = Some(s),
+                Err(e) => {
+                    log::warn!("second output unavailable ({e}); playing on one");
+                    second_lost = true;
+                }
+            }
+        }
+    }
     let _ = ready.send(Ok(()));
 
+    let first_rate = out.as_ref().map_or(0, |o| o.rate);
+    let mut delay1 = DelayLine::new(out.as_ref().map_or(2, |o| o.channels), if second.is_some() { delay_frames(second_cfg.as_ref().map_or(0, |c| c.delays_ms[0]), first_rate) } else { 0 });
     let mut formats: std::collections::HashMap<usize, SourceFormat> = std::collections::HashMap::new();
     let mut feeder: Option<Feeder> = None;
     let mut tracks: Vec<PathBuf> = Vec::new();
@@ -378,68 +619,73 @@ fn engine(
     let (mut shuffle, mut repeat) = (false, Repeat::Off);
     let mut order = PlayOrder::new(0, 0, false, Repeat::Off, 1);
     let seed = || std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
+    // Alignment clicks play instead of the music; where the music was, and whether it was paused.
+    let mut clicks: Option<ClickTrack> = None;
+    let mut resume_after_clicks: Option<(usize, u64, bool)> = None;
+    let (mut measured_at, mut realigned_at) = (epoch, epoch);
 
     loop {
         // Rate 0 until an exclusive device is open: the feeder then asks for the first file's rate.
         let (rate, channels) = out.as_ref().map_or((0, 2), |o| (o.rate, o.channels));
-        let fresh = |tracks: &[PathBuf], start: usize, exclusive: bool| {
-            if exclusive {
-                Feeder::following_source(tracks.to_vec(), start, rate, channels)
-            } else {
-                Feeder::new(tracks.to_vec(), start, rate, channels)
+        // Frames heard so far, less the silence the first output's delay put in front.
+        let heard = |played: u64, delay1: &DelayLine| (played as i64 - delay1.net_frames()).max(0) as u64;
+        let now_at = |feeder: &Option<Feeder>, timeline: &Timeline, delay1: &DelayLine| {
+            feeder.as_ref().and(timeline.at(heard(shared.played.load(Ordering::Acquire), delay1)))
+        };
+        let set_paused = |on: bool, second: &Option<Second>| {
+            shared.paused.store(on, Ordering::Release);
+            if let Some(s) = second {
+                s.shared.paused.store(on, Ordering::Release);
             }
         };
+        // Play, seek and skip all start the stream again from (track, ms); done once per turn.
+        let mut restart_at: Option<(usize, u64)> = None;
+        let mut flush_clicks = false;
         loop {
             let cmd = match rx.try_recv() {
                 Ok(c) => c,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return,
             };
-            let mut restart = |tracks: &[PathBuf], track: usize, offset_ms: u64, order: &PlayOrder, feeder: &mut Option<Feeder>, timeline: &mut Timeline| {
-                let mut f = fresh(tracks, track, exclusive).with_order(order.clone());
-                if offset_ms > 0 && f.seek_ms(offset_ms).is_err() {
-                    return;
-                }
-                *feeder = Some(f);
-                *timeline = Timeline::default();
-                timeline.start_track(track, offset_ms * rate as u64 / 1000);
-                start_ms = offset_ms;
-                want = None;
-                pending.clear();
-                finished = false;
-                shared.flush.store(true, Ordering::Release);
-            };
+            // The track a seek or skip is relative to: one about to start, or the one heard now.
+            let current = restart_at.map(|(t, _)| t).or_else(|| now_at(&feeder, &timeline, &delay1).map(|(t, _)| t));
             match cmd {
                 Cmd::Play { tracks: t, start, in_order } => {
                     tracks = t;
                     formats.clear();
                     order = if in_order { PlayOrder::fixed(tracks.len(), start) } else { PlayOrder::new(tracks.len(), start, shuffle, repeat, seed()) };
-                    restart(&tracks, start, 0, &order, &mut feeder, &mut timeline);
-                    shared.paused.store(false, Ordering::Release);
+                    clicks = None;
+                    resume_after_clicks = None;
+                    restart_at = Some((start, 0));
+                    set_paused(false, &second);
                 }
                 Cmd::Stop => return,
-                Cmd::Pause => shared.paused.store(true, Ordering::Release),
-                Cmd::Resume => shared.paused.store(false, Ordering::Release),
-                Cmd::Volume(v) => shared.volume.store(v.to_bits(), Ordering::Relaxed),
+                Cmd::Pause => set_paused(true, &second),
+                Cmd::Resume => set_paused(false, &second),
+                Cmd::Volume(v) => {
+                    shared.volume.store(v.to_bits(), Ordering::Relaxed);
+                    if let Some(s) = second.as_ref() {
+                        s.shared.volume.store(v.to_bits(), Ordering::Relaxed);
+                    }
+                }
                 Cmd::Seek(ms) => {
-                    if let (true, Some((track, _))) = (feeder.is_some(), timeline.at(shared.played.load(Ordering::Acquire))) {
-                        restart(&tracks, track, ms, &order, &mut feeder, &mut timeline);
+                    if let Some(track) = current {
+                        restart_at = Some((track, ms));
                     }
                 }
                 Cmd::Skip(by) => {
-                    if let Some((track, _)) = timeline.at(shared.played.load(Ordering::Acquire)) {
+                    if let Some(track) = current {
                         match order.skip(track, by) {
-                            Some(next) => restart(&tracks, next, 0, &order, &mut feeder, &mut timeline),
+                            Some(next) => restart_at = Some((next, 0)),
                             // Previous on the first song: start it again.
-                            None if by < 0 => restart(&tracks, track, 0, &order, &mut feeder, &mut timeline),
+                            None if by < 0 => restart_at = Some((track, 0)),
                             None => {}
                         }
                     }
                 }
                 Cmd::Shuffle(on) => {
                     shuffle = on;
-                    let current = timeline.at(shared.played.load(Ordering::Acquire)).map_or(0, |(t, _)| t);
-                    order.set_shuffle(on, current);
+                    order.set_shuffle(on, current.unwrap_or(0));
                     if let Some(f) = feeder.as_mut() {
                         *f.order_mut() = order.clone();
                     }
@@ -451,7 +697,113 @@ fn engine(
                         f.order_mut().set_repeat(r);
                     }
                 }
+                Cmd::Mode(m) => dual_mode = m,
+                Cmd::Delays(d) => {
+                    if let Some(s) = second.as_mut() {
+                        delay1.set_frames(delay_frames(d[0], rate));
+                        s.delay.set_frames(delay_frames(d[1], rate));
+                        // Both streams start over so the new delays apply from the same moment.
+                        if clicks.is_some() {
+                            flush_clicks = true;
+                        } else if let Some((track, frame)) = now_at(&feeder, &timeline, &delay1) {
+                            restart_at = restart_at.or(Some((track, frame * 1000 / rate.max(1) as u64)));
+                        }
+                    }
+                }
+                Cmd::Align(on) => {
+                    if on && clicks.is_none() && second.is_some() {
+                        let paused = shared.paused.load(Ordering::Acquire);
+                        let here = restart_at.or_else(|| now_at(&feeder, &timeline, &delay1).map(|(t, f)| (t, f * 1000 / rate.max(1) as u64)));
+                        resume_after_clicks = here.map(|(t, ms)| (t, ms, paused));
+                        restart_at = None;
+                        feeder = None;
+                        timeline = Timeline::default();
+                        clicks = Some(ClickTrack::new(rate, channels));
+                        flush_clicks = true;
+                        set_paused(false, &second);
+                    } else if !on && clicks.is_some() {
+                        clicks = None;
+                        flush_clicks = true;
+                        match resume_after_clicks.take() {
+                            Some((track, ms, paused)) => {
+                                restart_at = Some((track, ms));
+                                set_paused(paused, &second);
+                            }
+                            None => set_paused(true, &second),
+                        }
+                    }
+                }
             }
+        }
+
+        // The second output went away (error, or it stopped taking audio): carry on with one.
+        let now = Instant::now();
+        let playing_now = !shared.paused.load(Ordering::Acquire) && (feeder.is_some() || clicks.is_some());
+        let gone = second.as_mut().is_some_and(|s| s.shared.lost.load(Ordering::Acquire) || s.stalled(now, playing_now));
+        if gone {
+            log::warn!("second output went away; playing on one");
+            second = None;
+            second_lost = true;
+            delay1.set_frames(0);
+            if clicks.take().is_some() {
+                if let Some((track, ms, paused)) = resume_after_clicks.take() {
+                    restart_at = Some((track, ms));
+                    set_paused(paused, &second);
+                } else {
+                    set_paused(true, &second);
+                }
+            }
+            if restart_at.is_none() {
+                restart_at = now_at(&feeder, &timeline, &delay1).map(|(t, f)| (t, f * 1000 / rate.max(1) as u64));
+            }
+            flush_clicks = true;
+        }
+
+        // Keep the second output in step; if it is too far out, start both over where they are.
+        if let Some(s) = second.as_mut() {
+            if playing_now && now.duration_since(measured_at) >= DRIFT_EVERY {
+                measured_at = now;
+                s.measure(&shared, rate, now);
+                if s.drift.lost_sync() && s.wait.is_none() && now.duration_since(realigned_at) >= REALIGN_GAP {
+                    log::warn!("outputs drifted {:.0} ms apart; realigning", s.drift.error_s() * 1000.0);
+                    realigned_at = now;
+                    if clicks.is_some() {
+                        flush_clicks = true;
+                    } else if restart_at.is_none() {
+                        restart_at = now_at(&feeder, &timeline, &delay1).map(|(t, f)| (t, f * 1000 / rate.max(1) as u64));
+                    }
+                }
+            }
+        }
+
+        let flush_all = |second: &mut Option<Second>, delay1: &mut DelayLine| {
+            delay1.reset();
+            if let Some(s) = second.as_mut() {
+                if let Err(e) = s.restart(&shared) {
+                    log::warn!("second output stopped: {e}");
+                    *second = None;
+                }
+            }
+            shared.flush.store(true, Ordering::Release);
+        };
+        if let Some((track, ms)) = restart_at {
+            let mut f = if exclusive { Feeder::following_source(tracks.clone(), track, rate, channels) } else { Feeder::new(tracks.clone(), track, rate, channels) }.with_order(order.clone());
+            if ms == 0 || f.seek_ms(ms).is_ok() {
+                feeder = Some(f);
+                timeline = Timeline::default();
+                timeline.start_track(track, ms * rate as u64 / 1000);
+                start_ms = ms;
+                want = None;
+                pending.clear();
+                finished = false;
+                flush_all(&mut second, &mut delay1);
+            }
+        } else if flush_clicks {
+            pending.clear();
+            if clicks.is_some() {
+                clicks = Some(ClickTrack::new(rate, channels));
+            }
+            flush_all(&mut second, &mut delay1);
         }
 
         // The next file needs another rate: in exclusive mode, reopen the device at it once
@@ -469,7 +821,7 @@ fn engine(
                     Err(e) => {
                         log::warn!("exclusive mode unavailable ({e}); playing in shared mode");
                         exclusive = false;
-                        open_shared(wanted, &shared, &tap, &eq).map_err(|e| log::error!("no audio output: {e}")).ok()
+                        open_shared(wanted, true, &shared, Some(&tap), &eq).map_err(|e| log::error!("no audio output: {e}")).ok()
                     }
                 };
                 match out.as_ref() {
@@ -477,6 +829,7 @@ fn engine(
                         shared.played.store(0, Ordering::Release);
                         timeline = Timeline::default();
                         timeline.start_track(f.current_track(), start_ms * o.rate as u64 / 1000);
+                        delay1 = DelayLine::new(o.channels, 0);
                     }
                     _ => feeder = None,
                 }
@@ -485,56 +838,70 @@ fn engine(
             }
         }
 
-        // Fill the ring buffer, a few blocks per turn so commands and status stay responsive
+        // Fill the ring buffers, a few blocks per turn so commands and status stay responsive
         // even when decoding is slow (e.g. debug builds).
+        let (side1, side2) = match (clicks.is_some(), second.is_some()) {
+            (true, _) => DualMode::Split.sides(),
+            (false, true) => dual_mode.sides(),
+            (false, false) => (Side::Both, Side::Both),
+        };
         let mut budget = 8;
-        while let Some(f) = feeder.as_mut() {
-            if budget == 0 || want.is_some() {
-                break;
-            }
+        while budget > 0 && want.is_none() {
             budget -= 1;
             if pending_at >= pending.len() {
-                match f.next_block() {
-                    Ok(Some(block)) => {
-                        if let (false, Some(fmt)) = (formats.contains_key(&block.track), f.current_format()) {
-                            formats.insert(block.track, fmt);
-                        }
-                        if block.starts_track {
-                            // A new pass (next song, or the same one again with repeat-one) starts at 0.
-                            timeline.start_track(block.track, 0);
-                        }
-                        timeline.add(block.track, (block.samples.len() / channels) as u64);
-                        pending = block.samples;
-                        pending_at = 0;
-                    }
-                    Ok(None) if f.wants_rate().is_some() => {
-                        want = f.wants_rate();
+                let block = if let Some(c) = clicks.as_mut() {
+                    if out.as_ref().map_or(0, |o| o.producer.slots()) < rate as usize / 100 * channels {
                         break;
                     }
-                    Ok(None) | Err(_) => {
-                        feeder = None;
-                        finished = true;
-                        break;
+                    c.next(rate as usize / 100)
+                } else if let Some(f) = feeder.as_mut() {
+                    match f.next_block() {
+                        Ok(Some(block)) => {
+                            if let (false, Some(fmt)) = (formats.contains_key(&block.track), f.current_format()) {
+                                formats.insert(block.track, fmt);
+                            }
+                            if block.starts_track {
+                                // A new pass (next song, or the same one again with repeat-one) starts at 0.
+                                timeline.start_track(block.track, 0);
+                            }
+                            timeline.add(block.track, (block.samples.len() / channels) as u64);
+                            block.samples
+                        }
+                        Ok(None) if f.wants_rate().is_some() => {
+                            want = f.wants_rate();
+                            break;
+                        }
+                        Ok(None) | Err(_) => {
+                            feeder = None;
+                            finished = true;
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                };
+                if let Some(s) = second.as_mut() {
+                    let routed = route(&block, channels, s.out.channels, side2);
+                    if let Err(e) = s.push(&routed) {
+                        log::warn!("second output: {e}");
                     }
                 }
+                pending = delay1.process(&route(&block, channels, channels, side1));
+                pending_at = 0;
             }
             let Some(o) = out.as_mut() else { break };
-            let free = o.producer.slots().min(pending.len() - pending_at);
-            if free == 0 {
+            let n = o.write(&pending[pending_at..]);
+            pending_at += n;
+            if n == 0 {
                 break;
             }
-            if let Ok(mut chunk) = o.producer.write_chunk(free) {
-                let (a, b) = chunk.as_mut_slices();
-                let src = &pending[pending_at..pending_at + free];
-                a.copy_from_slice(&src[..a.len()]);
-                b.copy_from_slice(&src[a.len()..]);
-                chunk.commit_all();
-                pending_at += free;
-            }
+        }
+        if let Some(s) = second.as_mut() {
+            s.write();
         }
 
         // Publish what the listener hears.
-        let played = shared.played.load(Ordering::Acquire);
+        let played = heard(shared.played.load(Ordering::Acquire), &delay1);
         let drained = finished && pending_at >= pending.len() && out.as_ref().is_none_or(Out::is_empty);
         if let Ok(mut s) = status.lock() {
             let here = timeline.at(played);
@@ -557,6 +924,9 @@ fn engine(
             if s.device_name != name {
                 s.device_name = name.to_string();
             }
+            s.second = second.as_ref().map(|sec| sec.status(dual_mode));
+            s.second_lost = second_lost;
+            s.aligning = clicks.is_some();
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -638,6 +1008,76 @@ mod output_tests {
     }
 }
 
+// Machine test (F7.9): a quiet tone on the default output and on one other output, if there is one.
+#[cfg(test)]
+mod dual_machine_tests {
+    use super::*;
+    use crate::audio::fixtures::wav_with;
+
+    #[test]
+    #[ignore]
+    fn plays_a_tone_on_two_outputs() {
+        let devices = output_devices();
+        println!("{devices:?}");
+        let default = devices.iter().find(|d| d.is_default).map(|d| d.name.clone());
+        let Some(other) = devices.iter().find(|d| Some(&d.name) != default.as_ref()) else {
+            println!("only one output device: nothing to test");
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        // 440 Hz on the left, 660 Hz on the right: in stereo split each output gets one of them.
+        let tone = wav_with(d.path(), "tone.wav", 48_000, 2, 16, 48_000 * 6, |i, c| {
+            let f = if c == 0 { 440.0 } else { 660.0 };
+            (2.0 * std::f32::consts::PI * f * i as f32 / 48_000.0).sin() * 0.3
+        });
+        let second = SecondOutput { device: other.name.clone(), mode: DualMode::Split, delays_ms: [0, 0] };
+        let player = Player::start_with(None, false, Some(second)).expect("audio device");
+        player.set_volume(0.05);
+        player.play(vec![tone], 0);
+        std::thread::sleep(Duration::from_millis(1_500));
+        let s = player.status();
+        println!("{s:?}");
+        assert!(s.playing);
+        assert!(!s.second_lost, "second output opened");
+        let sec = s.second.expect("second output playing");
+        assert_eq!(sec.device_name, other.name);
+        assert!(sec.offset_ms.abs() < 50.0, "outputs together: {} ms", sec.offset_ms);
+
+        player.set_delays([0, 120]);
+        std::thread::sleep(Duration::from_millis(500));
+        let after = player.status();
+        assert!(after.playing && after.position_ms >= s.position_ms, "new delays keep the place: {} -> {}", s.position_ms, after.position_ms);
+
+        player.align(true);
+        std::thread::sleep(Duration::from_millis(1_000));
+        assert!(player.status().aligning);
+        player.align(false);
+        std::thread::sleep(Duration::from_millis(300));
+        let back = player.status();
+        assert!(!back.aligning && back.playing, "music again after the clicks");
+        assert!(back.position_ms >= after.position_ms, "from where it was: {} -> {}", after.position_ms, back.position_ms);
+    }
+
+    #[test]
+    #[ignore]
+    fn a_missing_second_output_leaves_one_playing() {
+        let d = tempfile::tempdir().unwrap();
+        let p = crate::audio::fixtures::wav(d.path(), "t.wav", 44_100, 1, 16, 44_100 * 2);
+        let second = SecondOutput { device: "No Such Speaker".into(), mode: DualMode::Split, delays_ms: [100, 0] };
+        let player = Player::start_with(None, false, Some(second)).expect("audio device");
+        player.set_volume(0.05);
+        player.play(vec![p], 0);
+        // A Bluetooth device can take a moment to wake up: wait for it to take audio.
+        let started = Instant::now();
+        while player.status().position_ms < 300 && started.elapsed() < Duration::from_secs(3) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let s = player.status();
+        assert!(s.playing && s.second.is_none() && s.second_lost);
+        assert!(s.position_ms > 200, "no delay left in front: {s:?}");
+    }
+}
+
 #[cfg(test)]
 mod renderer_tests {
     use super::*;
@@ -647,11 +1087,11 @@ mod renderer_tests {
         for s in samples {
             p.push(*s).unwrap();
         }
-        let shared = Arc::new(Shared::new());
+        let shared = Arc::new(Shared::new(Instant::now()));
         shared.paused.store(false, Ordering::Release);
         let eq: EqShared = Arc::new(Mutex::new((0, EqSettings::default())));
         let tap: Tap = Arc::new(Mutex::new(VecDeque::new()));
-        (Renderer::new(c, 48_000, channels, shared.clone(), tap, eq.clone()), shared, eq)
+        (Renderer::new(c, 48_000, channels, shared.clone(), Some(tap), eq.clone()), shared, eq)
     }
 
     #[test]
@@ -709,14 +1149,48 @@ mod renderer_tests {
     fn eq_settings_made_before_the_renderer_existed_still_apply() {
         let (mut p, c) = rtrb::RingBuffer::<f32>::new(16);
         p.push(0.5).unwrap();
-        let shared = Arc::new(Shared::new());
+        let shared = Arc::new(Shared::new(Instant::now()));
         shared.paused.store(false, Ordering::Release);
         let quieter = EqSettings { preamp_db: -6.0, ..EqSettings::default() };
         let eq: EqShared = Arc::new(Mutex::new((3, quieter)));
-        let mut r = Renderer::new(c, 48_000, 1, shared, Arc::new(Mutex::new(VecDeque::new())), eq);
+        let mut r = Renderer::new(c, 48_000, 1, shared, Some(Arc::new(Mutex::new(VecDeque::new()))), eq);
         let mut out = [0.0; 1];
         r.render(&mut out);
         assert!((out[0] - 0.5 * 0.501).abs() < 0.01, "preamp applied: {}", out[0]);
+    }
+
+    #[test]
+    fn each_handled_flush_is_counted() {
+        let (mut r, shared, _) = setup(&[0.5; 4], 1);
+        shared.flush.store(true, Ordering::Release);
+        r.render(&mut [0.0; 2]);
+        shared.flush.store(true, Ordering::Release);
+        shared.paused.store(true, Ordering::Release);
+        r.render(&mut [0.0; 2]);
+        assert_eq!(shared.flushes.load(Ordering::Acquire), 2, "also while paused");
+    }
+
+    #[test]
+    fn the_position_moves_on_between_callbacks_but_not_past_the_buffer() {
+        let (mut r, shared, _) = setup(&[0.5; 960], 1);
+        r.render(&mut [0.0; 480]); // 10 ms at 48 kHz
+        let stamp = shared.epoch + Duration::from_nanos(shared.stamp_ns.load(Ordering::Relaxed));
+        assert_eq!(shared.position(stamp, 48_000), 0.0, "the buffer just handed over starts now");
+        assert!((shared.position(stamp + Duration::from_millis(5), 48_000) - 240.0).abs() < 1.0);
+        assert_eq!(shared.position(stamp + Duration::from_secs(3), 48_000), 480.0, "never beyond what was handed over");
+    }
+
+    #[test]
+    fn a_renderer_without_a_tap_still_plays() {
+        let (mut p, c) = rtrb::RingBuffer::<f32>::new(4);
+        p.push(0.5).unwrap();
+        let shared = Arc::new(Shared::new(Instant::now()));
+        shared.paused.store(false, Ordering::Release);
+        let eq: EqShared = Arc::new(Mutex::new((0, EqSettings::default())));
+        let mut r = Renderer::new(c, 48_000, 1, shared, None, eq);
+        let mut out = [0.0; 1];
+        r.render(&mut out);
+        assert_eq!(out, [0.5]);
     }
 }
 
