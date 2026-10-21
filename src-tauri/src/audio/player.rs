@@ -169,6 +169,8 @@ impl Shared {
 /// The most recent samples the device played (mono, before volume), for the visualizer.
 type Tap = Arc<Mutex<VecDeque<f32>>>;
 const TAP_LEN: usize = 2048;
+/// Late callbacks this soon after playing starts are the device waking up, not a weak link.
+const GLITCH_WARMUP: Duration = Duration::from_secs(2);
 /// How much of the queue the "Up next" list shows (it scrolls).
 const UP_NEXT: usize = 100;
 
@@ -190,11 +192,13 @@ struct Renderer {
     rate: u32,
     /// When the last playing callback ran and how many frames it handed over (none while paused).
     prev: Option<(Instant, u64)>,
+    /// When playing (re)started; late callbacks in the first `GLITCH_WARMUP` are the device waking up.
+    playing_since: Option<Instant>,
 }
 
 impl Renderer {
     fn new(consumer: rtrb::Consumer<f32>, rate: u32, channels: usize, shared: Arc<Shared>, tap: Option<Tap>, eq_shared: EqShared) -> Self {
-        Self { consumer, channels, shared, tap, eq_shared, eq: Equalizer::new(rate, channels), eq_seen: 0, rate, prev: None }
+        Self { consumer, channels, shared, tap, eq_shared, eq: Equalizer::new(rate, channels), eq_seen: 0, rate, prev: None, playing_since: None }
     }
 
     fn render(&mut self, out: &mut [f32]) {
@@ -208,15 +212,18 @@ impl Renderer {
             cb.last_frames.store(0, Ordering::Relaxed);
             cb.flushes.fetch_add(1, Ordering::AcqRel);
             cb.nudge.store(0, Ordering::Release);
+            self.playing_since = None;
         }
         if cb.paused.load(Ordering::Acquire) {
             out.fill(0.0);
             self.prev = None;
+            self.playing_since = None;
             return;
         }
         let now = Instant::now();
+        let since = *self.playing_since.get_or_insert(now);
         if let Some((at, frames)) = self.prev.replace((now, (out.len() / self.channels) as u64)) {
-            if crate::audio::health::is_glitch(now - at, frames, self.rate) {
+            if now - since > GLITCH_WARMUP && crate::audio::health::is_glitch(now - at, frames, self.rate) {
                 cb.glitches.fetch_add(1, Ordering::AcqRel);
             }
         }
@@ -508,8 +515,6 @@ fn delay_frames(ms: u32, rate: u32) -> usize {
     ms.min(MAX_DELAY_MS) as usize * rate as usize / 1000
 }
 
-/// How long the second device may take no audio while playing before it counts as gone.
-const STALL: Duration = Duration::from_secs(2);
 /// How often the drift controller looks, and how soon after one realignment another may follow.
 const DRIFT_EVERY: Duration = Duration::from_millis(50);
 const REALIGN_GAP: Duration = Duration::from_secs(5);
@@ -524,10 +529,12 @@ struct Second {
     resampler: VarResampler,
     pending: Vec<f32>,
     drift: DriftController,
-    /// Flush counts (first, second) to wait for after a restart before measuring again.
-    wait: Option<(u64, u64)>,
+    /// Waiting for both devices to drop their old audio after a restart before measuring again.
+    wait: bool,
+    /// When the last diagnostic line was logged.
+    diag_at: Instant,
     /// Frames played when last seen moving, and when: notices a device that stopped silently.
-    progress: (u64, Instant),
+    progress: (u64, Instant, u64),
     /// Problems on this output (late callbacks, jumps to stay in line), and glitches counted so far.
     health: HealthLog,
     glitches_seen: u64,
@@ -544,8 +551,9 @@ impl Second {
             resampler,
             drift: DriftController::new(in_rate, out.rate),
             pending: Vec::new(),
-            wait: None,
-            progress: (0, Instant::now()),
+            wait: false,
+            diag_at: Instant::now(),
+            progress: (0, Instant::now(), 0),
             health: HealthLog::default(),
             glitches_seen: 0,
             in_rate,
@@ -557,7 +565,8 @@ impl Second {
     /// Both outputs start over together (play, seek, new delays): empty everything, put the full
     /// delay first. Call before flushing the first output.
     fn restart(&mut self, first: &Shared) -> Result<(), AudioError> {
-        self.wait = Some((first.flushes.load(Ordering::Acquire) + 1, self.shared.flushes.load(Ordering::Acquire) + 1));
+        let _ = first;
+        self.wait = true;
         self.pending.clear();
         self.delay.reset();
         self.resampler = VarResampler::new(self.in_rate, self.out.rate, self.out.channels)?;
@@ -582,31 +591,47 @@ impl Second {
         }
     }
 
-    fn measure(&mut self, first: &Shared, first_rate: u32, now: Instant) {
-        if let Some((a, b)) = self.wait {
-            if first.flushes.load(Ordering::Acquire) < a || self.shared.flushes.load(Ordering::Acquire) < b {
-                return;
+    /// Returns the jump made to line up again, if any (seconds; + the second output skipped ahead).
+    fn measure(&mut self, first: &Shared, first_rate: u32, now: Instant) -> Option<f64> {
+        // After a restart, measure once both devices have dropped their old audio (several restarts
+        // in a row need only that one wait).
+        let (p1, p2) = (first.position(now, first_rate), self.shared.position(now, self.out.rate));
+        let c = self.drift.correction();
+        if now.duration_since(self.diag_at) >= Duration::from_secs(2) {
+            self.diag_at = now;
+            let ring = self.out.producer.buffer().capacity() - self.out.producer.slots();
+            log::debug!(
+                "dual: wait {} first {:.0} second {:.0} frames, second ring {} ms + {} ms waiting, nudge {}, gap {:+.1} ms, correction {:+.0} ppm",
+                self.wait, p1, p2, ring / self.out.channels * 1000 / self.out.rate as usize, self.pending.len() / self.out.channels * 1000 / self.out.rate as usize,
+                self.shared.nudge.load(Ordering::Relaxed), self.drift.error_s() * 1000.0, c * 1e6,
+            );
+        }
+        if self.wait {
+            if first.flush.load(Ordering::Acquire) || self.shared.flush.load(Ordering::Acquire) {
+                return None;
             }
-            self.wait = None;
+            self.wait = false;
             self.drift.restart();
         }
-        let c = self.drift.update(first.position(now, first_rate), self.shared.position(now, self.out.rate));
+        let c = self.drift.update(p1, p2);
         self.resampler.set_correction(c);
         if let Some(step) = self.drift.take_step() {
             log::info!("second output {} {:.1} ms to line up", if step > 0.0 { "skips" } else { "waits" }, step.abs() * 1000.0);
             self.shared.nudge.fetch_add((step * self.out.rate as f64).round() as i64, Ordering::AcqRel);
-            self.health.record(self.shared.epoch.elapsed().as_secs_f64());
+            return Some(step);
         }
+        None
     }
 
-    /// True once the device has taken no audio for `STALL` while the first one plays.
-    fn stalled(&mut self, now: Instant, playing: bool) -> bool {
+    /// True once the device has taken no audio for a while as the first one carried on playing.
+    fn stalled(&mut self, now: Instant, playing: bool, first: &Shared, first_rate: u32) -> bool {
         let played = self.shared.played.load(Ordering::Acquire);
-        if !playing || played != self.progress.0 {
-            self.progress = (played, now);
+        let first_played = first.played.load(Ordering::Acquire);
+        if !playing || played != self.progress.0 || first_played < self.progress.2 {
+            self.progress = (played, now, first_played);
             return false;
         }
-        now.duration_since(self.progress.1) > STALL
+        crate::audio::health::second_stalled(now.duration_since(self.progress.1), first_played - self.progress.2, first_rate)
     }
 
     /// Log any late callbacks this output's device had since the last look.
@@ -814,7 +839,7 @@ fn engine(
         // The second output went away (error, or it stopped taking audio): carry on with one.
         let now = Instant::now();
         let playing_now = !shared.paused.load(Ordering::Acquire) && (feeder.is_some() || clicks.is_some());
-        let gone = second.as_mut().is_some_and(|s| s.shared.lost.load(Ordering::Acquire) || s.stalled(now, playing_now));
+        let gone = second.as_mut().is_some_and(|s| s.shared.lost.load(Ordering::Acquire) || s.stalled(now, playing_now, &shared, rate));
         if gone {
             log::warn!("second output went away; playing on one");
             second = None;
@@ -838,8 +863,15 @@ fn engine(
         if let Some(s) = second.as_mut() {
             if playing_now && now.duration_since(measured_at) >= DRIFT_EVERY {
                 measured_at = now;
-                s.measure(&shared, rate, now);
-                if s.drift.lost_sync() && s.wait.is_none() && now.duration_since(realigned_at) >= REALIGN_GAP {
+                if let Some(step) = s.measure(&shared, rate, now) {
+                    // Blame the output that fell behind.
+                    let t = epoch.elapsed().as_secs_f64();
+                    match crate::audio::health::behind(step) {
+                        crate::audio::health::Output::First => health1.record(t),
+                        crate::audio::health::Output::Second => s.health.record(t),
+                    }
+                }
+                if s.drift.lost_sync() && !s.wait && now.duration_since(realigned_at) >= REALIGN_GAP {
                     log::warn!("outputs drifted {:.0} ms apart; realigning", s.drift.error_s() * 1000.0);
                     realigned_at = now;
                     if clicks.is_some() {
@@ -1150,17 +1182,21 @@ mod dual_machine_tests {
         let sec = s.second.clone().expect("second output playing");
         assert_eq!(sec.device_name, other);
 
-        // Two device clocks over 15 s: the controller keeps them together.
-        let mut worst_late = 0.0f64;
+        // Two device clocks over 15 s: once settled (3 s warm-up, a 2 s look, then a jump if needed),
+        // the controller keeps them together.
+        let mut settled: Vec<f64> = Vec::new();
         for i in 0..15 {
             std::thread::sleep(Duration::from_secs(1));
             let sec = player.status().second.expect("still two outputs");
             println!("{:>2} s: offset {:+.1} ms, clock {:+.1} ppm", i + 1, sec.offset_ms, sec.drift_ppm);
-            if i >= 5 {
-                worst_late = worst_late.max(sec.offset_ms.abs());
+            if i >= 8 {
+                settled.push(sec.offset_ms.abs());
             }
         }
-        assert!(worst_late < 5.0, "outputs drifted apart: {worst_late} ms");
+        // A real Bluetooth dropout may still show for a moment before it is jumped away.
+        settled.sort_by(f64::total_cmp);
+        assert!(settled[settled.len() / 2] < 2.0, "outputs apart: {settled:?} ms");
+        assert!(settled.iter().filter(|&&v| v > 10.0).count() <= 1, "outputs apart: {settled:?} ms");
 
         player.set_delays([0, 120]);
         std::thread::sleep(Duration::from_millis(500));
@@ -1336,11 +1372,23 @@ mod renderer_tests {
     fn a_callback_that_comes_far_too_late_counts_as_a_glitch() {
         let (mut r, shared, _) = setup(&[0.5; 64], 1);
         r.render(&mut [0.0; 4]);
+        std::thread::sleep(GLITCH_WARMUP + Duration::from_millis(50));
+        r.render(&mut [0.0; 4]);
+        shared.glitches.store(0, Ordering::Release); // the warm-up wait itself
         r.render(&mut [0.0; 4]);
         assert_eq!(shared.glitches.load(Ordering::Acquire), 0);
         std::thread::sleep(Duration::from_millis(90));
         r.render(&mut [0.0; 4]);
         assert_eq!(shared.glitches.load(Ordering::Acquire), 1);
+    }
+
+    #[test]
+    fn a_late_callback_while_the_device_is_starting_is_not_a_glitch() {
+        let (mut r, shared, _) = setup(&[0.5; 64], 1);
+        r.render(&mut [0.0; 4]);
+        std::thread::sleep(Duration::from_millis(90));
+        r.render(&mut [0.0; 4]);
+        assert_eq!(shared.glitches.load(Ordering::Acquire), 0);
     }
 
     #[test]

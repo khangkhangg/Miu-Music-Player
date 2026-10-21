@@ -197,6 +197,11 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   Alignment UI: one signed offset slider (±500 ms) with ±1/±10 ms nudges; clicks are low on the first output, high on
   the second. Balance slider (±24 dB, remembered per pair) turns the louder speaker down. A speaker that starts late
   (Bose waking up ~20 ms after the Klipsch) is stepped into line within a second instead of being learnt as drift.
+  Lining up: nothing is judged for 3 s after a start, seek or pause (Bluetooth takes audio in bursts while it
+  fills its buffer); a gap over 5 ms seen for 2 s (median, so bursts do not count) is closed in one jump, sized
+  from the last half second. Jumps are blamed on the output that fell behind. The second output only counts as gone
+  if the first kept playing. Hands-off app runs on Klipsch + Bose: median 0.1–0.5 ms apart; jumps only after real
+  dropouts.
   Connection row: per-output health over the last minute (late device callbacks, realignment jumps: steady / a few
   dropouts / keeps dropping out) and battery level where Windows has one (Bose: 40 %). No signal strength: Windows
   does not expose RSSI for connected Bluetooth audio devices.

@@ -145,6 +145,9 @@ pub struct DriftController {
     step: Option<f64>,
     /// No new step before the first output has played this far (seconds since the restart).
     step_ok_at: f64,
+    /// Recent (time, gap) readings: a step is sized from their median, which ignores the bursts a
+    /// Bluetooth device takes audio in.
+    window: std::collections::VecDeque<(f64, f64)>,
 }
 
 const KP: f64 = 0.1;
@@ -153,22 +156,29 @@ const KI: f64 = 0.002;
 const SMOOTH_S: f64 = 1.0;
 /// Gaps above this are closed by a step; after one, wait this long (seconds) before the next.
 const STEP_S: f64 = 0.005;
+/// How long a gap must be seen (seconds) before it is stepped away.
+const PHASE_WINDOW_S: f64 = 2.0;
 const STEP_GAP_S: f64 = 1.0;
+/// After a start or seek, devices (Bluetooth above all) take audio in bursts while they fill their
+/// own buffers: nothing is judged until both have played this long (seconds).
+const WARMUP_S: f64 = 3.0;
 
 impl DriftController {
     pub fn new(rate1: u32, rate2: u32) -> Self {
-        Self { rate1: rate1 as f64, rate2: rate2 as f64, last: None, played1: 0.0, played2: 0.0, smoothed: 0.0, integral: 0.0, correction: 0.0, step: None, step_ok_at: 0.0 }
+        Self { rate1: rate1 as f64, rate2: rate2 as f64, last: Some((0.0, 0.0)), played1: 0.0, played2: 0.0, smoothed: 0.0, integral: 0.0, correction: 0.0, step: None, step_ok_at: WARMUP_S, window: Default::default() }
     }
 
     /// Both outputs start the music again together (play, seek): measure from here. The clock
     /// difference learnt so far is kept.
+    /// (Both devices count from zero again after a flush.)
     pub fn restart(&mut self) {
-        self.last = None;
+        self.last = Some((0.0, 0.0));
         self.played1 = 0.0;
         self.played2 = 0.0;
         self.smoothed = 0.0;
         self.step = None;
-        self.step_ok_at = 0.0;
+        self.step_ok_at = WARMUP_S;
+        self.window.clear();
     }
 
     /// Frames each device has consumed (since their last reset), as of now: the counter plus the
@@ -177,9 +187,9 @@ impl DriftController {
     pub fn update(&mut self, frames1: f64, frames2: f64) -> f64 {
         let Some((l1, l2)) = self.last.replace((frames1, frames2)) else { return self.correction };
         if frames1 < l1 || frames2 < l2 {
+            // Flushed: both counted again from zero.
             self.restart();
-            self.last = Some((frames1, frames2));
-            return self.correction;
+            return self.update(frames1, frames2);
         }
         let dt = (frames1 - l1) / self.rate1;
         self.played1 += dt;
@@ -190,18 +200,38 @@ impl DriftController {
         let raw = self.played2 - self.played1;
         let a = (dt / SMOOTH_S).min(1.0);
         self.smoothed += (raw - self.smoothed) * a;
+        if self.played1 < WARMUP_S {
+            // Still settling: keep to the clock difference learnt so far, judge nothing yet.
+            self.correction = (KI * self.integral).clamp(-MAX_CORRECTION, MAX_CORRECTION);
+            return self.correction;
+        }
         // A gap bigger than drift could make (a speaker that started late, a dropout) is closed in
         // one step, not learnt as a clock difference.
-        if self.smoothed.abs() > STEP_S && self.played1 >= self.step_ok_at {
-            self.step = Some(-raw);
-            self.smoothed = 0.0;
-            self.step_ok_at = self.played1 + STEP_GAP_S;
-            return self.correction;
+        self.window.push_back((self.played1, raw));
+        while self.window.front().is_some_and(|&(t, _)| self.played1 - t > PHASE_WINDOW_S) {
+            self.window.pop_front();
+        }
+        let seen_long_enough = self.window.front().is_some_and(|&(t, _)| self.played1 - t >= PHASE_WINDOW_S * 0.95);
+        if seen_long_enough && self.played1 >= self.step_ok_at {
+            let mut gaps: Vec<f64> = self.window.iter().map(|&(_, g)| g).collect();
+            gaps.sort_by(f64::total_cmp);
+            let median = gaps[gaps.len() / 2];
+            if median.abs() > STEP_S && gaps.iter().filter(|g| g.signum() == median.signum() && g.abs() > STEP_S / 2.0).count() * 4 >= gaps.len() * 3 {
+                // Sized from the latest half second: the speed correction has closed some of it meanwhile.
+                let mut recent: Vec<f64> = self.window.iter().filter(|&&(t, _)| self.played1 - t <= 0.5).map(|&(_, g)| g).collect();
+                recent.sort_by(f64::total_cmp);
+                let size = recent.get(recent.len() / 2).copied().unwrap_or(median);
+                self.step = Some(-size);
+                self.smoothed -= size;
+                self.window.clear();
+                self.step_ok_at = self.played1 + STEP_GAP_S;
+                return self.correction;
+            }
         }
         // Integrate only while the correction is not pinned at its limit (no wind-up).
         let next_integral = self.integral + self.smoothed * dt;
         let c = KP * self.smoothed + KI * next_integral;
-        if c.abs() < MAX_CORRECTION && self.smoothed.abs() < STEP_S {
+        if c.abs() < MAX_CORRECTION && self.smoothed.abs() < STEP_S && self.played1 >= WARMUP_S {
             self.integral = next_integral;
         }
         self.correction = c.clamp(-MAX_CORRECTION, MAX_CORRECTION);
@@ -211,6 +241,11 @@ impl DriftController {
     /// Seconds the second output is ahead of the first (negative: behind), smoothed.
     pub fn error_s(&self) -> f64 {
         self.smoothed
+    }
+
+    /// Current resampling correction (fraction: +0.001 = 0.1 % more output frames).
+    pub fn correction(&self) -> f64 {
+        self.correction
     }
 
     /// Current correction in parts per million.
@@ -414,13 +449,16 @@ mod tests {
     /// the real one, extrapolates each counter from its last callback at the nominal rate.
     /// Returns (controller, worst error in the last minute, seconds).
     fn simulate(rate1: u32, rate2: u32, ppm: f64, minutes: f64) -> (DriftController, f64) {
-        simulate_with(rate1, rate2, ppm, minutes, 0.0)
+        let (c, worst, _) = simulate_with(rate1, rate2, ppm, minutes, 0.0, 0.0, 0.0);
+        (c, worst)
     }
 
     /// Like `simulate`, with the second device starting `late_s` after the first, and the
     /// controller's phase steps applied the way the renderer does: skipping ahead counts the
     /// skipped frames as played, holding plays silence that is not counted.
-    fn simulate_with(rate1: u32, rate2: u32, ppm: f64, minutes: f64, late_s: f64) -> (DriftController, f64) {
+    pub(super) fn simulate_with(rate1: u32, rate2: u32, ppm: f64, minutes: f64, late_s: f64, burst_s: f64, jitter_s: f64) -> (DriftController, f64, usize) {
+        let mut steps = 0;
+        let mut burst = (burst_s * rate2 as f64) as u64; // taken all at once by the first callback, like a Bluetooth prebuffer
         let mut c = DriftController::new(rate1, rate2);
         let (chunk1, chunk2) = (rate1 as u64 / 100, rate2 as u64 / 100);
         let (mut f1, mut f2) = (0u64, 0u64);
@@ -432,6 +470,13 @@ mod tests {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             ((seed >> 33) as f64 / (1u64 << 31) as f64 - 0.5) * 0.002
         };
+        // Bluetooth: each of the second device's callbacks comes up to `jitter_s` / 2 early or late, so they bunch up.
+        let mut jseed = 777u64;
+        let mut jitter = move || {
+            jseed = jseed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((jseed >> 33) as f64 / (1u64 << 31) as f64 - 0.5) * jitter_s
+        };
+        let mut late2 = jitter();
         let step = 0.05;
         let total = minutes * 60.0;
         let mut worst = 0.0f64;
@@ -443,31 +488,35 @@ mod tests {
                 seen1 = t1 + wobble().abs();
                 t1 += chunk1 as f64 / rate1 as f64;
             }
-            while t2 <= now {
+            while t2 + late2 <= now {
                 let held = if nudge < 0 { (-nudge).min(chunk2 as i64) } else { 0 };
                 nudge += held;
                 let skipped = nudge.max(0);
                 nudge -= skipped;
                 f2 += chunk2 - held as u64 + skipped as u64;
-                seen2 = t2 + wobble().abs();
+                f2 += std::mem::take(&mut burst);
+                seen2 = t2 + late2 + wobble().abs();
+                late2 = jitter();
                 t2 += chunk2 as f64 / (rate2 as f64 * (1.0 + ppm * 1e-6));
             }
             let at = |frames: u64, seen: f64, rate: u32, chunk: u64| frames as f64 - chunk as f64 + ((now - seen).max(0.0) * rate as f64).min(chunk as f64);
             c.update(at(f1, seen1, rate1, chunk1), at(f2, seen2, rate2, chunk2));
             if let Some(s) = c.take_step() {
                 nudge += (s * rate2 as f64).round() as i64;
+                steps += 1;
             }
             if now > total - 60.0 {
                 worst = worst.max(c.error_s().abs());
             }
         }
-        (c, worst)
+        (c, worst, steps)
     }
 
     #[test]
     fn a_second_device_that_starts_late_is_stepped_into_line_not_mistaken_for_drift() {
-        let (c, worst) = simulate_with(44_100, 44_100, 0.0, 1.5, 0.025);
+        let (c, worst, steps) = simulate_with(44_100, 44_100, 0.0, 1.5, 0.025, 0.0, 0.0);
         assert!(worst < 0.002, "worst {worst} s");
+        assert_eq!(steps, 1);
         assert!(c.clock_ppm().abs() < 20.0, "a 25 ms late start is not a clock difference: {} ppm", c.clock_ppm());
     }
 
@@ -475,11 +524,12 @@ mod tests {
     fn a_second_device_that_starts_early_waits_for_the_first() {
         let mut c = DriftController::new(48_000, 48_000);
         c.update(0.0, 0.0);
-        for i in 1..=40 {
-            c.update(i as f64 * 2_400.0, i as f64 * 2_400.0 + 960.0); // 20 ms ahead
+        for i in 1..=120 {
+            c.update(i as f64 * 2_400.0, i as f64 * 2_400.0 + 960.0); // 20 ms ahead, for 6 s
         }
         let s = c.take_step().expect("a step");
-        assert!((s + 0.020).abs() < 0.003, "hold the second output about 20 ms: {s}");
+        // About 20 ms, less what the speed correction closed while the gap was being confirmed.
+        assert!((-0.021..-0.014).contains(&s), "hold the second output about 20 ms: {s}");
         assert!(c.take_step().is_none(), "one step at a time");
     }
 
@@ -515,7 +565,9 @@ mod tests {
     fn counters_that_restart_begin_a_new_measurement() {
         let mut c = DriftController::new(48_000, 48_000);
         c.update(0.0, 0.0);
-        c.update(48_000.0, 0.0); // second device silent for a second
+        for i in 1..=120 {
+            c.update(i as f64 * 2_400.0, 0.0); // second device silent for 6 s
+        }
         assert!(c.take_step().is_some_and(|s| s > 0.9), "skip the second output ahead");
         c.update(0.0, 0.0); // both flushed (seek)
         c.update(4_800.0, 4_800.0);
@@ -630,5 +682,75 @@ mod balance_tests {
     fn balance_is_kept_within_its_range() {
         assert_eq!(balance_gains(99.0), balance_gains(MAX_BALANCE_DB));
         assert_eq!(balance_gains(f32::NAN), [1.0, 1.0]);
+    }
+}
+
+#[cfg(test)]
+mod warm_up_tests {
+    use super::*;
+
+    #[test]
+    fn a_bluetooth_start_burst_gets_one_correction_after_settling_not_a_back_and_forth() {
+        // The second speaker starts 20 ms late and its first callback takes 60 ms in one go.
+        let (_, worst, steps) = super::tests::simulate_with(44_100, 44_100, 0.0, 1.5, 0.020, 0.060, 0.0);
+        assert_eq!(steps, 1, "one step once both have settled");
+        assert!(worst < 0.002, "worst {worst} s");
+    }
+
+    #[test]
+    fn nothing_is_judged_in_the_first_seconds() {
+        let mut c = DriftController::new(48_000, 48_000);
+        c.update(0.0, 0.0);
+        for i in 1..=50 {
+            c.update(i as f64 * 2_400.0, i as f64 * 2_400.0 + 4_800.0); // 100 ms ahead for 2.5 s
+            assert!(c.take_step().is_none(), "no step during warm-up ({} s)", i as f64 * 0.05);
+        }
+        for i in 51..=120 {
+            c.update(i as f64 * 2_400.0, i as f64 * 2_400.0 + 4_800.0);
+        }
+        assert!(c.take_step().is_some_and(|s| (s + 0.1).abs() < 0.01), "then one step back by 100 ms");
+    }
+}
+
+#[cfg(test)]
+mod jitter_tests {
+    #[test]
+    fn bursty_bluetooth_timing_with_no_real_offset_never_causes_a_jump() {
+        // Callbacks up to 20 ms early or late and bunching up, as measured on a Bose SoundLink Flex.
+        let (_, _, steps) = super::tests::simulate_with(44_100, 44_100, 0.0, 2.0, 0.0, 0.0, 0.040);
+        assert_eq!(steps, 0, "every jump here is an audible tick for nothing");
+    }
+
+    #[test]
+    fn a_late_start_is_still_corrected_once_despite_bursty_timing() {
+        let (_, _, steps) = super::tests::simulate_with(44_100, 44_100, 0.0, 1.0, 0.030, 0.060, 0.040);
+        assert_eq!(steps, 1);
+    }
+}
+
+#[cfg(test)]
+mod dropout_tests {
+    use super::*;
+
+    #[test]
+    fn a_dropout_mid_song_is_closed_in_one_jump_of_its_full_size() {
+        let mut c = DriftController::new(48_000, 48_000);
+        let mut lag = 0.0; // frames the second device is behind
+        let mut steps = Vec::new();
+        for i in 1..=400 {
+            if i == 160 {
+                lag = 3_840.0; // 80 ms dropout at 8 s
+            }
+            let f = i as f64 * 2_400.0;
+            c.update(f, f - lag);
+            if let Some(s) = c.take_step() {
+                steps.push(s);
+                lag -= s * 48_000.0; // the skip counts as played
+            }
+        }
+        assert_eq!(steps.len(), 1, "{steps:?}");
+        // The speed correction closes a little of it while the gap is being confirmed; the jump does the rest.
+        assert!((0.065..0.085).contains(&steps[0]), "{steps:?}");
+        assert!(c.error_s().abs() < 0.003, "together afterwards: {} s", c.error_s());
     }
 }

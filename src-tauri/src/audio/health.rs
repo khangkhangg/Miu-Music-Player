@@ -88,3 +88,40 @@ mod tests {
         assert_eq!(h.level(70.0), Health::Good);
     }
 }
+
+/// The second output counts as gone only if it took no audio for `still` while the first one
+/// carried on playing (`first_moved` frames at `first_rate`): if both stopped, the problem is
+/// upstream or with the first output, not the second.
+pub fn second_stalled(still: Duration, first_moved: u64, first_rate: u32) -> bool {
+    still > Duration::from_secs(2) && first_moved as f64 >= first_rate as f64 * (still.as_secs_f64() * 0.5)
+}
+
+/// Which output a realignment jump points at: a positive jump (the second output skips ahead)
+/// means the second fell behind; a negative one (it waits) means the first did.
+pub fn behind(step_s: f64) -> Output {
+    if step_s > 0.0 { Output::Second } else { Output::First }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Output {
+    First,
+    Second,
+}
+
+#[cfg(test)]
+mod blame_tests {
+    use super::*;
+
+    #[test]
+    fn the_second_output_is_gone_only_if_the_first_kept_playing() {
+        assert!(second_stalled(Duration::from_secs(3), 44_100 * 3, 44_100));
+        assert!(!second_stalled(Duration::from_secs(3), 0, 44_100), "both stopped: not the second's fault");
+        assert!(!second_stalled(Duration::from_secs(1), 44_100, 44_100), "not still long enough");
+    }
+
+    #[test]
+    fn a_jump_is_blamed_on_the_output_that_fell_behind() {
+        assert_eq!(behind(0.03), Output::Second);
+        assert_eq!(behind(-0.03), Output::First);
+    }
+}
