@@ -105,6 +105,7 @@ button, input, select { font: inherit; }
 .sync-box { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; }
 .sync-plan { font-size: 13px; }
 .sync-status { font-size: 12px; margin: 0; }
+.player-hint { font-size: 12px; margin: 6px 0 0; }
 .sync-last { font-size: 12px; margin: 0; }
 .sync-guide { font-size: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .sync-guide-title { margin: 0 0 4px; font-weight: 600; }

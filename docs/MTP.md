@@ -2,7 +2,24 @@
 
 Written 2026-10-21 alongside the USB mass-storage player sync (`src-tauri/src/player/`).
 
-## Where things stand
+## Update 2026-10-21: copying is built, not yet tried on a real device
+
+- `player::wpd_fs::WpdFs` implements `PlayerFs` over one MTP storage: paths resolve to object ids
+  folder by folder (listings cached per run), folders are created with `CreateObjectWithPropertiesOnly`,
+  files with `CreateObjectWithPropertiesAndData` + `IStream::Write` + `Commit`, deletes use
+  `PORTABLE_DEVICE_DELETE_NO_RECURSION`, free space comes from the storage object.
+- `PlayerFs::can_rename()` is false for MTP: the sync writes straight to the final name, checks
+  `WPD_OBJECT_SIZE`, and deletes a wrong copy (tested with the fake drive).
+- `mtp::players` makes one player per storage of every MTP device, id `mtp:<serial>:<storage id>`
+  (names when the device gives no serial or storage id); iPhones (PTP) and USB disks (MSC) are left out.
+  The watcher notices WPD devices arriving and leaving, not only drive letters.
+- The card shows the device name, no folder picker, and "Keep the phone unlocked and set to File transfer".
+- **Not verified on hardware**: no MTP device was available on 2026-10-21. The machine test
+  `cargo test --lib wpd_fs -- --ignored --nocapture` writes a small file into `MiuTest-…` on the first
+  MTP storage, checks the size after `Commit`, and deletes it again; run it with a phone plugged in and
+  fill in the table at the end.
+
+## Where things stand (before the update)
 
 | | Mass storage (USB stick, SD card, MP3 player in "MSC" mode) | MTP (Android, Walkman NW-A/ZX, some SanDisk) |
 |---|---|---|

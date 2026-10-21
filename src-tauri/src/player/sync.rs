@@ -29,6 +29,10 @@ pub trait PlayerFs {
     /// Remove `dir` only if it is empty.
     fn remove_empty_dir(&self, dir: &Path) -> bool;
     fn free_bytes(&self) -> Option<u64>;
+    /// Whether files can be renamed in place. MTP devices often refuse, so files go straight to their name.
+    fn can_rename(&self) -> bool {
+        true
+    }
 }
 
 /// Progress, sent as `player-sync-progress`.
@@ -165,23 +169,35 @@ fn put(db: &Db, id: &str, song_id: i64, src: &Path, folder: &Path, fs: &dyn Play
         dst = numbered(&wanted, n);
         n += 1;
     }
-    let part = dst.with_file_name(format!("{}.miu-part", dst.file_name().unwrap_or_default().to_string_lossy()));
     if let Some(parent) = dst.parent() {
         fs.make_dirs(parent)?;
     }
-    let written = fs.copy_in(src, &part).and_then(|_| match fs.len(&part) {
+    let check = |at: &Path| match fs.len(at) {
         Some(n) if n == src_len => Ok(()),
         Some(n) => Err(format!("the copy on the player has {n} bytes, not {src_len}")),
         None => Err("the copy did not arrive on the player".into()),
-    });
-    if let Err(e) = written {
-        let _ = fs.remove(&part);
-        return Err(e);
+    };
+    if fs.can_rename() {
+        // Under a temporary name first, so a cut-off copy never looks like a song.
+        let part = dst.with_file_name(format!("{}.miu-part", dst.file_name().unwrap_or_default().to_string_lossy()));
+        if let Err(e) = fs.copy_in(src, &part).and_then(|_| check(&part)) {
+            let _ = fs.remove(&part);
+            return Err(e);
+        }
+        if fs.len(&dst).is_some() {
+            fs.remove(&dst)?;
+        }
+        fs.rename(&part, &dst)?;
+    } else {
+        // No rename (MTP): straight to the name, checked, and deleted again if it is wrong.
+        if fs.len(&dst).is_some() {
+            fs.remove(&dst)?;
+        }
+        if let Err(e) = fs.copy_in(src, &dst).and_then(|_| check(&dst)) {
+            let _ = fs.remove(&dst);
+            return Err(e);
+        }
     }
-    if fs.len(&dst).is_some() {
-        fs.remove(&dst)?;
-    }
-    fs.rename(&part, &dst)?;
     if let Some((old_path, _)) = &old {
         if key(old_path) != key(&dst) {
             remove_ours(db, id, song_id, folder, fs)?;
@@ -295,6 +311,10 @@ pub(crate) mod tests {
         pub free: Option<u64>,
         /// Copies whose name contains this arrive one byte short.
         pub short: Option<String>,
+        /// Like many MTP devices: renaming is refused.
+        pub no_rename: bool,
+        /// Every name a file was written under, in order.
+        pub written: RefCell<Vec<String>>,
     }
 
     impl FakeDrive {
@@ -328,9 +348,13 @@ pub(crate) mod tests {
                 return Err("no such folder".into());
             }
             self.files.borrow_mut().insert(key(dst), (dst.to_path_buf(), n));
+            self.written.borrow_mut().push(dst.to_string_lossy().replace('\\', "/"));
             Ok(n)
         }
         fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
+            if self.no_rename {
+                return Err("renaming is not supported".into());
+            }
             let (_, n) = self.files.borrow_mut().remove(&key(from)).ok_or("no such file")?;
             self.files.borrow_mut().insert(key(to), (to.to_path_buf(), n));
             Ok(())
@@ -350,6 +374,9 @@ pub(crate) mod tests {
         }
         fn free_bytes(&self) -> Option<u64> {
             self.free
+        }
+        fn can_rename(&self) -> bool {
+            !self.no_rename
         }
     }
 
@@ -515,6 +542,40 @@ pub(crate) mod tests {
         assert_eq!(r.added, 2);
         assert!(seen.borrow().iter().all(|a| matches!(a, crate::library::convert::Action::Mp3 { .. })));
         assert_eq!(drive.paths(), vec!["MUSIC/Khánh Ly/Tình ca/03 Diễm xưa.mp3", "MUSIC/Other/Album/01 Song.mp3"]);
+    }
+
+    #[test]
+    fn without_renaming_songs_are_written_straight_to_their_name() {
+        let lib = tagged();
+        like(&lib, 0);
+        like(&lib, 2);
+        let drive = FakeDrive { no_rename: true, ..Default::default() };
+        let r = sync(&lib, &drive, &wav_player()).unwrap();
+        assert_eq!((r.added, r.failed.len()), (2, 0), "{:?}", r.failed);
+        assert_eq!(drive.paths(), vec!["MUSIC/Khánh Ly/Tình ca/03 Diễm xưa.wav", "MUSIC/Other/Album/01 Song.wav"]);
+        assert!(drive.written.borrow().iter().all(|w| !w.contains("miu-part")), "{:?}", drive.written.borrow());
+    }
+
+    #[test]
+    fn without_renaming_a_short_copy_is_still_removed() {
+        let lib = tagged();
+        like(&lib, 0);
+        let drive = FakeDrive { no_rename: true, short: Some("Diễm".into()), ..Default::default() };
+        let r = sync(&lib, &drive, &wav_player()).unwrap();
+        assert_eq!(r.failed.len(), 1);
+        assert!(drive.paths().is_empty(), "the bad copy is deleted: {:?}", drive.paths());
+    }
+
+    #[test]
+    fn without_renaming_a_tag_edit_still_moves_the_file() {
+        let lib = tagged();
+        like(&lib, 0);
+        let drive = FakeDrive { no_rename: true, ..Default::default() };
+        sync(&lib, &drive, &wav_player()).unwrap();
+        lib.db.conn().execute("UPDATE songs SET title = 'Diễm xưa (live)' WHERE id = ?1", [lib.ids[0]]).unwrap();
+        let r = sync(&lib, &drive, &wav_player()).unwrap();
+        assert!(r.failed.is_empty(), "{:?}", r.failed);
+        assert_eq!(drive.paths(), vec!["MUSIC/Khánh Ly/Tình ca/03 Diễm xưa (live).wav"]);
     }
 
     #[test]

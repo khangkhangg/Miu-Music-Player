@@ -22,7 +22,13 @@ fn root_dirs(root: &Path) -> Vec<String> {
 
 fn current(db: &SharedDb) -> Result<Vec<Player>, String> {
     let known = crate::player::profile::players(&*db.lock().map_err(|e| e.to_string())?);
-    Ok(players(&crate::player::volumes::list(), &known, &root_dirs))
+    let mut list = players(&crate::player::volumes::list(), &known, &root_dirs);
+    // Phones and Walkmans over MTP: one player per storage.
+    match crate::player::mtp::probe() {
+        Ok(devices) => list.extend(crate::player::mtp::players(&devices, &known)),
+        Err(e) => log::warn!("listing MTP devices failed: {e}"),
+    }
+    Ok(list)
 }
 
 /// Watch for drives coming and going (letters change), and send the players then.
@@ -30,8 +36,8 @@ pub fn start(app: AppHandle, db: SharedDb) {
     let spawned = std::thread::Builder::new().name("player-watch".into()).spawn(move || {
         let mut last = None;
         loop {
-            let now = crate::player::volumes::letters();
-            if last != Some(now) {
+            let now = (crate::player::volumes::letters(), crate::player::mtp::device_ids());
+            if last.as_ref() != Some(&now) {
                 last = Some(now);
                 match current(&db) {
                     Ok(list) => {
@@ -134,10 +140,16 @@ fn sync_blocking(id: &str, shared: &SharedDb, app: &AppHandle) -> Result<Report,
         Some(ff) => cache.converted(ff, &s.path, &s.audio_key, &s.tags_key, s.action, s.cover.as_deref()),
         None => Err("needs converting, and the ffmpeg sidecar is missing".into()),
     };
-    let root = player.root.clone();
-    let fs = DriveFs { root: root.clone(), free: Box::new(move || crate::player::volumes::free_bytes(&root)) };
+    let fs: Box<dyn crate::player::sync::PlayerFs> = match (player.kind, &player.wpd_device, &player.wpd_storage) {
+        (crate::player::drives::PlayerKind::Mtp, Some(device), Some(storage)) => Box::new(crate::player::wpd_fs::WpdFs::open(device, storage).map_err(fail)?),
+        (crate::player::drives::PlayerKind::Mtp, _, _) => return Err(fail("The device did not say where its storage is.".into())),
+        _ => {
+            let root = player.root.clone();
+            Box::new(DriveFs { root: root.clone(), free: Box::new(move || crate::player::volumes::free_bytes(&root)) })
+        }
+    };
     log::info!("player sync to {} ({}) into {:?}", player.root.display(), id, player.profile.folder);
-    let report = run(&db, id, &player.profile, &fs, Some(&convert), &mut |stage| {
+    let report = run(&db, id, &player.profile, fs.as_ref(), Some(&convert), &mut |stage| {
         let _ = app.emit("player-sync-progress", stage);
     }, crate::util::time::now_unix());
     let _ = cache.trim(4 * 1024 * 1024 * 1024);

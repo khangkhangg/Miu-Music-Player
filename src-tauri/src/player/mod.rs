@@ -9,3 +9,5 @@ pub mod service;
 #[cfg(windows)]
 pub mod volumes;
 pub mod mtp;
+#[cfg(windows)]
+pub mod wpd_fs;

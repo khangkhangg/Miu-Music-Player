@@ -28,10 +28,27 @@ pub fn device_id(serial: u32) -> String {
     format!("vol:{serial:08X}")
 }
 
+/// How Miu reaches a player.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlayerKind {
+    /// A drive letter (USB stick, SD card, MP3 player in mass-storage mode).
+    #[default]
+    Drive,
+    /// Windows Portable Devices (Android phone, Sony Walkman, newer SanDisk).
+    Mtp,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
     pub id: String,
+    pub kind: PlayerKind,
+    /// MTP only: the WPD device path and storage object id (both change between connections).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wpd_device: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wpd_storage: Option<String>,
     pub root: PathBuf,
     pub label: String,
     pub total_bytes: u64,
@@ -67,7 +84,7 @@ pub fn players(volumes: &[Volume], known: &BTreeMap<String, Profile>, root_dirs:
             },
             None => continue,
         };
-        out.push(Player { id, root: v.root.clone(), label: v.label.clone(), total_bytes: v.total_bytes, free_bytes: v.free_bytes, configured, profile });
+        out.push(Player { id, kind: PlayerKind::Drive, wpd_device: None, wpd_storage: None, root: v.root.clone(), label: v.label.clone(), total_bytes: v.total_bytes, free_bytes: v.free_bytes, configured, profile });
     }
     out
 }

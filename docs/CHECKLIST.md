@@ -259,9 +259,10 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   iPhone's); a copy of the wrong size is deleted and retried next time; a sync that does not fit stops before copying; progress.
   Built 2026-10-21, tests green; FLAC → MP3 V0 with ID3 tags checked with the real ffmpeg (ignored test); the whole sync ran
   against a real drive letter (`subst`, ignored test with `MIU_PLAYER_DRIVE`). Verified in the app 2026-10-21: liked songs copied to a USB stick and play on the player.
-- [ ] **M.3 MTP (Android, Walkman)** — read-only probe built (`cargo run --bin mtp-probe`, `player::mtp`): lists WPD devices and their
-  storages with space; works on this PC (found the USB disk as `MSC:`). No MTP device was available, so copying is not built;
-  see `docs/MTP.md` for the design and open questions.
+- [ ] **M.3 MTP (Android, Walkman)** — *Test first:* each MTP storage is a player known by serial + storage id (iPhone and
+  USB disks left out); without rename, songs go straight to their name, a short copy is deleted, a tag edit still moves the file.
+  Built 2026-10-21 (`player::wpd_fs`, `mtp::players`), tests green. **Not tried on a real device yet**: plug in a phone (unlocked,
+  File transfer) or Walkman, run `cargo test --lib wpd_fs -- --ignored --nocapture`, then sync from its card. See docs/MTP.md.
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.

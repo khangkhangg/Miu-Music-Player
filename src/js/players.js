@@ -17,6 +17,18 @@ function drive(root) {
 }
 
 export function playerCard(p) {
+  if (p.kind === 'mtp') {
+    // A phone or Walkman over MTP: no drive letter, and it must stay unlocked while files go over.
+    const total = p.totalBytes;
+    return {
+      title: p.label,
+      detail: t('player.folder', { path: p.profile?.folder || '' }),
+      storage: total ? { usedPercent: Math.round(((total - p.freeBytes) / total) * 100), label: t('device.storage', { free: formatBytes(p.freeBytes), total: formatBytes(total) }) } : null,
+      suggested: !p.configured,
+      mtp: true,
+      hint: t('player.mtpHint'),
+    };
+  }
   const letter = drive(p.root);
   const name = p.label?.trim() || t('player.usbDrive');
   const folder = p.profile?.folder ? `${letter}\\${p.profile.folder}` : `${letter}\\`;
@@ -26,6 +38,7 @@ export function playerCard(p) {
     detail: t('player.folder', { path: folder }),
     storage: total ? { usedPercent: Math.round(((total - p.freeBytes) / total) * 100), label: t('device.storage', { free: formatBytes(p.freeBytes), total: formatBytes(total) }) } : null,
     suggested: !p.configured,
+    mtp: false,
   };
 }
 

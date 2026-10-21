@@ -458,5 +458,6 @@
   "player.gone.other": "{n} bài đã bị xoá trên máy nghe nhạc được chép lại.",
   "player.leftAlone.one": "{n} tệp đã bị sửa trên máy nghe nhạc được giữ nguyên.",
   "player.leftAlone.other": "{n} tệp đã bị sửa trên máy nghe nhạc được giữ nguyên.",
-  "player.noSpace": "Máy nghe nhạc không đủ chỗ: cần {need}, còn {available}."
+  "player.noSpace": "Máy nghe nhạc không đủ chỗ: cần {need}, còn {available}.",
+  "player.mtpHint": "Giữ điện thoại mở khoá và ở chế độ Truyền tệp trong lúc đồng bộ."
 }

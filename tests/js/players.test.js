@@ -66,3 +66,12 @@ test('a sync that did not start says why', () => {
   });
   assert.deepEqual(playerStopped({ kind: 'failed', reason: 'The player is not connected.' }), { title: 'Sync failed', lines: ['The player is not connected.'] });
 });
+
+test('a phone or Walkman over MTP shows its name and storage, not a drive letter, and asks to stay unlocked', () => {
+  const c = playerCard(player({ kind: 'mtp', root: '', label: 'Pixel 7 — Internal shared storage', profile: { folder: 'Music', target: 'aac256', plays: [] } }));
+  assert.equal(c.title, 'Pixel 7 — Internal shared storage');
+  assert.equal(c.detail, 'Songs go to Music');
+  assert.equal(c.mtp, true);
+  assert.equal(c.hint, 'Keep the phone unlocked and set to File transfer while it syncs.');
+  assert.equal(playerCard(player()).mtp, false, 'a drive is not MTP');
+});

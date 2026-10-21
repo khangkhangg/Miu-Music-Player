@@ -636,6 +636,11 @@ function renderPlayer(card) {
   el.querySelector('.device-detail').textContent = c.detail;
   el.querySelector('.player-suggested').hidden = !c.suggested;
   el.querySelector('.player-forget').hidden = c.suggested;
+  // MTP players have no folders to browse to: Miu fills Music on the device.
+  el.querySelector('.player-folder').hidden = c.mtp;
+  const hint = el.querySelector('.player-hint');
+  hint.hidden = !c.hint;
+  hint.textContent = c.hint ?? '';
   const storage = el.querySelector('.storage');
   storage.hidden = !c.storage;
   if (c.storage) {

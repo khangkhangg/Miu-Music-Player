@@ -458,5 +458,6 @@
   "player.gone.other": "{n} songs deleted on the player were copied again.",
   "player.leftAlone.one": "{n} file changed on the player was left there.",
   "player.leftAlone.other": "{n} files changed on the player were left there.",
-  "player.noSpace": "Not enough space on the player: needs {need}, {available} available."
+  "player.noSpace": "Not enough space on the player: needs {need}, {available} available.",
+  "player.mtpHint": "Keep the phone unlocked and set to File transfer while it syncs."
 }
