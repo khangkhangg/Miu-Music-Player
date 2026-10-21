@@ -9,7 +9,7 @@ import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
 import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
@@ -864,6 +864,7 @@ function setupOutput() {
       .catch(message => { $('out-error').textContent = String(message); invoke('output_state').then(renderDevices); })
       .finally(() => { $('out-exclusive').disabled = false; });
   });
+  setupSecondOutput();
   invoke('output_state').then(renderDevices);
 }
 
@@ -871,6 +872,7 @@ let outputState = null;
 
 function renderDevices(state) {
   outputState = state;
+  renderSecond(state);
   document.getElementById('out-exclusive').checked = state.exclusive;
   document.getElementById('out-exclusive-note').hidden = !state.exclusive;
   renderOutputInfo();
@@ -901,6 +903,59 @@ function renderOutputInfo() {
   $('out-fallback').hidden = !(outputState?.exclusive && ev?.deviceRate && !ev.exclusive);
   $('out-path').textContent = path;
   $('out-path').classList.toggle('bit-perfect', path === t('output.bitPerfect'));
+  $('out-dual-status').textContent = ev ? dualStatus(ev) : '';
+  $('out-align').setAttribute('aria-pressed', String(Boolean(ev?.aligning)));
+  $('out-align').textContent = t(ev?.aligning ? 'output.alignStop' : 'output.align');
+}
+
+// ---- Second output (F7.9, experimental) ----
+
+function setupSecondOutput() {
+  const $ = id => document.getElementById(id);
+  const fail = message => {
+    $('out-error').textContent = String(message);
+    setTimeout(() => { $('out-error').textContent = ''; }, 5000);
+    invoke('output_state').then(renderDevices);
+  };
+  $('out-second').addEventListener('change', e => {
+    $('out-second').disabled = true;
+    invoke('set_second_output', { device: e.target.value || null })
+      .then(renderDevices)
+      .catch(fail)
+      .finally(() => { $('out-second').disabled = false; });
+  });
+  $('out-mode').addEventListener('change', e => invoke('set_dual_mode', { mode: e.target.value }).then(renderDevices).catch(fail));
+  const delays = () => [0, 1].map(i => Number($(`out-delay-${i}`).value));
+  for (const i of [0, 1]) {
+    const slider = $(`out-delay-${i}`);
+    slider.addEventListener('input', () => { $(`out-delay-${i}-val`).textContent = t('output.ms', { ms: slider.value }); });
+    // Applied on release: both outputs start again together with the new delays.
+    slider.addEventListener('change', () => invoke('set_dual_delays', { delays: delays() }).catch(fail));
+  }
+  $('out-align').addEventListener('click', () => {
+    invoke('output_align', { on: !playerState?.aligning }).catch(fail);
+  });
+}
+
+function renderSecond(state) {
+  const $ = id => document.getElementById(id);
+  $('out-second').replaceChildren(...secondOptions(state, playerState?.deviceName).map(o => {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    opt.selected = o.selected;
+    return opt;
+  }));
+  $('out-second').disabled = state.exclusive;
+  $('out-second-exclusive').hidden = !state.exclusive;
+  $('out-mode').value = state.dualMode;
+  $('out-mode').disabled = !state.second || state.exclusive;
+  $('out-dual').hidden = !state.second || state.exclusive;
+  if (state.second) $('out-second-box').open = true;
+  state.delays.forEach((ms, i) => {
+    $(`out-delay-${i}`).value = String(ms);
+    $(`out-delay-${i}-val`).textContent = t('output.ms', { ms });
+  });
 }
 
 // ---- Tag editor (F9) ----

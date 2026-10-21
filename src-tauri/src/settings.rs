@@ -106,6 +106,51 @@ pub fn set_exclusive_output(db: &Db, on: bool) -> Result<()> {
     db.set_setting_json(EXCLUSIVE_OUTPUT, &on)
 }
 
+const SECOND_OUTPUT: &str = "second_output";
+const DUAL_MODE: &str = "dual_mode";
+const DUAL_DELAYS: &str = "dual_delays";
+
+/// Name of the second output device (F7.9, experimental); `None` = play on one output.
+pub fn second_output(db: &Db) -> Option<String> {
+    db.setting_json::<Option<String>>(SECOND_OUTPUT).ok().flatten().flatten()
+}
+
+pub fn set_second_output(db: &Db, name: Option<&str>) -> Result<()> {
+    db.set_setting_json(SECOND_OUTPUT, &name)
+}
+
+/// Same sound on both outputs (default) or stereo split.
+pub fn dual_mode(db: &Db) -> crate::audio::dual::DualMode {
+    db.setting_json(DUAL_MODE).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_dual_mode(db: &Db, mode: crate::audio::dual::DualMode) -> Result<()> {
+    db.set_setting_json(DUAL_MODE, &mode)
+}
+
+/// One key per pair of devices whichever is first; `true` when `first` sorts after `second`.
+fn pair_key(first: &str, second: &str) -> (String, bool) {
+    let swapped = first > second;
+    let (a, b) = if swapped { (second, first) } else { (first, second) };
+    (format!("{a}\u{1f}{b}"), swapped)
+}
+
+/// Delays (ms) of `first` and `second` when they play together, as last set for that pair.
+pub fn dual_delays(db: &Db, first: &str, second: &str) -> [u32; 2] {
+    let all: std::collections::HashMap<String, [u32; 2]> = db.setting_json(DUAL_DELAYS).ok().flatten().unwrap_or_default();
+    let (key, swapped) = pair_key(first, second);
+    let [a, b] = all.get(&key).copied().unwrap_or_default().map(|d| d.min(crate::audio::player::MAX_DELAY_MS));
+    if swapped { [b, a] } else { [a, b] }
+}
+
+pub fn set_dual_delays(db: &Db, first: &str, second: &str, delays: [u32; 2]) -> Result<()> {
+    let mut all: std::collections::HashMap<String, [u32; 2]> = db.setting_json(DUAL_DELAYS).ok().flatten().unwrap_or_default();
+    let (key, swapped) = pair_key(first, second);
+    let [a, b] = delays.map(|d| d.min(crate::audio::player::MAX_DELAY_MS));
+    all.insert(key, if swapped { [b, a] } else { [a, b] });
+    db.set_setting_json(DUAL_DELAYS, &all)
+}
+
 const CONVERSION: &str = "conversion";
 
 /// How songs are converted for the iPhone (default: ALAC, hi-res as ALAC 24/48).
@@ -384,6 +429,48 @@ mod output_tests {
         assert_eq!(output_device(&db).as_deref(), Some("Speakers (Realtek(R) Audio)"));
         set_output_device(&db, None).unwrap();
         assert_eq!(output_device(&db), None);
+    }
+}
+
+#[cfg(test)]
+mod second_output_tests {
+    use super::*;
+    use crate::audio::dual::DualMode;
+
+    #[test]
+    fn there_is_no_second_output_until_one_is_chosen() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(second_output(&db), None);
+        assert_eq!(dual_mode(&db), DualMode::Same);
+    }
+
+    #[test]
+    fn the_second_output_and_its_mode_are_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        set_second_output(&db, Some("JBL Flip 6")).unwrap();
+        set_dual_mode(&db, DualMode::Split).unwrap();
+        assert_eq!(second_output(&db).as_deref(), Some("JBL Flip 6"));
+        assert_eq!(dual_mode(&db), DualMode::Split);
+        set_second_output(&db, None).unwrap();
+        assert_eq!(second_output(&db), None);
+    }
+
+    #[test]
+    fn delays_are_remembered_per_pair_of_devices() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dual_delays(&db, "Bose A", "JBL B"), [0, 0]);
+        set_dual_delays(&db, "Bose A", "JBL B", [0, 180]).unwrap();
+        set_dual_delays(&db, "Bose A", "Headphones", [40, 0]).unwrap();
+        assert_eq!(dual_delays(&db, "Bose A", "JBL B"), [0, 180]);
+        assert_eq!(dual_delays(&db, "Bose A", "Headphones"), [40, 0]);
+        assert_eq!(dual_delays(&db, "JBL B", "Bose A"), [180, 0], "the same pair the other way round");
+    }
+
+    #[test]
+    fn delays_are_kept_within_half_a_second() {
+        let db = Db::open_in_memory().unwrap();
+        set_dual_delays(&db, "A", "B", [9_000, 20]).unwrap();
+        assert_eq!(dual_delays(&db, "A", "B"), [500, 20]);
     }
 }
 

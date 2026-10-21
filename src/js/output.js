@@ -46,3 +46,35 @@ export function deviceOptions({ devices, chosen }) {
   const first = { value: '', label: def ? t('output.systemDefaultNamed', { name: def.name }) : t('output.systemDefault'), selected: !chosen };
   return [first, ...devices.map((d) => ({ value: d.name, label: d.name, selected: d.name === chosen }))];
 }
+
+/** The first output's device: the chosen one, else the system default. */
+function firstOutput({ devices, chosen }) {
+  return chosen ?? devices.find((d) => d.isDefault)?.name ?? null;
+}
+
+/**
+ * Options for the second output menu (F7.9): "None" first, then every device but the first output
+ * (the chosen one, and `playing`: the device the first output really uses, if it fell back).
+ */
+export function secondOptions({ devices, chosen, second }, playing = null) {
+  const first = firstOutput({ devices, chosen });
+  const opts = [{ value: '', label: t('output.secondNone'), selected: !second }];
+  for (const d of devices) {
+    if (d.name !== first && d.name !== playing) opts.push({ value: d.name, label: d.name, selected: d.name === second });
+  }
+  if (second && !devices.some((d) => d.name === second)) {
+    opts.push({ value: second, label: t('output.notConnected', { name: second }), selected: true });
+  }
+  return opts;
+}
+
+const signed = (n) => `${n < 0 ? '−' : '+'}${Math.abs(Math.round(n))}`;
+
+/** One line on how the two outputs are doing, from the player event. */
+export function dualStatus({ second, secondLost }) {
+  if (!second) return secondLost ? t('output.secondLost') : '';
+  const clock = signed(second.driftPpm);
+  if (Math.abs(second.offsetMs) < 2) return t('output.inStep', { ppm: clock });
+  const ms = Math.round(Math.abs(second.offsetMs));
+  return t(second.offsetMs < 0 ? 'output.behind' : 'output.ahead', { ms, ppm: clock });
+}

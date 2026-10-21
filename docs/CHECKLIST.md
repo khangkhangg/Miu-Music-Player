@@ -187,6 +187,14 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   6 dB ±0.5; clipping warning when preamp + max band > 0; user presets save/load.
 - [x] **F7.8 Output panel + device picker** — *Test first:* signal-path label = "Bit-perfect" only when EQ off + exclusive.
   Device choice saved; switching keeps song, position, volume, EQ. (Shows shared mode until exclusive mode lands.)
+- [x] **F7.9 Second output (experimental)** — *Test first:* stereo split routes left/right, delay line inserts and
+  skips frames, drift controller keeps two simulated clocks (±300 ppm, other rate, callback jitter) within 2 ms and
+  learns the clock difference, variable resampler follows its correction, click track pattern; settings remember
+  delays per device pair. Shared mode only. `#[ignore]` machine test plays a tone on two real outputs.
+  Verified 2026-10-21 in the app on Klipsch The One (Bluetooth, 44.1 kHz) + LG HDR 4K (HDMI, 48 kHz): same sound and
+  stereo split, delays, alignment clicks, offset held within ±2 ms over a minute.
+- [ ] **Manual:** two Bluetooth speakers in stereo split by ear; switch the second speaker off mid-song (should drop to
+  one output after ~2 s). Neither has been tried yet.
 - [ ] **Manual:** listening test with FLAC 16/44.1 and 24/96 through speakers and a USB DAC.
 
 ## Phase 5c – Languages and metadata editing

@@ -73,7 +73,8 @@ pub fn run() {
     let saved_output = db.lock().ok().and_then(|d| settings::output_device(&d));
     let saved_exclusive = db.lock().is_ok_and(|d| settings::exclusive_output(&d));
     let (saved_shuffle, saved_repeat) = db.lock().map(|d| (settings::shuffle(&d), settings::repeat(&d))).unwrap_or_default();
-    let player: audio::service::SharedPlayer = audio::service::PlayerHandle::new_deferred(saved_output, saved_exclusive, saved_shuffle, saved_repeat);
+    let saved_second = db.lock().ok().and_then(|d| audio::service::second_config(&d));
+    let player: audio::service::SharedPlayer = audio::service::PlayerHandle::new_deferred(saved_output, saved_exclusive, saved_second, saved_shuffle, saved_repeat);
     let podcast_downloads: podcast::service::SharedDownloads = std::sync::Arc::new(podcast::service::Downloads::default());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -153,6 +154,10 @@ pub fn run() {
             audio::service::output_state,
             audio::service::set_output,
             audio::service::set_exclusive,
+            audio::service::set_second_output,
+            audio::service::set_dual_mode,
+            audio::service::set_dual_delays,
+            audio::service::output_align,
             audio::service::player_shuffle,
             audio::service::play_episode,
             audio::service::play_chapters,

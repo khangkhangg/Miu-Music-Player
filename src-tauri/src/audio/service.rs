@@ -10,7 +10,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::audio::decode::SourceFormat;
 use crate::audio::order::Repeat;
-use crate::audio::player::{output_devices, OutputDevice, Player};
+use crate::audio::dual::DualMode;
+use crate::audio::player::{output_devices, OutputDevice, Player, SecondOutput, SecondStatus};
 use crate::library::service::SharedDb;
 use crate::library::songs::paths_for;
 
@@ -46,10 +47,16 @@ pub struct PlayerEvent {
     pub up_next: Vec<i64>,
     /// Set while a podcast episode plays (then `song_id` is empty).
     pub episode_id: Option<i64>,
+    /// The second output while it plays (F7.9).
+    pub second: Option<SecondStatus>,
+    /// A second output is set but could not be opened or went away: one output plays.
+    pub second_lost: bool,
+    /// The alignment clicks are playing.
+    pub aligning: bool,
 }
 
-fn open(device: Option<&str>, exclusive: bool) -> Option<Player> {
-    match Player::start_on(device, exclusive) {
+fn open(device: Option<&str>, exclusive: bool, second: Option<SecondOutput>) -> Option<Player> {
+    match Player::start_with(device, exclusive, second) {
         Ok(p) => Some(p),
         Err(e) => {
             log::error!("no audio output: {e}");
@@ -61,7 +68,7 @@ fn open(device: Option<&str>, exclusive: bool) -> Option<Player> {
 impl PlayerHandle {
     /// `device`: the saved output device name, or `None` for the Windows default.
     pub fn new(device: Option<&str>, exclusive: bool) -> Self {
-        Self { player: Mutex::new(open(device, exclusive)), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episodes: Mutex::new(Vec::new()) }
+        Self { player: Mutex::new(open(device, exclusive, None)), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episodes: Mutex::new(Vec::new()) }
     }
 
     fn with<T>(&self, f: impl FnOnce(&Player) -> T) -> Option<T> {
@@ -85,6 +92,9 @@ impl PlayerHandle {
                 repeat: Repeat::Off,
                 up_next: Vec::new(),
                 episode_id: None,
+                second: None,
+                second_lost: false,
+                aligning: false,
             };
         };
         let queue = self.queue.lock().map(|q| q.clone()).unwrap_or_default();
@@ -106,16 +116,19 @@ impl PlayerHandle {
             repeat: s.repeat,
             up_next,
             episode_id,
+            second: s.second,
+            second_lost: s.second_lost,
+            aligning: s.aligning,
         }
     }
 
     /// Like `new`, but the device is opened on another thread: the app window does not wait for
     /// it. Until then the player reports "unavailable" and commands answer "no audio output device".
-    pub fn new_deferred(device: Option<String>, exclusive: bool, shuffle: bool, repeat: Repeat) -> Arc<Self> {
+    pub fn new_deferred(device: Option<String>, exclusive: bool, second: Option<SecondOutput>, shuffle: bool, repeat: Repeat) -> Arc<Self> {
         let handle = Arc::new(Self { player: Mutex::new(None), queue: Mutex::new(Vec::new()), paths: Mutex::new(Vec::new()), episodes: Mutex::new(Vec::new()) });
         let h = handle.clone();
         std::thread::spawn(move || {
-            if let Some(p) = open(device.as_deref(), exclusive) {
+            if let Some(p) = open(device.as_deref(), exclusive, second) {
                 p.set_shuffle(shuffle);
                 p.set_repeat(repeat);
                 if let Ok(mut slot) = h.player.lock() {
@@ -149,11 +162,11 @@ impl PlayerHandle {
     }
 
     /// Move playback to another output device or mode, keeping queue, song, position, volume, EQ and pause.
-    pub fn switch_output(&self, device: Option<&str>, exclusive: bool, eq: crate::audio::eq::EqSettings) -> Result<(), String> {
+    pub fn switch_output(&self, device: Option<&str>, exclusive: bool, second: Option<SecondOutput>, eq: crate::audio::eq::EqSettings) -> Result<(), String> {
         let mut slot = self.player.lock().map_err(|e| e.to_string())?;
         let before = slot.as_ref().map(Player::status);
         *slot = None; // stops the old engine and closes its device
-        let player = open(device, exclusive).ok_or("could not open that output device")?;
+        let player = open(device, exclusive, second).ok_or("could not open that output device")?;
         player.set_eq(eq);
         if let Some(s) = before {
             player.set_shuffle(s.shuffle);
@@ -308,40 +321,103 @@ pub struct OutputState {
     chosen: Option<String>,
     /// Exclusive (bit-perfect) mode is switched on.
     exclusive: bool,
+    /// Second output (F7.9): the device, the mode, and the delays (ms) of the first and second
+    /// output as remembered for this pair.
+    second: Option<String>,
+    dual_mode: DualMode,
+    delays: [u32; 2],
+}
+
+/// The first output's device name: the chosen one, or whichever is the Windows default now.
+fn first_name(chosen: Option<String>) -> String {
+    chosen.or_else(|| output_devices().into_iter().find(|d| d.is_default).map(|d| d.name)).unwrap_or_default()
+}
+
+/// The saved second output, ready for the engine.
+pub fn second_config(d: &crate::library::db::Db) -> Option<SecondOutput> {
+    let device = crate::settings::second_output(d)?;
+    let first = first_name(crate::settings::output_device(d));
+    Some(SecondOutput { delays_ms: crate::settings::dual_delays(d, &first, &device), mode: crate::settings::dual_mode(d), device })
 }
 
 #[tauri::command]
 pub fn output_state(db: State<'_, SharedDb>) -> Result<OutputState, String> {
     let d = db.lock().map_err(|e| e.to_string())?;
+    let second = second_config(&d);
     Ok(OutputState {
         devices: output_devices(),
         chosen: crate::settings::output_device(&d),
         exclusive: crate::settings::exclusive_output(&d),
+        dual_mode: crate::settings::dual_mode(&d),
+        delays: second.as_ref().map_or([0, 0], |s| s.delays_ms),
+        second: second.map(|s| s.device),
     })
+}
+
+/// Reopen the output with the saved settings; playback carries on where it was.
+fn reopen(db: &State<'_, SharedDb>, player: &State<'_, SharedPlayer>) -> Result<(), String> {
+    let (eq, device, exclusive, second) = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        (crate::settings::eq_settings(&d), crate::settings::output_device(&d), crate::settings::exclusive_output(&d), second_config(&d))
+    };
+    player.switch_output(device.as_deref(), exclusive, second, eq)
 }
 
 /// Choose an output device (`None` = Windows default); playback moves over without losing its place.
 #[tauri::command]
 pub fn set_output(device: Option<String>, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<OutputState, String> {
-    let (eq, exclusive) = {
+    {
         let d = db.lock().map_err(|e| e.to_string())?;
         crate::settings::set_output_device(&d, device.as_deref()).map_err(|e| e.to_string())?;
-        (crate::settings::eq_settings(&d), crate::settings::exclusive_output(&d))
-    };
-    player.switch_output(device.as_deref(), exclusive, eq)?;
+        // The first output cannot also be the second one.
+        if device.is_some() && crate::settings::second_output(&d) == device {
+            crate::settings::set_second_output(&d, None).map_err(|e| e.to_string())?;
+        }
+    }
+    reopen(&db, &player)?;
     output_state(db)
 }
 
 /// Switch exclusive (bit-perfect) mode on or off; playback carries on where it was.
 #[tauri::command]
 pub fn set_exclusive(on: bool, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<OutputState, String> {
-    let (eq, device) = {
-        let d = db.lock().map_err(|e| e.to_string())?;
-        crate::settings::set_exclusive_output(&d, on).map_err(|e| e.to_string())?;
-        (crate::settings::eq_settings(&d), crate::settings::output_device(&d))
-    };
-    player.switch_output(device.as_deref(), on, eq)?;
+    crate::settings::set_exclusive_output(&*db.lock().map_err(|e| e.to_string())?, on).map_err(|e| e.to_string())?;
+    reopen(&db, &player)?;
     output_state(db)
+}
+
+/// Play on a second output too (F7.9, shared mode only), or on one again (`None`).
+#[tauri::command]
+pub fn set_second_output(device: Option<String>, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<OutputState, String> {
+    crate::settings::set_second_output(&*db.lock().map_err(|e| e.to_string())?, device.as_deref()).map_err(|e| e.to_string())?;
+    reopen(&db, &player)?;
+    output_state(db)
+}
+
+/// Same sound on both outputs, or stereo split; takes effect at once.
+#[tauri::command]
+pub fn set_dual_mode(mode: DualMode, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<OutputState, String> {
+    crate::settings::set_dual_mode(&*db.lock().map_err(|e| e.to_string())?, mode).map_err(|e| e.to_string())?;
+    let _ = player.act(|p| p.set_dual_mode(mode));
+    output_state(db)
+}
+
+/// Delays (ms) of the first and second output, remembered for this pair of devices.
+#[tauri::command]
+pub fn set_dual_delays(delays: [u32; 2], db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        let second = crate::settings::second_output(&d).ok_or("choose a second output first")?;
+        let first = first_name(crate::settings::output_device(&d));
+        crate::settings::set_dual_delays(&d, &first, &second, delays).map_err(|e| e.to_string())?;
+    }
+    player.act(|p| p.set_delays(delays))
+}
+
+/// Alignment clicks on (the music waits) or off (the music carries on where it was).
+#[tauri::command]
+pub fn output_align(on: bool, player: State<'_, SharedPlayer>) -> Result<(), String> {
+    player.act(|p| p.align(on))
 }
 
 // Machine test: needs a real output device (quiet test tone).
@@ -365,7 +441,7 @@ mod tests {
         .unwrap();
         std::thread::sleep(Duration::from_millis(1_200));
         let before = h.event();
-        h.switch_output(None, false, crate::audio::eq::EqSettings::default()).unwrap();
+        h.switch_output(None, false, None, crate::audio::eq::EqSettings::default()).unwrap();
         std::thread::sleep(Duration::from_millis(400));
         let after = h.event();
         println!("before {before:?}\nafter {after:?}");

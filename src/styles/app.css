@@ -378,7 +378,14 @@ div.tile { cursor: default; }
 .eq-head select, .eq-head input[type="text"] { font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .eq-switch { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .eq-error { font-size: 12px; color: var(--danger); }
-.out-panel { width: 460px; }
+.out-panel { width: 460px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.out-second { margin-top: 10px; font-size: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.out-second summary { cursor: pointer; font-size: 13px; }
+.out-row { margin-top: 8px; }
+.out-row select { max-width: 100%; }
+.out-delay { display: grid; grid-template-columns: 150px 1fr 52px; align-items: center; gap: 8px; margin-top: 8px; }
+.out-delay output { text-align: right; font-variant-numeric: tabular-nums; }
+#out-align[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .out-exclusive { margin-top: 10px; }
 .out-note { font-size: 12px; margin: 6px 0 0; }
 .out-info { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 10px 0 0; font-size: 12px; }

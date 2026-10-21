@@ -536,6 +536,28 @@
         <dt data-i18n="output.deviceLabel">Device</dt><dd id="out-device-info"></dd>
         <dt data-i18n="output.path">Signal path</dt><dd id="out-path"></dd>
       </dl>
+      <details class="out-second" id="out-second-box">
+        <summary data-i18n="output.second">Second output (experimental)</summary>
+        <p class="out-note eq-error" id="out-second-exclusive" hidden data-i18n="output.secondExclusive">A second output plays only in shared mode. Turn exclusive mode off to use it.</p>
+        <div class="eq-head out-row">
+          <select id="out-second" aria-label="Second output device" data-i18n-attr="aria-label:output.secondDevice"></select>
+          <select id="out-mode" aria-label="What each output plays" data-i18n-attr="aria-label:output.dualMode">
+            <option value="same" data-i18n="output.modeSame">Same sound on both</option>
+            <option value="split" data-i18n="output.modeSplit">Stereo split: left on the first, right on the second</option>
+          </select>
+        </div>
+        <div id="out-dual" hidden>
+          <label class="out-delay"><span data-i18n="output.delayFirst">Delay, first output</span><input type="range" id="out-delay-0" min="0" max="500" step="5"><output id="out-delay-0-val"></output></label>
+          <label class="out-delay"><span data-i18n="output.delaySecond">Delay, second output</span><input type="range" id="out-delay-1" min="0" max="500" step="5"><output id="out-delay-1-val"></output></label>
+          <p class="out-note muted" data-i18n="output.delayHelp">Bluetooth speakers each lag by 100–300 ms, and Windows does not say how much. Delay the one that plays first until both line up; the delays are remembered for this pair.</p>
+          <div class="eq-head out-row">
+            <button class="eq-btn" id="out-align" type="button" aria-pressed="false" data-i18n="output.align">Alignment clicks</button>
+            <span class="out-note" id="out-dual-status" role="status"></span>
+          </div>
+          <p class="out-note muted" data-i18n="output.alignHelp">Clicks play on the first output, then the second, then both together. Move the delays until they sound evenly spaced and the third is a single click. The music waits meanwhile.</p>
+        </div>
+        <p class="out-note muted" data-i18n="output.pairingTip">If both speakers can pair with each other (Bose Stereo or Party mode, JBL PartyBoost, Auracast), use that instead: speakers keep themselves in step far better than a PC can over Bluetooth.</p>
+      </details>
     </section>
 
     <dialog class="editor" id="editor" aria-labelledby="editor-heading">

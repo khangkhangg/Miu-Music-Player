@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from '../../src/js/output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus } from '../../src/js/output.js';
 
 test('sample rates read like a spec sheet', () => {
   assert.deepEqual([44_100, 48_000, 96_000, 192_000, 88_200].map(rateLabel), ['44.1 kHz', '48 kHz', '96 kHz', '192 kHz', '88.2 kHz']);
@@ -49,4 +49,36 @@ test('exclusive mode below full volume or with too few bits says why it is not b
   assert.equal(signalPath({ ...base, volume: 0.8 }), 'Exclusive mode · volume 80%');
   assert.equal(signalPath({ ...base, deviceBits: 16 }), 'Exclusive mode · reduced to 16-bit');
   assert.equal(signalPath({ ...base, sourceBits: null }), 'Bit-perfect', 'lossy files have no bit depth to lose');
+});
+
+test('the second output menu offers every device but the first output', () => {
+  const devices = [{ name: 'Headphones', isDefault: true }, { name: 'LG HDR 4K', isDefault: false }, { name: 'JBL Flip 6', isDefault: false }];
+  assert.deepEqual(secondOptions({ devices, chosen: null, second: null }), [
+    { value: '', label: 'None (one output)', selected: true },
+    { value: 'LG HDR 4K', label: 'LG HDR 4K', selected: false },
+    { value: 'JBL Flip 6', label: 'JBL Flip 6', selected: false },
+  ], 'the system default is the first output when none is chosen');
+  const opts = secondOptions({ devices, chosen: 'LG HDR 4K', second: 'JBL Flip 6' });
+  assert.deepEqual(opts.map((o) => o.value), ['', 'Headphones', 'JBL Flip 6']);
+  assert.equal(opts.find((o) => o.selected).value, 'JBL Flip 6');
+});
+
+test('a saved second output that is not plugged in still shows, marked as missing', () => {
+  const devices = [{ name: 'Headphones', isDefault: true }];
+  const opts = secondOptions({ devices, chosen: null, second: 'JBL Flip 6' });
+  assert.deepEqual(opts.at(-1), { value: 'JBL Flip 6', label: 'JBL Flip 6 (not connected)', selected: true });
+});
+
+test('the second output status says whether the two play together', () => {
+  assert.equal(dualStatus({ second: null, secondLost: false }), '');
+  assert.equal(dualStatus({ second: null, secondLost: true }), 'Second output not available: playing on one');
+  assert.equal(dualStatus({ second: { offsetMs: 0.4, driftPpm: 12.3 }, secondLost: false }), 'In step (clock +12 ppm)');
+  assert.equal(dualStatus({ second: { offsetMs: -7.6, driftPpm: -40 }, secondLost: false }), 'Catching up: 8 ms behind (clock −40 ppm)');
+  assert.equal(dualStatus({ second: { offsetMs: 30, driftPpm: 0 }, secondLost: false }), 'Catching up: 30 ms ahead (clock +0 ppm)');
+});
+
+test('the device actually playing is left out too, when the chosen first output is not connected', () => {
+  const devices = [{ name: 'Headphones', isDefault: true }, { name: 'LG HDR 4K', isDefault: false }];
+  const opts = secondOptions({ devices, chosen: 'Bose Flex', second: null }, 'Headphones');
+  assert.deepEqual(opts.map((o) => o.value), ['', 'LG HDR 4K']);
 });
