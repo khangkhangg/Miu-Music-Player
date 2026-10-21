@@ -552,14 +552,20 @@ pub(crate) mod tests {
         assert_eq!(stages, vec![Stage::Check, Stage::Copy { done: 0, total: 2 }, Stage::Copy { done: 1, total: 2 }, Stage::Copy { done: 2, total: 2 }]);
     }
 
-    /// Syncs two songs to the first removable drive (a USB stick will do) into a `MiuTest-…`
-    /// folder, then unlikes them and checks the drive is left as it was. Passes, saying so, when
-    /// no removable drive is plugged in. `cargo test --lib player::sync -- --ignored --nocapture`
+    /// Syncs two songs to the first removable drive (a USB stick will do), or the drive named in
+    /// `MIU_PLAYER_DRIVE` (`X:\`), into a `MiuTest-…` folder, then unlikes them and checks the drive
+    /// is left as it was. Passes, saying so, when there is no such drive.
+    /// `cargo test --lib player::sync -- --ignored --nocapture`
     #[cfg(windows)]
     #[test]
     #[ignore]
     fn syncs_to_a_real_removable_drive_and_cleans_up() {
-        let Some(v) = crate::player::volumes::list().into_iter().find(|v| v.removable) else {
+        let wanted = std::env::var("MIU_PLAYER_DRIVE").ok();
+        let found = crate::player::volumes::list().into_iter().find(|v| match &wanted {
+            Some(root) => v.root.to_string_lossy().eq_ignore_ascii_case(root),
+            None => v.removable,
+        });
+        let Some(v) = found else {
             println!("no removable drive plugged in: nothing to test");
             return;
         };

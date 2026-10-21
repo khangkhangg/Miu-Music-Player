@@ -92,6 +92,46 @@
           <div class="sync-result" id="sync-result" role="alert" hidden></div>
         </div>
       </div>
+
+      <section class="players" id="players" aria-live="polite">
+        <div id="player-list" class="player-list"></div>
+        <button class="player-add" id="player-add" type="button" title="Pick the folder your player reads music from" data-i18n-attr="title:player.addHint">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span data-i18n="player.add">Use a drive as a player…</span>
+        </button>
+        <p class="sync-shortage player-add-error" id="player-add-error" role="alert" hidden></p>
+      </section>
+      <template id="player-template">
+        <div class="device-card ready player-card">
+          <div class="device-head">
+            <svg class="phone" viewBox="0 0 24 40" aria-hidden="true"><rect x="1" y="1" width="22" height="38" rx="4"/><circle cx="12" cy="27" r="6"/><path d="M6 6h12v8H6z"/></svg>
+            <div class="device-text">
+              <p class="device-name"></p>
+              <p class="muted device-detail"></p>
+            </div>
+          </div>
+          <div class="storage">
+            <div class="storage-bar"><div class="storage-used"></div></div>
+            <p class="muted storage-label"></p>
+          </div>
+          <div class="sync-box">
+            <span class="stat-label" data-i18n="player.title">MUSIC PLAYER</span>
+            <p class="muted player-suggested" data-i18n="player.suggested" hidden>This drive has a Music folder. Sync to use it as a music player.</p>
+            <label class="player-option"><span data-i18n="player.convertTo">Convert other songs to</span> <select class="player-target"></select></label>
+            <div class="player-option"><span data-i18n="player.alsoPlays">Also copy as they are</span> <span class="player-plays"></span></div>
+            <p class="sync-plan player-plan"></p>
+            <p class="sync-last muted player-last" hidden></p>
+            <p class="sync-shortage player-shortage" role="alert" hidden></p>
+            <button class="sync-btn player-sync" type="button" data-i18n="sync.button">Sync</button>
+            <p class="sync-status muted player-status" role="status" hidden></p>
+            <div class="sync-result player-result" role="alert" hidden></div>
+            <div class="player-actions">
+              <button class="player-link player-folder" type="button" data-i18n="player.changeFolder">Change folder…</button>
+              <button class="player-link player-forget" type="button" data-i18n="player.forget">Stop using as a player</button>
+            </div>
+          </div>
+        </div>
+      </template>
     </aside>
 
     <main class="main">

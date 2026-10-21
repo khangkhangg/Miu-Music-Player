@@ -10,7 +10,8 @@ import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions } from './output.js';
-import { t, startInLanguage } from './i18n.js';
+import { t, startInLanguage, translatePage } from './i18n.js';
+import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
 import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
@@ -73,6 +74,7 @@ if (invoke) {
   invoke('check_prereqs').then(showPrereqNotice);
   window.__TAURI__.event.listen('devices', e => showDevices(e.payload));
   invoke('list_devices').then(showDevices);
+  setupPlayers();
 
   invoke('list_folders').then(f => { showFolders(f); boot(60); });
   loadSongs().then(() => boot(100), () => boot(100));
@@ -559,6 +561,7 @@ function showSyncOutcome(tone, title, lines) {
 }
 
 function showSyncPreview() {
+  for (const card of playerCards.values()) showPlayerPreview(card);
   const box = document.getElementById('sync-box');
   const phone = (lastDevices ?? []).find(d => d.trusted && d.udid);
   box.hidden = !phone;
@@ -573,6 +576,143 @@ function showSyncPreview() {
     short.hidden = !p.shortage;
     if (p.shortage) short.textContent = t('sync.noSpace', { need: formatBytes(p.shortage.need), available: formatBytes(p.shortage.available) });
   }).catch(() => { box.hidden = true; });
+}
+
+// ---- Music players: USB drives and memory cards ----
+const playerCards = new Map(); // id → { el, player }
+let playerSyncing = null; // id of the player being synced
+
+function setupPlayers() {
+  window.__TAURI__.event.listen('players', e => showPlayers(e.payload));
+  window.__TAURI__.event.listen('player-sync-progress', e => {
+    const card = playerCards.get(playerSyncing);
+    if (!card) return;
+    const status = card.el.querySelector('.player-status');
+    status.hidden = false;
+    status.textContent = playerStageText(e.payload).text;
+  });
+  document.getElementById('player-add').addEventListener('click', () => pickPlayerFolder());
+  invoke('list_players').then(showPlayers).catch(() => {});
+}
+
+async function pickPlayerFolder(defaultPath) {
+  const folder = await window.__TAURI__.dialog.open({ directory: true, multiple: false, defaultPath });
+  if (!folder) return;
+  const error = document.getElementById('player-add-error');
+  error.hidden = true;
+  invoke('add_player', { folder }).then(showPlayers).catch(reason => {
+    error.textContent = t('player.addFailed', { reason });
+    error.hidden = false;
+  });
+}
+
+function showPlayers(players) {
+  const list = document.getElementById('player-list');
+  const seen = new Set();
+  for (const p of players ?? []) {
+    seen.add(p.id);
+    let card = playerCards.get(p.id);
+    if (!card) {
+      const frag = document.getElementById('player-template').content.cloneNode(true);
+      translatePage(frag);
+      card = { el: frag.firstElementChild, player: p };
+      wirePlayer(card);
+      playerCards.set(p.id, card);
+      list.append(card.el);
+    }
+    card.player = p;
+    renderPlayer(card);
+  }
+  for (const [id, card] of playerCards) {
+    if (!seen.has(id) && id !== playerSyncing) { card.el.remove(); playerCards.delete(id); }
+  }
+}
+
+function renderPlayer(card) {
+  const p = card.player;
+  const c = playerCard(p);
+  const el = card.el;
+  el.querySelector('.device-name').textContent = c.title;
+  el.querySelector('.device-detail').textContent = c.detail;
+  el.querySelector('.player-suggested').hidden = !c.suggested;
+  el.querySelector('.player-forget').hidden = c.suggested;
+  const storage = el.querySelector('.storage');
+  storage.hidden = !c.storage;
+  if (c.storage) {
+    storage.querySelector('.storage-used').style.width = `${c.storage.usedPercent}%`;
+    storage.querySelector('.storage-label').textContent = c.storage.label;
+  }
+  el.querySelector('.player-target').replaceChildren(...targetOptions(p.profile.target).map(o => {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    opt.selected = o.selected;
+    return opt;
+  }));
+  el.querySelector('.player-plays').replaceChildren(...PLAYS.map(f => {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = f.value;
+    box.checked = p.profile.plays.includes(f.value);
+    label.append(box, f.label);
+    return label;
+  }));
+  showPlayerPreview(card);
+}
+
+function savePlayer(card, profile) {
+  invoke('save_player', { id: card.player.id, profile }).then(showPlayers).catch(() => renderPlayer(card));
+}
+
+function wirePlayer(card) {
+  const el = card.el;
+  el.querySelector('.player-target').addEventListener('change', e => savePlayer(card, { ...card.player.profile, target: e.target.value }));
+  el.querySelector('.player-plays').addEventListener('change', e => savePlayer(card, withPlays(card.player.profile, e.target.value, e.target.checked)));
+  el.querySelector('.player-folder').addEventListener('click', () => pickPlayerFolder(card.player.root));
+  el.querySelector('.player-forget').addEventListener('click', () => invoke('forget_player', { id: card.player.id }).then(showPlayers));
+  el.querySelector('.player-sync').addEventListener('click', () => {
+    if (playerSyncing) return;
+    playerSyncing = card.player.id;
+    const button = el.querySelector('.player-sync');
+    for (const b of document.querySelectorAll('.player-sync')) b.disabled = true;
+    button.textContent = t('sync.syncing');
+    el.querySelector('.player-result').hidden = true;
+    invoke('player_sync_now', { id: card.player.id })
+      .then(report => { const r = playerResult(report); showPlayerOutcome(card, r.tone, null, r.lines); })
+      .catch(err => { const s = playerStopped(err); showPlayerOutcome(card, 'warn', s.title, s.lines); })
+      .finally(() => {
+        playerSyncing = null;
+        for (const b of document.querySelectorAll('.player-sync')) b.disabled = false;
+        button.textContent = t('sync.button');
+        el.querySelector('.player-status').hidden = true;
+        invoke('list_players').then(showPlayers);
+      });
+  });
+}
+
+function showPlayerOutcome(card, tone, title, lines) {
+  const box = card.el.querySelector('.player-result');
+  box.className = `sync-result player-result ${tone}`; // i18n-ignore: class names
+  const items = [];
+  if (title) { const h = document.createElement('p'); h.className = 'sync-result-title'; h.textContent = title; items.push(h); }
+  for (const line of lines) { const p = document.createElement('p'); p.textContent = line; items.push(p); }
+  box.replaceChildren(...items);
+  box.hidden = false;
+}
+
+function showPlayerPreview(card) {
+  if (playerSyncing === card.player.id) return;
+  const el = card.el;
+  invoke('player_sync_preview', { id: card.player.id }).then(p => {
+    el.querySelector('.player-plan').textContent = planSummary(p.plan);
+    const last = el.querySelector('.player-last');
+    last.textContent = lastSyncLabel(p.lastRun, Math.floor(Date.now() / 1000));
+    last.hidden = !p.lastRun;
+    const short = el.querySelector('.player-shortage');
+    short.hidden = !p.shortage;
+    if (p.shortage) short.textContent = playerStopped(p.shortage).lines[0];
+  }).catch(() => {});
 }
 
 function showPrereqNotice(report) {

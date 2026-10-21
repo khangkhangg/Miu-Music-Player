@@ -86,6 +86,19 @@ button, input, select { font: inherit; }
 .phone { width: 18px; height: 30px; flex: none; fill: none; stroke: var(--text-muted); stroke-width: 1.6; }
 .device-card.ready .phone { stroke: var(--accent-ink); }
 .device-card.untrusted .phone { stroke: var(--danger); }
+.players { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.player-list { display: flex; flex-direction: column; gap: 8px; }
+.player-add { margin: 0 16px; display: flex; align-items: center; gap: 6px; border: 1px dashed var(--border); border-radius: var(--radius); background: transparent; color: var(--text-muted); font-size: 12px; padding: 7px 10px; cursor: pointer; }
+.player-add:hover { color: var(--text); border-color: var(--text-muted); }
+.player-add svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.player-card .phone { stroke: var(--accent-ink); }
+.player-option { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text-muted); }
+.player-option select { font: inherit; font-size: 12px; background: var(--surface-muted); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; max-width: 100%; }
+.player-plays { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.player-plays label { display: inline-flex; align-items: center; gap: 3px; color: var(--text); }
+.player-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.player-link { border: 0; background: none; padding: 0; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; }
+.player-link:hover { color: var(--text); }
 .storage-bar { height: 4px; background: var(--surface-muted); overflow: hidden; }
 .storage-used { height: 100%; width: 0; background: var(--accent); }
 .storage-label { font-size: 11px; margin-top: 4px !important; }
