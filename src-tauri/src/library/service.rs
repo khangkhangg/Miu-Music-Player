@@ -12,7 +12,6 @@ use crate::library::db::Db;
 use crate::library::duplicates::{pending_hashes, store_hash};
 use crate::library::fingerprint::audio_hash;
 use crate::library::folders::{self, WatchedFolder};
-use crate::library::scan::rescan_folder;
 use crate::library::watch::FolderWatcher;
 use crate::util::time::now_unix;
 
@@ -43,8 +42,11 @@ fn rescan(app: &AppHandle, db: &SharedDb, ids: &[i64]) {
     let total = folders.len();
     for (i, f) in folders.into_iter().enumerate() {
         progress(app, "scan", i, total);
+        // Walk the disk first, without the database: a sleeping hard disk can take half a minute
+        // to answer, and the window needs the database meanwhile to show the library.
+        let found = crate::library::scan::scan_folder(std::path::Path::new(&f.path));
         let Ok(d) = db.lock() else { return };
-        match rescan_folder(&d, f.id, &f.path, now_unix()) {
+        match crate::library::scan::reconcile(&d, f.id, &found, now_unix()) {
             Ok(diff) => log::info!("rescanned {}: +{} ~{} -{}", f.path, diff.added, diff.updated, diff.removed),
             Err(e) => log::warn!("rescan of {} failed: {e}", f.path),
         }

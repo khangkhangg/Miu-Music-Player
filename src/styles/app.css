@@ -205,7 +205,7 @@ button.primary svg { width: 12px; height: 12px; fill: currentColor; }
 .tile-cover:hover img { transform: scale(1.04); }
 .tile-cover { position: relative; }
 .tile-play { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%) scale(0.9); width: 56px; height: 56px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
-  background: rgba(20, 20, 26, 0.55); color: #fff; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease; }
+  background: rgba(20, 20, 26, 0.55); color: #fff; opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease; }
 .tile-play svg { width: 22px; height: 22px; fill: currentColor; margin-left: 3px; }
 .tile-cover:hover .tile-play, .tile-play:focus-visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .tile-play:hover { background: var(--accent); color: var(--on-accent); }
@@ -327,7 +327,7 @@ div.tile { cursor: default; }
 .np-art { position: relative; }
 .art-rate { position: absolute; right: 10px; bottom: 14px; display: flex; gap: 8px; opacity: 0; transition: opacity 0.18s ease; z-index: 2; }
 .np-art:hover .art-rate, .art-rate:focus-within { opacity: 1; }
-.art-rate-btn { width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: rgba(20, 20, 26, 0.6); color: #fff; backdrop-filter: blur(4px); }
+.art-rate-btn { width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: rgba(20, 20, 26, 0.6); color: #fff; }
 .art-rate-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .art-rate-btn:hover { background: rgba(20, 20, 26, 0.85); }
 .art-rate-btn.on { background: var(--accent); color: var(--on-accent); }

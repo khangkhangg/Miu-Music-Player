@@ -32,7 +32,8 @@
         "resizable": true,
         "maximizable": true,
         "visible": false,
-        "center": false
+        "center": false,
+        "create": false
       }
     ],
     "security": {
