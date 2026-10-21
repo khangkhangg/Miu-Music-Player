@@ -84,18 +84,23 @@ pub type Convert<'a> = &'a dyn Fn(&SongSource) -> Result<PathBuf, String>;
 
 /// The file to hand to iTunes for a song: the original, or its converted copy.
 pub fn sendable_path(db: &Db, song_id: i64, policy: &Policy, convert: Option<Convert>) -> Result<PathBuf, String> {
+    sendable_path_with(db, song_id, &|format, rate, bits| action(format, rate, bits, policy), convert)
+}
+
+/// The file to copy to any device: the original, or its converted copy (`decide` as in `plan::plan_with`).
+pub fn sendable_path_with(db: &Db, song_id: i64, decide: crate::sync::plan::Decide, convert: Option<Convert>) -> Result<PathBuf, String> {
     let (path, format, rate, bits, audio_hash, size, mtime): (String, String, Option<u32>, Option<u32>, Option<String>, i64, i64) = db
         .conn()
         .query_row("SELECT path, format, sample_rate, bit_depth, audio_hash, size, mtime FROM songs WHERE id = ?1", [song_id], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
         })
         .map_err(|e| e.to_string())?;
-    let act = action(Format::from_name(&format), rate, bits, policy);
+    let act = decide(Format::from_name(&format), rate, bits);
     match act {
         Action::Keep => Ok(PathBuf::from(path)),
         Action::Skip => Err("not a format Miu can read".into()),
-        Action::Aac { .. } | Action::Alac { .. } => {
-            let convert = convert.ok_or("needs converting for the iPhone, and the ffmpeg sidecar is missing")?;
+        Action::Aac { .. } | Action::Alac { .. } | Action::Mp3 { .. } => {
+            let convert = convert.ok_or("needs converting, and the ffmpeg sidecar is missing")?;
             let audio_key = audio_hash.filter(|h| !h.is_empty()).unwrap_or_else(|| format!("{path}|{size}|{mtime}"));
             let cover = match crate::library::artfetch::cover_of(db, song_id) {
                 Some(crate::library::artfetch::Cover::Fetched(file)) => Some(file),

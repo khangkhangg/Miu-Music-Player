@@ -13,8 +13,18 @@ pub enum Action {
     Keep,
     Alac { bits: u32, rate: u32 },
     Aac { kbps: u32, rate: u32 },
+    /// For music players that want MP3 (never chosen for the iPhone).
+    Mp3 { mode: Mp3Mode, rate: u32 },
     /// Not a format Miu can read: never synced.
     Skip,
+}
+
+/// How songs are encoded as MP3: LAME V0 (VBR, about 245 kbit/s) or a constant 320 kbit/s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Mp3Mode {
+    V0,
+    Cbr320,
 }
 
 /// Hi-res sources (above 48 kHz or 24-bit) on the phone.

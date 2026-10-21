@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::library::convert::{action, Action, Policy};
+use crate::library::convert::{action, Action, Mp3Mode, Policy};
 use crate::library::db::Db;
 use crate::library::fingerprint::fnv64;
 use crate::library::format::Format;
@@ -57,6 +57,9 @@ pub fn estimated_bytes(act: Action, source_bytes: u64, duration_ms: u64, channel
     match act {
         Action::Keep | Action::Skip => source_bytes,
         Action::Aac { kbps, .. } => kbps as u64 * 125 * duration_ms / 1000,
+        // LAME V0 averages about 245 kbit/s.
+        Action::Mp3 { mode: Mp3Mode::V0, .. } => 245 * 125 * duration_ms / 1000,
+        Action::Mp3 { mode: Mp3Mode::Cbr320, .. } => 320 * 125 * duration_ms / 1000,
         // ALAC typically lands near 60 % of the PCM size.
         Action::Alac { bits, rate } => duration_ms * rate as u64 * channels * bits.div_ceil(8) as u64 * 6 / 10 / 1000,
     }
@@ -112,14 +115,17 @@ pub(crate) fn liked_hashes(db: &Db) -> rusqlite::Result<HashMap<i64, (String, Op
     rows.collect()
 }
 
-fn liked_songs(db: &Db, policy: &Policy) -> rusqlite::Result<Vec<Liked>> {
+/// What a device does with a song of this format, sample rate and bit depth.
+pub type Decide<'a> = &'a dyn Fn(Format, Option<u32>, Option<u32>) -> Action;
+
+fn liked_songs(db: &Db, decide: Decide) -> rusqlite::Result<Vec<Liked>> {
     let mut stmt = db.conn().prepare(
         "SELECT id, title, artist, album, album_artist, genre, year, track_no, track_total, disc_no,
                 format, sample_rate, bit_depth, size, duration_ms, audio_hash
          FROM songs WHERE rating = 1 ORDER BY id",
     )?;
     let rows = stmt.query_map([], |r| {
-        let act = action(Format::from_name(&r.get::<_, String>(10)?), r.get(11)?, r.get(12)?, policy);
+        let act = decide(Format::from_name(&r.get::<_, String>(10)?), r.get(11)?, r.get(12)?);
         let bytes = estimated_bytes(act, r.get::<_, i64>(13)? as u64, r.get::<_, Option<i64>>(14)?.unwrap_or(0) as u64, 2);
         Ok((act, Liked { id: r.get(0)?, bytes, meta_hash: meta_hash(r)?, audio_hash: r.get(15)? }))
     })?;
@@ -143,10 +149,16 @@ fn sent(db: &Db, udid: &str) -> rusqlite::Result<HashMap<i64, Sent>> {
 
 /// What to do on the phone `udid` so it holds exactly the liked songs Miu can sync.
 pub fn plan(db: &Db, udid: &str, policy: &Policy) -> rusqlite::Result<Plan> {
+    plan_with(db, udid, &|format, rate, bits| action(format, rate, bits, policy))
+}
+
+/// The plan for any device (an iPhone, or a music player keyed by its volume): `decide` says what
+/// becomes of each liked song there.
+pub fn plan_with(db: &Db, udid: &str, decide: Decide) -> rusqlite::Result<Plan> {
     let mut on_phone = sent(db, udid)?;
     let mut p = Plan::default();
     let mut rest = Vec::new();
-    for s in liked_songs(db, policy)? {
+    for s in liked_songs(db, decide)? {
         match on_phone.remove(&s.id) {
             None => {
                 p.add_bytes += s.bytes;

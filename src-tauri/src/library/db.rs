@@ -133,6 +133,14 @@ pub const MIGRATIONS: &[&str] = &[
      ) STRICT;",
     // 14: audiobooks (Phase 8): LibriVox books live beside podcasts; their chapters are episodes
     "ALTER TABLE podcasts ADD COLUMN kind TEXT NOT NULL DEFAULT 'podcast' CHECK (kind IN ('podcast', 'audiobook'));",
+    // 15: files Miu copied onto music players (path relative to the drive root): only these are ever removed
+    "CREATE TABLE player_files (
+        device TEXT NOT NULL,
+        song_id INTEGER NOT NULL,
+        path TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        PRIMARY KEY (device, song_id)
+     ) STRICT;",
 ];
 
 #[derive(Debug, thiserror::Error)]

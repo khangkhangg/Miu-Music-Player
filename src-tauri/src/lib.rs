@@ -2,6 +2,7 @@ pub mod apple;
 pub mod audio;
 pub mod device;
 pub mod library;
+pub mod player;
 pub mod podcast;
 pub mod audiobook;
 pub mod settings;
@@ -92,6 +93,7 @@ pub fn run() {
         .setup(move |app| {
             device::service::start(app.handle().clone(), registry);
             podcast::service::start(app.handle().clone(), db.clone(), podcast_downloads.clone());
+            player::service::start(app.handle().clone(), db.clone());
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db.clone(), library_watch);
             audio::eq_service::start(&db, &player);
@@ -120,6 +122,12 @@ pub fn run() {
             library::service::undo_edit,
             sync::service::sync_preview,
             sync::service::sync_now,
+            player::service::list_players,
+            player::service::add_player,
+            player::service::save_player,
+            player::service::forget_player,
+            player::service::player_sync_preview,
+            player::service::player_sync_now,
             podcast::service::podcast_subscribe,
             podcast::service::podcast_refresh,
             podcast::service::podcast_list,

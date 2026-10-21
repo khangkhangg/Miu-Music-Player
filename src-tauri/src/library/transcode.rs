@@ -18,17 +18,21 @@ pub trait Transcoder {
 
 /// ffmpeg arguments for one conversion, or `None` when the file goes as it is.
 pub fn ffmpeg_args(src: &Path, dst: &Path, action: Action) -> Option<Vec<OsString>> {
+    use crate::library::convert::Mp3Mode;
     let codec: Vec<&str> = match action {
         Action::Keep | Action::Skip => return None,
         Action::Alac { bits: 16, .. } => vec!["-c:a", "alac", "-sample_fmt", "s16p"],
         Action::Alac { .. } => vec!["-c:a", "alac", "-sample_fmt", "s32p", "-bits_per_raw_sample", "24"],
         Action::Aac { .. } => vec!["-c:a", "aac"],
+        Action::Mp3 { mode: Mp3Mode::V0, .. } => vec!["-c:a", "libmp3lame", "-q:a", "0"],
+        Action::Mp3 { mode: Mp3Mode::Cbr320, .. } => vec!["-c:a", "libmp3lame", "-b:a", "320k"],
     };
     let (rate, kbps) = match action {
-        Action::Alac { rate, .. } => (rate, None),
+        Action::Alac { rate, .. } | Action::Mp3 { rate, .. } => (rate, None),
         Action::Aac { kbps, rate } => (rate, Some(kbps)),
         _ => unreachable!(),
     };
+    let container: &[&str] = if matches!(action, Action::Mp3 { .. }) { &["-id3v2_version", "3", "-f", "mp3"] } else { &["-f", "ipod"] };
     let mut args: Vec<OsString> = ["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i"].iter().map(OsString::from).collect();
     args.push(src.as_os_str().to_owned());
     args.extend(["-map", "0:a:0", "-vn", "-map_metadata", "0"].iter().map(OsString::from));
@@ -36,9 +40,15 @@ pub fn ffmpeg_args(src: &Path, dst: &Path, action: Action) -> Option<Vec<OsStrin
     if let Some(k) = kbps {
         args.extend([OsString::from("-b:a"), OsString::from(format!("{k}k"))]);
     }
-    args.extend([OsString::from("-ar"), OsString::from(rate.to_string()), OsString::from("-f"), OsString::from("ipod")]);
+    args.extend([OsString::from("-ar"), OsString::from(rate.to_string())]);
+    args.extend(container.iter().map(OsString::from));
     args.push(dst.as_os_str().to_owned());
     Some(args)
+}
+
+/// The file extension of a converted copy.
+pub fn extension(action: Action) -> &'static str {
+    if matches!(action, Action::Mp3 { .. }) { "mp3" } else { "m4a" }
 }
 
 const SIDECAR: &str = "ffmpeg.exe";
@@ -64,7 +74,7 @@ impl Cache {
         let mut copies: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
             .flatten()
             .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "m4a") && !p.to_string_lossy().ends_with(".partial.m4a"))
+            .filter(|p| p.extension().is_some_and(|x| x == "m4a" || x == "mp3") && !p.file_stem().is_some_and(|s| s.to_string_lossy().ends_with(".partial")))
             .filter_map(|p| {
                 let m = std::fs::metadata(&p).ok()?;
                 Some((m.modified().ok()?, m.len(), p))
@@ -91,10 +101,11 @@ impl Cache {
         let io = |e: std::io::Error| e.to_string();
         std::fs::create_dir_all(&self.dir).map_err(io)?;
         let name = crate::library::fingerprint::fnv64(format!("{audio_key}\u{1f}{action:?}").as_bytes());
-        let file = self.dir.join(format!("{name}.m4a"));
+        let ext = extension(action);
+        let file = self.dir.join(format!("{name}.{ext}"));
         let tags_file = self.dir.join(format!("{name}.tags"));
         if !file.is_file() {
-            let partial = self.dir.join(format!("{name}.partial.m4a"));
+            let partial = self.dir.join(format!("{name}.partial.{ext}"));
             let encoded = t.encode(src, &partial, action).and_then(|_| t.retag(src, &partial, cover));
             if let Err(e) = encoded {
                 let _ = std::fs::remove_file(&partial);
@@ -143,8 +154,9 @@ impl Transcoder for Ffmpeg {
         use lofty::picture::{MimeType, Picture, PictureType};
         use lofty::tag::{Tag, TagExt, TagType};
         let file = lofty::read_from_path(src).map_err(|e| e.to_string())?;
-        let mut tag = file.primary_tag().or_else(|| file.first_tag()).cloned().unwrap_or_else(|| Tag::new(TagType::Mp4Ilst));
-        tag.re_map(TagType::Mp4Ilst);
+        let mut tag = file.primary_tag().or_else(|| file.first_tag()).cloned().unwrap_or_else(|| Tag::new(TagType::Id3v2));
+        let tag_type = if dst.extension().is_some_and(|x| x.eq_ignore_ascii_case("mp3")) { TagType::Id3v2 } else { TagType::Mp4Ilst };
+        tag.re_map(tag_type);
         if tag.picture_count() == 0 {
             if let Some(jpg) = cover.and_then(|c| std::fs::read(c).ok()) {
                 tag.push_picture(Picture::new_unchecked(PictureType::CoverFront, Some(MimeType::Jpeg), None, jpg));
@@ -183,6 +195,32 @@ mod tests {
     fn aac_arguments_set_bitrate_and_rate() {
         let a = strs(&ffmpeg_args(Path::new("a.ogg"), Path::new("x.m4a"), Action::Aac { kbps: 256, rate: 48_000 }).unwrap());
         assert!(has(&a, ["-c:a", "aac"]) && has(&a, ["-b:a", "256k"]) && has(&a, ["-ar", "48000"]) && has(&a, ["-f", "ipod"]), "{a:?}");
+    }
+
+    #[test]
+    fn mp3_arguments_use_lame_v0_or_320k_with_id3v2_3() {
+        use crate::library::convert::Mp3Mode;
+        let v0 = strs(&ffmpeg_args(Path::new("a.flac"), Path::new("x.mp3"), Action::Mp3 { mode: Mp3Mode::V0, rate: 44_100 }).unwrap());
+        assert!(has(&v0, ["-c:a", "libmp3lame"]) && has(&v0, ["-q:a", "0"]) && has(&v0, ["-ar", "44100"]) && has(&v0, ["-f", "mp3"]), "{v0:?}");
+        assert!(has(&v0, ["-id3v2_version", "3"]), "ID3v2.3: what cheap players read");
+        assert!(!v0.iter().any(|a| a == "-b:a"), "{v0:?}");
+        let cbr = strs(&ffmpeg_args(Path::new("a.flac"), Path::new("x.mp3"), Action::Mp3 { mode: Mp3Mode::Cbr320, rate: 48_000 }).unwrap());
+        assert!(has(&cbr, ["-b:a", "320k"]) && has(&cbr, ["-ar", "48000"]) && has(&cbr, ["-f", "mp3"]), "{cbr:?}");
+    }
+
+    #[test]
+    fn mp3_copies_are_cached_as_mp3_and_trimmed_like_the_others() {
+        use crate::library::convert::Mp3Mode;
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache { dir: dir.path().to_path_buf() };
+        let t = Fake::default();
+        let mp3 = cache.converted(&t, Path::new("a.flac"), "a", "t", Action::Mp3 { mode: Mp3Mode::V0, rate: 44_100 }, None).unwrap();
+        assert_eq!(mp3.extension().unwrap(), "mp3");
+        let m4a = cache.converted(&t, Path::new("a.flac"), "a", "t", ALAC, None).unwrap();
+        assert_ne!(mp3, m4a);
+        age(&mp3, 300);
+        cache.trim(std::fs::metadata(&m4a).unwrap().len()).unwrap();
+        assert!(!mp3.exists() && m4a.exists(), "the old MP3 copy is trimmed too");
     }
 
     #[test]
@@ -310,6 +348,36 @@ mod tests {
         let err = cache.converted(&t, Path::new("a.flac"), "audio1", "tags1", ALAC, None).unwrap_err();
         assert!(err.contains("Invalid data"), "{err}");
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0, "no partial or finished file left");
+    }
+
+    /// Needs the ffmpeg sidecar in src-tauri/binaries. `cargo test --lib transcode -- --ignored`
+    #[test]
+    #[ignore]
+    fn flac_becomes_mp3_v0_with_id3_tags_for_music_players() {
+        use lofty::file::{AudioFile, TaggedFileExt};
+        use lofty::tag::{Accessor, TagExt};
+        let exe = Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries").join(DEV_SIDECAR);
+        assert!(exe.is_file(), "ffmpeg sidecar in src-tauri/binaries");
+        let ff = Ffmpeg { exe };
+        let dir = tempfile::tempdir().unwrap();
+        let wav = crate::audio::fixtures::wav(dir.path(), "src.wav", 96_000, 2, 24, 96_000);
+        let flac = dir.path().join("Hạ trắng.flac");
+        assert!(std::process::Command::new(&ff.exe).args(["-hide_banner", "-loglevel", "error", "-i"]).arg(&wav).arg(&flac).status().unwrap().success());
+        let mut f = lofty::read_from_path(&flac).unwrap();
+        let tag = f.primary_tag_mut().unwrap();
+        tag.set_title("Hạ trắng".into());
+        tag.set_artist("Khánh Ly".into());
+        tag.save_to_path(&flac, lofty::config::WriteOptions::default()).unwrap();
+
+        let cache = Cache { dir: dir.path().join("cache") };
+        let mode = crate::library::convert::Mp3Mode::V0;
+        let out = cache.converted(&ff, &flac, "audio", "tags", Action::Mp3 { mode, rate: 48_000 }, None).unwrap();
+        assert_eq!(out.extension().unwrap(), "mp3");
+        let mp3 = lofty::read_from_path(&out).unwrap();
+        assert_eq!(mp3.file_type(), lofty::file::FileType::Mpeg);
+        assert_eq!(mp3.properties().sample_rate(), Some(48_000));
+        let tag = mp3.tag(lofty::tag::TagType::Id3v2).expect("ID3v2 tag");
+        assert_eq!((tag.title().as_deref(), tag.artist().as_deref()), (Some("Hạ trắng"), Some("Khánh Ly")));
     }
 
     /// Needs the ffmpeg sidecar in src-tauri/binaries (not in git; see the F6.1 checklist entry).
