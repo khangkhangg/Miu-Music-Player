@@ -246,19 +246,19 @@ so downloads, progress, the now-playing column and the mini player are the podca
 
 ## Phase 9 – Other music players
 Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.md`.
-- [ ] **M.1 Find USB mass-storage players** — *Test first:* removable drives with a `Music` folder are offered (the folder keeps
+- [x] **M.1 Find USB mass-storage players** — *Test first:* removable drives with a `Music` folder are offered (the folder keeps
   its real name), fixed disks and drives without one are not; drives the user set up are players whatever they hold; a player is
   known by its volume serial (`vol:XXXXXXXX`), not its letter; a picked folder splits into drive + folder; per-player settings
   (folder, convert-to MP3 V0 / MP3 320 / AAC 256, formats copied as they are) are remembered and folders off the drive refused.
-  Built 2026-10-21, tests green. Drive listing checked on this PC (`player::volumes`, ignored test). **Waiting for a check in the
-  app with a USB stick**: the card appears by itself when the stick has a `Music` folder, else "Use a drive as a player…".
-- [ ] **M.2 Sync to a mass-storage player** — *Test first (fake drive):* liked songs land as `Artist\Album\NN Title.ext`; names FAT
+  Built 2026-10-21, tests green. Drive listing checked on this PC (`player::volumes`, ignored test). Verified in the app 2026-10-21:
+  the USB stick showed up as a player.
+- [x] **M.2 Sync to a mass-storage player** — *Test first (fake drive):* liked songs land as `Artist\Album\NN Title.ext`; names FAT
   refuses are made safe; a second sync does nothing; unliking removes only Miu's file and the folders it emptied; a file changed
   on the player, or one Miu did not put there, is never removed or overwritten; deleted songs are copied again; a tag edit moves
   the file; a new music folder moves the songs; formats the player cannot play go converted (MP3 via LAME, cached like the
   iPhone's); a copy of the wrong size is deleted and retried next time; a sync that does not fit stops before copying; progress.
   Built 2026-10-21, tests green; FLAC → MP3 V0 with ID3 tags checked with the real ffmpeg (ignored test); the whole sync ran
-  against a real drive letter (`subst`, ignored test with `MIU_PLAYER_DRIVE`). **Waiting for a check in the app with a USB stick.**
+  against a real drive letter (`subst`, ignored test with `MIU_PLAYER_DRIVE`). Verified in the app 2026-10-21: liked songs copied to a USB stick and play on the player.
 - [ ] **M.3 MTP (Android, Walkman)** — read-only probe built (`cargo run --bin mtp-probe`, `player::mtp`): lists WPD devices and their
   storages with space; works on this PC (found the USB disk as `MSC:`). No MTP device was available, so copying is not built;
   see `docs/MTP.md` for the design and open questions.
