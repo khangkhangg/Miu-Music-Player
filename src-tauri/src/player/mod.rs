@@ -8,3 +8,4 @@ pub mod sync;
 pub mod service;
 #[cfg(windows)]
 pub mod volumes;
+pub mod mtp;
