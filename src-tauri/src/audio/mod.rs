@@ -1,4 +1,5 @@
 pub mod decode;
+pub mod dual;
 pub mod eq;
 pub mod eq_service;
 pub mod exclusive;
