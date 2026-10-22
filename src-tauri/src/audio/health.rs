@@ -125,3 +125,72 @@ mod blame_tests {
         assert_eq!(behind(-0.03), Output::First);
     }
 }
+
+/// Watches how much audio an output takes compared with real time. A Bluetooth link in trouble
+/// keeps calling back on time but takes less audio (its own buffer is not draining), so over a
+/// second it falls clearly short of real time.
+#[derive(Debug, Default)]
+pub struct RateWatch {
+    last: Option<(f64, u64)>,
+}
+
+/// Taking less than this share of real time over a second counts as a dropout.
+pub const SLOW_SHARE: f64 = 0.93;
+
+impl RateWatch {
+    /// Look at the device's frame counter at time `t` (seconds); returns true when the second
+    /// that just ended fell short. Counters that went back (a flush) start over.
+    pub fn observe(&mut self, t: f64, frames: u64, rate: u32) -> bool {
+        let Some((t0, f0)) = self.last else {
+            self.last = Some((t, frames));
+            return false;
+        };
+        if frames < f0 || t < t0 {
+            self.last = Some((t, frames));
+            return false;
+        }
+        if t - t0 < 1.0 {
+            return false;
+        }
+        self.last = Some((t, frames));
+        let share = (frames - f0) as f64 / rate.max(1) as f64 / (t - t0);
+        share < SLOW_SHARE
+    }
+
+    /// Paused or restarted: the next second starts fresh.
+    pub fn reset(&mut self) {
+        self.last = None;
+    }
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::*;
+
+    #[test]
+    fn a_device_taking_audio_in_real_time_is_fine() {
+        let mut w = RateWatch::default();
+        assert!(!w.observe(0.0, 0, 44_100));
+        assert!(!w.observe(0.5, 22_050, 44_100), "less than a second: not judged yet");
+        assert!(!w.observe(1.0, 44_100, 44_100));
+        assert!(!w.observe(2.0, 87_000, 44_100), "1.4 % short is callback jitter");
+    }
+
+    #[test]
+    fn a_device_falling_short_of_real_time_is_a_dropout() {
+        let mut w = RateWatch::default();
+        w.observe(0.0, 0, 44_100);
+        assert!(w.observe(1.0, 40_100, 44_100), "91 % of real time");
+        assert!(!w.observe(2.0, 84_200, 44_100), "back to real time");
+    }
+
+    #[test]
+    fn a_flush_or_pause_starts_over() {
+        let mut w = RateWatch::default();
+        w.observe(0.0, 100_000, 44_100);
+        assert!(!w.observe(1.0, 2_000, 44_100), "counter went back: flushed");
+        w.reset();
+        assert!(!w.observe(5.0, 2_000, 44_100));
+        assert!(!w.observe(6.0, 46_100, 44_100));
+    }
+}

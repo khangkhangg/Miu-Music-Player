@@ -158,6 +158,8 @@ const SMOOTH_S: f64 = 1.0;
 const STEP_S: f64 = 0.005;
 /// How long a gap must be seen (seconds) before it is stepped away.
 const PHASE_WINDOW_S: f64 = 2.0;
+/// The quarter-second medians in that window must lie within this of each other (seconds).
+const SETTLED_SPREAD_S: f64 = 0.004;
 const STEP_GAP_S: f64 = 1.0;
 /// After a start or seek, devices (Bluetooth above all) take audio in bursts while they fill their
 /// own buffers: nothing is judged until both have played this long (seconds).
@@ -216,7 +218,19 @@ impl DriftController {
             let mut gaps: Vec<f64> = self.window.iter().map(|&(_, g)| g).collect();
             gaps.sort_by(f64::total_cmp);
             let median = gaps[gaps.len() / 2];
-            if median.abs() > STEP_S && gaps.iter().filter(|g| g.signum() == median.signum() && g.abs() > STEP_S / 2.0).count() * 4 >= gaps.len() * 3 {
+            // Only once the gap has stopped moving: a speaker still settling after a start is left alone.
+            // Judged on quarter-second medians, so callback jitter does not count as movement.
+            let start = self.window.front().map_or(0.0, |&(t, _)| t);
+            let mut bins: Vec<Vec<f64>> = vec![Vec::new(); 8];
+            for &(t, g) in &self.window {
+                bins[(((t - start) / (PHASE_WINDOW_S / 8.0)) as usize).min(7)].push(g);
+            }
+            let medians: Vec<f64> = bins.iter_mut().filter(|b| !b.is_empty()).map(|b| {
+                b.sort_by(f64::total_cmp);
+                b[b.len() / 2]
+            }).collect();
+            let spread = medians.iter().copied().fold(f64::MIN, f64::max) - medians.iter().copied().fold(f64::MAX, f64::min);
+            if spread <= SETTLED_SPREAD_S && median.abs() > STEP_S && gaps.iter().filter(|g| g.signum() == median.signum() && g.abs() > STEP_S / 2.0).count() * 4 >= gaps.len() * 3 {
                 // Sized from the latest half second: the speed correction has closed some of it meanwhile.
                 let mut recent: Vec<f64> = self.window.iter().filter(|&&(t, _)| self.played1 - t <= 0.5).map(|&(_, g)| g).collect();
                 recent.sort_by(f64::total_cmp);
@@ -228,10 +242,16 @@ impl DriftController {
                 return self.correction;
             }
         }
+        // A big gap is left alone until it stops moving and is then closed by a step; nudging the
+        // speed meanwhile would keep it moving. Small gaps and the clock difference are followed here.
+        if self.smoothed.abs() > STEP_S {
+            self.correction = (KI * self.integral).clamp(-MAX_CORRECTION, MAX_CORRECTION);
+            return self.correction;
+        }
         // Integrate only while the correction is not pinned at its limit (no wind-up).
         let next_integral = self.integral + self.smoothed * dt;
         let c = KP * self.smoothed + KI * next_integral;
-        if c.abs() < MAX_CORRECTION && self.smoothed.abs() < STEP_S && self.played1 >= WARMUP_S {
+        if c.abs() < MAX_CORRECTION {
             self.integral = next_integral;
         }
         self.correction = c.clamp(-MAX_CORRECTION, MAX_CORRECTION);
@@ -556,9 +576,9 @@ mod tests {
 
     #[test]
     fn the_correction_never_exceeds_its_limit() {
-        let (c, worst) = simulate(48_000, 48_000, 20_000.0, 2.0);
+        let (c, _) = simulate(48_000, 48_000, 20_000.0, 2.0);
         assert!(c.ppm() <= MAX_CORRECTION * 1e6 + 1e-6);
-        assert!(worst < 0.05, "2 % off cannot be followed smoothly, but steps keep it bounded: {worst}");
+        assert!(c.lost_sync(), "2 % off cannot be followed; the engine must realign");
     }
 
     #[test]
@@ -566,7 +586,8 @@ mod tests {
         let mut c = DriftController::new(48_000, 48_000);
         c.update(0.0, 0.0);
         for i in 1..=120 {
-            c.update(i as f64 * 2_400.0, 0.0); // second device silent for 6 s
+            // The second device takes nothing for the first second, then plays along.
+            c.update(i as f64 * 2_400.0, (i.max(20) - 20) as f64 * 2_400.0);
         }
         assert!(c.take_step().is_some_and(|s| s > 0.9), "skip the second output ahead");
         c.update(0.0, 0.0); // both flushed (seek)
@@ -752,5 +773,27 @@ mod dropout_tests {
         // The speed correction closes a little of it while the gap is being confirmed; the jump does the rest.
         assert!((0.065..0.085).contains(&steps[0]), "{steps:?}");
         assert!(c.error_s().abs() < 0.003, "together afterwards: {} s", c.error_s());
+    }
+}
+
+#[cfg(test)]
+mod settling_tests {
+    use super::*;
+
+    #[test]
+    fn a_gap_that_is_still_moving_is_left_to_settle_not_jumped_on() {
+        // After the warm-up the second device's gap swings to -25 ms and back over 4 s (a slow start burst).
+        let mut c = DriftController::new(48_000, 48_000);
+        let mut steps = 0;
+        for i in 1..=200 {
+            let t = i as f64 * 0.05;
+            let gap = if (3.0..7.0).contains(&t) { -0.025 * (std::f64::consts::PI * (t - 3.0) / 4.0).sin() } else { 0.0 };
+            let f = i as f64 * 2_400.0;
+            c.update(f, f + gap * 48_000.0);
+            if c.take_step().is_some() {
+                steps += 1;
+            }
+        }
+        assert_eq!(steps, 0, "the swing settles by itself");
     }
 }

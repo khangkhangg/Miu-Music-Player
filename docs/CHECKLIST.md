@@ -199,10 +199,12 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   (Bose waking up ~20 ms after the Klipsch) is stepped into line within a second instead of being learnt as drift.
   Lining up: nothing is judged for 3 s after a start, seek or pause (Bluetooth takes audio in bursts while it
   fills its buffer); a gap over 5 ms seen for 2 s (median, so bursts do not count) is closed in one jump, sized
-  from the last half second. Jumps are blamed on the output that fell behind. The second output only counts as gone
+  from the last half second. Big gaps are only jumped once they have stopped moving (quarter-second
+  medians within 4 ms); the speed correction only follows small gaps and the clock difference. Jumps are blamed on the output that fell behind. The second output only counts as gone
   if the first kept playing. Hands-off app runs on Klipsch + Bose: median 0.1–0.5 ms apart; jumps only after real
   dropouts.
-  Connection row: per-output health over the last minute (late device callbacks, realignment jumps: steady / a few
+  Connection row: per-output health over the last minute (late device callbacks, a second of audio taken clearly slower than real time (how a
+  struggling Bluetooth link shows: it calls back on time but takes less), jumps blamed on the output that fell behind: steady / a few
   dropouts / keeps dropping out) and battery level where Windows has one (Bose: 40 %). No signal strength: Windows
   does not expose RSSI for connected Bluetooth audio devices.
 - [ ] **Manual:** line up the two Bluetooth speakers by ear with the clicks, then stereo split on music; switch the
