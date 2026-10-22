@@ -3,6 +3,9 @@ pub mod audio;
 pub mod device;
 pub mod library;
 pub mod lyrics;
+pub mod media_controls;
+#[cfg(windows)]
+pub mod media_controls_win;
 pub mod player;
 pub mod podcast;
 pub mod audiobook;
@@ -103,6 +106,8 @@ pub fn run() {
             library::service::start(app.handle().clone(), db.clone(), library_watch);
             update::start(app.handle().clone(), db.clone());
             audio::eq_service::start(&db, &player);
+            #[cfg(windows)]
+            media_controls_win::start(app.handle(), player.clone());
             audio::service::start(app.handle().clone(), player.clone(), db.clone());
             audio::visualizer::start(app.handle().clone(), player, visualizer_on);
             Ok(())

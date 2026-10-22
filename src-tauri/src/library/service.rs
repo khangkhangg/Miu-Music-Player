@@ -289,22 +289,25 @@ pub fn undo_edit(app: AppHandle, db: State<'_, SharedDb>, last: State<'_, LastEd
 pub fn art_response(db: &SharedDb, uri_path: &str) -> tauri::http::Response<Vec<u8>> {
     let not_found = || tauri::http::Response::builder().status(404).body(Vec::new()).unwrap();
     let Some((id, size)) = crate::library::art::parse_request(uri_path) else { return not_found() };
-    let cover = db.lock().ok().and_then(|d| crate::library::artfetch::cover_of(&d, id));
-    let cache = crate::util::paths::local_appdata_root().join("MiuMusic").join("art");
-    // Embedded first; otherwise the cover found online for the song's album.
-    let made = match cover {
-        Some(crate::library::artfetch::Cover::Embedded { path, mtime }) => crate::library::art::cached_thumbnail(&cache, id, mtime, Path::new(&path), size),
-        Some(crate::library::artfetch::Cover::Fetched(file)) => crate::library::art::cached_file_thumbnail(&cache, &file, size),
-        None => return not_found(),
-    };
-    match made {
-        Ok(Some(jpg)) => tauri::http::Response::builder()
+    match cover_jpeg(db, id, size) {
+        Some(jpg) => tauri::http::Response::builder()
             .header("Content-Type", "image/jpeg")
             .header("Cache-Control", "max-age=86400")
             .body(jpg)
             .unwrap(),
-        _ => not_found(),
+        None => not_found(),
     }
+}
+
+/// A song's cover as a `size`×`size` JPEG: embedded first, otherwise the one found online for its album.
+pub fn cover_jpeg(db: &SharedDb, id: i64, size: u32) -> Option<Vec<u8>> {
+    let cover = db.lock().ok().and_then(|d| crate::library::artfetch::cover_of(&d, id))?;
+    let cache = crate::util::paths::local_appdata_root().join("MiuMusic").join("art");
+    let made = match cover {
+        crate::library::artfetch::Cover::Embedded { path, mtime } => crate::library::art::cached_thumbnail(&cache, id, mtime, Path::new(&path), size),
+        crate::library::artfetch::Cover::Fetched(file) => crate::library::art::cached_file_thumbnail(&cache, &file, size),
+    };
+    made.ok().flatten()
 }
 
 // ---- Covers found online for albums without one ----

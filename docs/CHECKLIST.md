@@ -210,6 +210,16 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   Auto-calibrate (microphone at the listening spot): clicks for timing, short noise bursts for loudness (headset
   mics gate out steady sound), sets and saves delay and balance; a speaker's own Bluetooth mic is never offered.
   On Klipsch + Bose with a USB headset mic: run 1 heard +2.5 ms / +4.0 dB and corrected, run 2 heard +2 ms / -0.4 dB.
+- [x] **F7.10 Windows media controls (lock screen, media keys)** — *Test first:* player state → SMTC status
+  (closed / stopped / playing / paused), episode wins over song, buttons → the UI's player commands (stop = pause),
+  title/artist/album for tagged and untagged songs and for episodes/chapters (from the library), timeline sent only on a
+  new track, play/pause, a seek or every 5 s. `media_controls.rs` (pure) + `media_controls_win.rs` (SMTC through
+  `ISystemMediaTransportControlsInterop::GetForWindow` on the main window; Miu is unpackaged). Cover: the song's
+  thumbnail (300 px), a show's artwork URL for episodes. Hidden while nothing is loaded.
+  Verified 2026-10-22 on this PC through Windows' media session API (what the lock screen and Quick Settings read):
+  title, artist, album, cover and length shown; play, pause, next, previous and seek from the session work; keyboard
+  media keys (play/pause, next, previous) work with another app focused; taskbar thumbnail buttons still work.
+  **Still to check by eye:** the lock screen (Win+L) panel and a Bluetooth headset button.
 - [ ] **Manual:** line up the two Bluetooth speakers by ear with the clicks, then stereo split on music; switch the
   second speaker off mid-song (should drop to one output after ~2 s); walk a speaker out of range and watch the
   connection row turn amber/red. Not tried yet.

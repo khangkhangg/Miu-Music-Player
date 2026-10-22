@@ -165,6 +165,17 @@ impl PlayerHandle {
         self.with(f).ok_or_else(|| "no audio output device".to_string())
     }
 
+    /// A press on Windows' media controls: the same player calls as the UI's buttons.
+    pub fn run(&self, command: crate::media_controls::Command) -> Result<(), String> {
+        use crate::media_controls::Command;
+        match command {
+            Command::Resume => self.act(Player::resume),
+            Command::Pause => self.act(Player::pause),
+            Command::Skip(by) => self.act(|p| p.skip(by)),
+            Command::Seek(ms) => self.act(|p| p.seek(ms)),
+        }
+    }
+
     /// Move playback to another output device or mode, keeping queue, song, position, volume, EQ and pause.
     pub fn switch_output(&self, device: Option<&str>, exclusive: bool, second: Option<SecondOutput>, eq: crate::audio::eq::EqSettings) -> Result<(), String> {
         let mut slot = self.player.lock().map_err(|e| e.to_string())?;
@@ -210,6 +221,8 @@ pub fn start(app: AppHandle, handle: SharedPlayer, db: SharedDb) {
                 }
             }
             if last.as_ref() != Some(&ev) {
+                #[cfg(windows)]
+                crate::media_controls_win::show(&ev, &db);
                 let _ = app.emit("player", &ev);
                 last = Some(ev);
             }
