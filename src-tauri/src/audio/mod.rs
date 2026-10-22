@@ -4,6 +4,7 @@ pub mod dual;
 pub mod eq;
 pub mod eq_service;
 pub mod health;
+pub mod listen;
 pub mod exclusive;
 #[cfg(test)]
 pub mod fixtures;
