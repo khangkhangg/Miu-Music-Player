@@ -290,6 +290,16 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   Built 2026-10-21 (`player::wpd_fs`, `mtp::players`), tests green. **Not tried on a real device yet**: plug in a phone (unlocked,
   File transfer) or Walkman, run `cargo test --lib wpd_fs -- --ignored --nocapture`, then sync from its card. See docs/MTP.md.
 
+## Phase 10 – Lyrics
+- [x] **L.1 Lyrics, free** — *Test first:* LRC parsing (stamp styles, several stamps a line, offset, metadata), the
+  current line, LRCLIB requests and answers (exact match, then searches with the main artist and a clean title, then
+  free text; best result by length, synced first), the order tags → `.lrc` beside the song → cache → LRCLIB, "not
+  found" cached for a week, a failed request not cached and reported as unreachable. Lyrics button on the cover next to
+  the thumbs; the lyrics replace Up next; synced lines highlight and stay centred as the song plays, click a line to
+  play from it; Settings: look up online (default on). Tried in the app: JVKE "Golden Hour" from LRCLIB, 30 synced lines,
+  highlight following the song. Sampling 15 library songs found lyrics for 5 (several others have junk tags).
+- [ ] **Manual:** sing along to a few Vietnamese songs; check LRCLIB coverage for your library.
+
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
   2026-10-20: path resolution tested (next to the app, or `src-tauri/binaries` from `target/<profile>`); `externalBin` + licence

@@ -9,6 +9,7 @@ import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
+import { lineAt, livePosition, lyricsNote } from './lyrics.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel, connectionRows, calibrationText } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
@@ -147,6 +148,7 @@ if (invoke) {
   document.getElementById('delete-all').addEventListener('click', () => confirmDelete(shown.filter(x => x.rating === -1)));
   setupEq();
   setupOutput();
+  setupLyrics();
   document.getElementById('open-mini').addEventListener('click', () => invoke('open_mini'));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
   document.getElementById('add-folder').addEventListener('click', pickFolder);
@@ -323,6 +325,7 @@ function showPlayer(event) {
   }
   const songChanged = event?.songId !== playerState?.songId || event?.episodeId !== playerState?.episodeId;
   playerState = event;
+  lyricsOnPlayer(event);
   const episode = event?.episodeId != null ? episodeInfo(event.episodeId) : null;
   const np = episode ? nowPlaying({ ...event, songId: 'episode' }, new Map([['episode', episode]])) : nowPlaying(event, songsById);
   for (const id of ['np-back15', 'np-fwd30']) document.getElementById(id).hidden = !episode;
@@ -1017,6 +1020,100 @@ function renderSecond(state) {
   $('out-balance-val').textContent = balanceLabel(state.balance);
 }
 
+// ---- Lyrics (L) ----
+let lyricsShown = false;
+const lyricsCache = new Map(); // song id → lyrics, or the pending request for them
+let lyricsSong = null; // the song whose lyrics are on show
+let lyricsLines = []; // its synced lines
+let lyricsLine = -1; // the line highlighted
+let lyricsEventAt = 0; // when the last player event came (performance.now)
+let lyricsScrolledAt = 0; // when the listener last scrolled the lyrics themselves
+
+function setupLyrics() {
+  const $ = id => document.getElementById(id);
+  $('np-lyrics').addEventListener('click', () => {
+    lyricsShown = !lyricsShown;
+    invoke('set_app_setting', { name: 'lyricsShown', value: lyricsShown }).catch(() => {});
+    showLyricsView();
+  });
+  $('lyrics-lines').addEventListener('click', e => {
+    const li = e.target.closest('li[data-ms]');
+    if (li) invoke('player_seek', { ms: Number(li.dataset.ms) });
+  });
+  for (const kind of ['wheel', 'touchmove', 'keydown']) {
+    $('np-lyrics-view').addEventListener(kind, () => { lyricsScrolledAt = Date.now(); }, { passive: true });
+  }
+  invoke('app_settings').then(s => { lyricsShown = s.lyricsShown; showLyricsView(); }).catch(() => {});
+  // Follow the song between player events; cheap, and idle unless lyrics are on show and playing.
+  setInterval(followLyrics, 100);
+}
+
+function lyricsOnPlayer(ev) {
+  lyricsEventAt = performance.now();
+  if (lyricsShown && (ev?.songId ?? null) !== lyricsSong) showLyricsView();
+}
+
+/** Show or hide the lyrics (in place of Up next) and load the playing song's. */
+function showLyricsView() {
+  const $ = id => document.getElementById(id);
+  const id = playerState?.episodeId == null ? (playerState?.songId ?? null) : null;
+  const on = lyricsShown && id != null;
+  $('np-lyrics').classList.toggle('on', lyricsShown);
+  $('np-lyrics').setAttribute('aria-pressed', String(lyricsShown));
+  $('np-lyrics-view').hidden = !on;
+  document.querySelector('.up-next').hidden = on;
+  if (on && id !== lyricsSong) loadLyrics(id);
+}
+
+async function loadLyrics(id) {
+  lyricsSong = id;
+  renderLyrics(null);
+  let pending = lyricsCache.get(id);
+  if (!pending) {
+    pending = invoke('song_lyrics', { id }).catch(() => ({ synced: [], plain: null, instrumental: false, source: 'none' }));
+    lyricsCache.set(id, pending);
+  }
+  const lyrics = await pending;
+  // A failed request is tried again the next time the song plays.
+  if (lyrics.source === 'unreachable') lyricsCache.delete(id);
+  else lyricsCache.set(id, lyrics);
+  if (lyricsSong === id) renderLyrics(lyrics);
+}
+
+function renderLyrics(lyrics) {
+  const $ = id => document.getElementById(id);
+  $('lyrics-note').textContent = lyricsNote(lyrics);
+  lyricsLines = lyrics?.synced ?? [];
+  lyricsLine = -1;
+  $('lyrics-lines').replaceChildren(...lyricsLines.map(l => {
+    const li = document.createElement('li');
+    li.dataset.ms = String(l.ms);
+    li.dir = 'auto';
+    li.title = t('lyrics.seek');
+    if (l.text) li.textContent = l.text;
+    else li.className = 'gap';
+    return li;
+  }));
+  const plain = !lyricsLines.length && lyrics?.plain;
+  $('lyrics-plain').hidden = !plain;
+  $('lyrics-plain').textContent = plain || '';
+  $('np-lyrics-view').scrollTop = 0;
+}
+
+function followLyrics() {
+  if (!lyricsShown || !lyricsLines.length || document.getElementById('np-lyrics-view').hidden) return;
+  const now = lineAt(lyricsLines, livePosition(playerState, lyricsEventAt, performance.now()));
+  if (now === lyricsLine) return;
+  const items = document.getElementById('lyrics-lines').children;
+  items[lyricsLine]?.classList.remove('now');
+  lyricsLine = now;
+  const li = items[now];
+  if (!li) return;
+  li.classList.add('now');
+  // Keep the sung line in the middle, unless the listener is scrolling the lyrics themselves.
+  if (Date.now() - lyricsScrolledAt > 4000) li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
 // ---- Tag editor (F9) ----
 let editing = []; // [{ id, path, tags }] in list order
 let perSong = []; // per song: field → typed value, only fields that were touched
@@ -1227,6 +1324,7 @@ function showSettings(s) {
   $('set-lossless').value = s.conversion.lossless;
   $('set-hires').value = s.conversion.hiRes;
   $('set-exclusive').checked = s.exclusiveOutput;
+  $('set-lyrics-online').checked = s.lyricsOnline;
   $('set-podcast-cleanup').value = s.podcastCleanupDays == null ? 'never' : String(s.podcastCleanupDays);
   $('set-auto-update').checked = s.autoUpdate;
 }
@@ -1300,6 +1398,10 @@ function setupSettings(languageSetting) {
   $('track-list').addEventListener('click', e => { if (e.target.closest('.track-play')) playTrack(e.target.closest('.track')); });
   $('track-list').addEventListener('dblclick', e => { if (!e.target.closest('button')) playTrack(e.target.closest('.track')); });
   const reload = () => invoke('app_settings').then(showSettings);
+  $('set-lyrics-online').addEventListener('change', e => {
+    lyricsCache.clear(); // songs with none may have some online now, or should not be looked up
+    invoke('set_app_setting', { name: 'lyricsOnline', value: e.target.checked }).then(showSettings);
+  });
   $('set-theme').addEventListener('change', () => invoke('set_app_setting', { name: 'theme', value: $('set-theme').value }).then(showSettings));
   const conversion = () => invoke('set_app_setting', { name: 'conversion', value: { lossless: $('set-lossless').value, hiRes: $('set-hires').value } })
     .then(showSettings).then(showSyncPreview);

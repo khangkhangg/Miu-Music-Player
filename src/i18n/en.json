@@ -527,5 +527,16 @@
   "settings.updates": "Updates",
   "settings.autoUpdate": "Check for updates automatically",
   "settings.checkNow": "Check now",
-  "settings.checking": "Checking…"
+  "settings.checking": "Checking…",
+  "lyrics.show": "Lyrics",
+  "lyrics.loading": "Looking for lyrics…",
+  "lyrics.none": "No lyrics found for this song.",
+  "lyrics.instrumental": "Instrumental",
+  "lyrics.from.tags": "Lyrics from the song file",
+  "lyrics.from.file": "Lyrics from the .lrc file",
+  "lyrics.from.online": "Lyrics from LRCLIB",
+  "lyrics.notTimed": "not timed",
+  "lyrics.seek": "Play from this line",
+  "settings.lyricsOnline": "Look up lyrics online (LRCLIB, free) when a song has none of its own",
+  "lyrics.unreachable": "Could not reach the lyrics service. Try again later."
 }

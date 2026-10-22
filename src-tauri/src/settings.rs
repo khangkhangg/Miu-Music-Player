@@ -224,6 +224,10 @@ pub struct AppSettings {
     pub exclusive_output: bool,
     pub podcast_cleanup_days: Option<u32>,
     pub auto_update: bool,
+    /// Look lyrics up online (LRCLIB) when a song has none of its own.
+    pub lyrics_online: bool,
+    /// The lyrics view is open in the now-playing column.
+    pub lyrics_shown: bool,
 }
 
 pub fn all(db: &Db) -> AppSettings {
@@ -238,6 +242,8 @@ pub fn all(db: &Db) -> AppSettings {
         exclusive_output: exclusive_output(db),
         podcast_cleanup_days: podcast_cleanup_days(db),
         auto_update: auto_update(db),
+        lyrics_online: lyrics_online(db),
+        lyrics_shown: lyrics_shown(db),
     }
 }
 
@@ -264,8 +270,23 @@ pub fn change(db: &Db, name: &str, value: &serde_json::Value) -> std::result::Re
         "exclusiveOutput" => set_exclusive_output(db, get(value)?).map_err(db_err),
         "podcastCleanupDays" => set_podcast_cleanup_days(db, get(value)?).map_err(db_err),
         "autoUpdate" => db.set_setting_json(AUTO_UPDATE, &get::<bool>(value)?).map_err(db_err),
+        "lyricsOnline" => db.set_setting_json(LYRICS_ONLINE, &get::<bool>(value)?).map_err(db_err),
+        "lyricsShown" => db.set_setting_json(LYRICS_SHOWN, &get::<bool>(value)?).map_err(db_err),
         _ => Err(format!("unknown setting {name:?}")),
     }
+}
+
+const LYRICS_ONLINE: &str = "lyrics_online";
+const LYRICS_SHOWN: &str = "lyrics_shown";
+
+/// Look lyrics up on LRCLIB when a song has none of its own (default: yes).
+pub fn lyrics_online(db: &Db) -> bool {
+    db.setting_json::<bool>(LYRICS_ONLINE).ok().flatten().unwrap_or(true)
+}
+
+/// The lyrics view is open (default: no).
+pub fn lyrics_shown(db: &Db) -> bool {
+    db.setting_json::<bool>(LYRICS_SHOWN).ok().flatten().unwrap_or(false)
 }
 
 const PODCAST_CLEANUP_DAYS: &str = "podcast_cleanup_days";
@@ -602,6 +623,8 @@ mod schema_tests {
             exclusive_output: false,
             podcast_cleanup_days: Some(7),
             auto_update: true,
+            lyrics_online: true,
+            lyrics_shown: false,
         });
     }
 
@@ -611,10 +634,13 @@ mod schema_tests {
         change(&db, "theme", &serde_json::json!("dark")).unwrap();
         change(&db, "miniOnTop", &serde_json::json!(false)).unwrap();
         change(&db, "visualizerStyle", &serde_json::json!("line")).unwrap();
+        change(&db, "lyricsOnline", &serde_json::json!(false)).unwrap();
+        change(&db, "lyricsShown", &serde_json::json!(true)).unwrap();
         change(&db, "conversion", &serde_json::json!({ "hiRes": "alac16_44", "lossless": "aac256" })).unwrap();
         let s = all(&db);
         assert_eq!((s.theme.as_str(), s.mini_on_top, s.visualizer_style.as_str()), ("dark", false, "line"));
         assert_eq!(s.conversion, Policy { hi_res: HiRes::Alac16_44, lossless: Lossless::Aac256 });
+        assert!(!s.lyrics_online && s.lyrics_shown);
     }
 
     #[test]

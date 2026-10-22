@@ -166,7 +166,7 @@ pub fn app_settings(db: State<'_, SharedDb>) -> Result<crate::settings::AppSetti
 /// Change a setting that needs no other action (theme, conversion) and tell every window.
 #[tauri::command]
 pub fn set_app_setting(name: String, value: serde_json::Value, app: AppHandle, db: State<'_, SharedDb>) -> Result<crate::settings::AppSettings, String> {
-    if !["theme", "conversion", "podcastCleanupDays"].contains(&name.as_str()) {
+    if !["theme", "conversion", "podcastCleanupDays", "autoUpdate", "lyricsOnline", "lyricsShown"].contains(&name.as_str()) {
         return Err(format!("{name} has its own command"));
     }
     let all = {

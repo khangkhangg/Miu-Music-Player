@@ -89,6 +89,12 @@ pub fn read_tags_with(path: &Path, forced: Option<&'static encoding_rs::Encoding
     Ok(t)
 }
 
+/// Lyrics written in the file's tags (unsynced lyrics frames; often LRC text), if any.
+pub fn read_lyrics(path: &Path) -> Option<String> {
+    let file = lofty::read_from_path(path).ok()?;
+    file.tags().iter().find_map(|t| t.get_string(&ItemKey::Lyrics).map(str::trim).filter(|s| !s.is_empty()).map(String::from))
+}
+
 /// The front cover, or else the first picture in the tag.
 pub fn read_artwork(path: &Path) -> Result<Option<Artwork>, String> {
     let file = lofty::read_from_path(path).map_err(|e| e.to_string())?;
@@ -351,5 +357,24 @@ mod quality_tests {
         assert_eq!(t.bitrate_kbps, Some(128));
         assert_eq!(t.sample_rate, Some(44_100));
         assert_eq!(t.bit_depth, None);
+    }
+}
+
+#[cfg(test)]
+mod lyrics_tests {
+    use super::fixtures::*;
+    use super::*;
+    use lofty::config::WriteOptions;
+    use lofty::tag::{TagExt, TagType};
+
+    #[test]
+    fn reads_lyrics_written_in_the_tags() {
+        let d = tempfile::tempdir().unwrap();
+        let p = silent_mp3(d.path(), "a.mp3");
+        assert_eq!(read_lyrics(&p), None, "none yet");
+        let mut tag = Tag::new(TagType::Id3v2);
+        tag.insert_text(ItemKey::Lyrics, "[00:01.00] Mưa vẫn mưa bay".into());
+        tag.save_to_path(&p, WriteOptions::default()).unwrap();
+        assert_eq!(read_lyrics(&p).as_deref(), Some("[00:01.00] Mưa vẫn mưa bay"));
     }
 }

@@ -373,6 +373,14 @@ div.tile { cursor: default; }
 .up-next li { display: flex; align-items: center; gap: 12px; font-size: 13px; }
 .up-next .thumb { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: var(--surface-raised); flex: none; display: grid; place-items: center; }
 .up-next .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.np-lyrics { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 32px; scroll-behavior: smooth; -webkit-mask-image: linear-gradient(transparent, #000 28px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(transparent, #000 28px, #000 calc(100% - 40px), transparent); }
+.lyrics-note { font-size: 11px; text-align: center; margin: 0 0 12px; }
+.lyrics-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.lyrics-lines li { font-size: 15px; line-height: 1.35; color: var(--text-muted); cursor: pointer; transition: color 0.2s ease, transform 0.2s ease; overflow-wrap: anywhere; }
+.lyrics-lines li:hover { color: var(--text); }
+.lyrics-lines li.gap { height: 10px; }
+.lyrics-lines li.now { color: var(--accent-ink, var(--accent)); font-weight: 600; transform: scale(1.04); }
+.lyrics-plain { white-space: pre-wrap; text-align: center; font-size: 14px; line-height: 1.6; color: var(--text); }
 .up-next .thumb svg { width: 14px; height: 14px; fill: none; stroke: var(--text-muted); stroke-width: 1.6; }
 .up-next .text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .up-next .text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

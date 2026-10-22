@@ -2,6 +2,7 @@ pub mod apple;
 pub mod audio;
 pub mod device;
 pub mod library;
+pub mod lyrics;
 pub mod player;
 pub mod podcast;
 pub mod audiobook;
@@ -166,6 +167,7 @@ pub fn run() {
             audio::service::set_dual_balance,
             audio::service::output_align,
             audio::service::calibrate_outputs,
+            lyrics::service::song_lyrics,
             audio::service::player_shuffle,
             audio::service::play_episode,
             audio::service::play_chapters,
