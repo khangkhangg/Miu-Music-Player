@@ -45,7 +45,7 @@ quick-xml = "0.41"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 libloading = "0.8"
-windows-sys = { version = "0.60", features = ["Win32_System_LibraryLoader", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_Debug"] }
+windows-sys = { version = "0.60", features = ["Win32_System_LibraryLoader", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_Debug", "Win32_System_Threading"] }
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_Devices", "Win32_Devices_PortableDevices", "Win32_Devices_DeviceAndDriverInstallation", "Win32_Devices_Properties", "Win32_System_Com_StructuredStorage", "Win32_System_WinRT", "Foundation", "Media", "Storage_Streams"] }
 wasapi = "0.26.0"
 # Same version wry uses; only for the WebView2 memory target (windows.rs).

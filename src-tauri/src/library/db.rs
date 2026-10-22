@@ -141,6 +141,14 @@ pub const MIGRATIONS: &[&str] = &[
         bytes INTEGER NOT NULL,
         PRIMARY KEY (device, song_id)
      ) STRICT;",
+    // 16: DJ mode song analysis (D.1), JSON `dj::analysis::Analysis`; size/mtime say which file it was
+    "CREATE TABLE dj_analysis (
+        song_id INTEGER PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
+        size INTEGER NOT NULL,
+        mtime INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        analyzed_at INTEGER NOT NULL
+     ) STRICT;",
 ];
 
 #[derive(Debug, thiserror::Error)]

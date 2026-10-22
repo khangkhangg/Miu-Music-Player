@@ -320,6 +320,21 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   buttons. Tried with real key presses on this PC: every action did its job; rebinding, clash message, Esc, Delete
   and reset checked in Settings. Keys Windows will not give Miu are marked in Settings.
 
+## Phase 12 – DJ mode (spec: `docs/DJ_MODE.md`)
+- [x] **D.0 One vocabulary of DJ actions** — *Test first:* actions travel as plain JSON for the screen, keyboard
+  and controller mappings.
+- [x] **D.1 Song analysis** — *Test first:* tempo and beat grid on synthetic beats, downbeat, major/minor key
+  (Camelot) and compatible keys, energy, mix points skipping silence and fades, low confidence for beatless noise.
+  Tried on real songs: about 0.4 s a song in a release build; ballads give low beat confidence.
+- [x] **D.1 Background analyser** — *Test first:* results kept per song and file version (re-analysed when the
+  file changes, removed with the song), liked songs first, disliked skipped, undecodable files recorded once.
+  Runs at background priority a minute after launch and when DJ mode asks for progress.
+- [ ] **D.2 DJ engine** — two decks, tempo ±8 %, 3-band EQ with kill, filter, gain, crossfader, headphone cue.
+- [ ] **D.3 Auto DJ** — picker (key, tempo, energy curve) and transition planner.
+- [ ] **D.4 DJ screen and party screen**.
+- [ ] **D.5 Hands-on** — hot cues, loops, effects, party pads, keyboard map.
+- [ ] **D.6 Controllers** — MIDI, five built-in mappings, MIDI learn.
+
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
   2026-10-20: path resolution tested (next to the app, or `src-tauri/binaries` from `target/<profile>`); `externalBin` + licence

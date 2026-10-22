@@ -112,6 +112,7 @@ pub fn run() {
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db.clone(), library_watch);
             update::start(app.handle().clone(), db.clone());
+            dj::service::start(app.handle().clone(), db.clone());
             shortcuts_service::apply(app.handle(), &db);
             audio::eq_service::start(&db, &player);
             #[cfg(windows)]
@@ -186,6 +187,8 @@ pub fn run() {
             audio::service::output_align,
             audio::service::calibrate_outputs,
             lyrics::service::song_lyrics,
+            dj::service::dj_analysis_progress,
+            dj::service::dj_song_analysis,
             audio::service::player_shuffle,
             audio::service::play_episode,
             audio::service::play_chapters,

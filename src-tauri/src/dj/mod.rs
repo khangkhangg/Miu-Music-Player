@@ -2,3 +2,5 @@
 
 pub mod actions;
 pub mod analysis;
+pub mod service;
+pub mod store;
