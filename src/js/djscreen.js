@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, fits, songMeta,
-  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns,
+  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats,
 } from './dj.js';
 
 const POLL_MS = 50;
@@ -94,6 +94,18 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
       nudge.addEventListener('pointerdown', () => act({ type: 'nudge', deck: side, amount: Number(nudge.dataset.amount) }));
       for (const ev of ['pointerup', 'pointerleave']) nudge.addEventListener(ev, () => act({ type: 'nudge', deck: side, amount: 0 }));
     }
+    // Hands-on: hot cues (right-click clears), beat loops, effects.
+    for (const pad of deck.querySelectorAll('.dj-hotpad')) {
+      const slot = Number(pad.dataset.slot);
+      pad.addEventListener('click', () => act({ type: 'hotCue', deck: side, slot }));
+      pad.addEventListener('contextmenu', (e) => { e.preventDefault(); act({ type: 'clearHotCue', deck: side, slot }); });
+    }
+    for (const b of deck.querySelectorAll('[data-loop]')) {
+      b.addEventListener('click', () => act({ type: 'loop', deck: side, beats: b.dataset.loop === 'off' ? null : Number(b.dataset.loop) }));
+    }
+    for (const b of deck.querySelectorAll('[data-fx]')) {
+      b.addEventListener('click', () => act({ type: 'effect', deck: side, effect: b.dataset.fx, on: b.getAttribute('aria-pressed') !== 'true' }));
+    }
     // The platter: drag round it to nudge a playing song or move through a paused one.
     const platter = deck.querySelector('.dj-platter');
     platter.addEventListener('pointerdown', (e) => {
@@ -134,6 +146,23 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
   xfader.addEventListener('input', () => { dragging = xfader; act({ type: 'crossfader', value: Number(xfader.value) }); });
   xfader.addEventListener('change', () => { dragging = null; });
   xfader.addEventListener('dblclick', () => { xfader.value = '0'; act({ type: 'crossfader', value: 0 }); });
+
+  for (const b of root.querySelectorAll('[data-pad]')) b.addEventListener('click', () => act({ type: 'pad', slot: Number(b.dataset.pad) }));
+
+  // The DJ keyboard while the booth is open (not while typing in the search box or a menu).
+  const held = new Map();
+  document.addEventListener('keydown', (e) => {
+    if (root.hidden || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.target.closest?.('input[type="search"], select')) return;
+    const k = keyAction(e, state);
+    if (!k) return;
+    e.preventDefault();
+    act(k.down);
+    if (k.up) held.set(e.code, k.up);
+  });
+  document.addEventListener('keyup', (e) => {
+    const up = held.get(e.code);
+    if (up) { held.delete(e.code); act(up); }
+  });
 
   const sendAuto = () => invoke('dj_set_auto', { curve: $('dj-curve').value, queue }).catch(() => {});
   $('dj-auto').addEventListener('change', (e) => act({ type: 'autoDj', on: e.target.checked }));
@@ -237,6 +266,11 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     const tempo = el.querySelector('[data-ctl="tempo"]');
     if (dragging !== tempo) tempo.value = String(d.tempo);
     el.querySelector('[data-ctl="play"]').classList.toggle('on', d.playing);
+    for (const pad of el.querySelectorAll('.dj-hotpad')) pad.classList.toggle('set', d.hotCues?.[Number(pad.dataset.slot)] != null);
+    const beats = loopBeats(d);
+    for (const b of el.querySelectorAll('[data-loop]')) b.classList.toggle('on', b.dataset.loop === 'off' ? !!d.loopS : Number(b.dataset.loop) === beats);
+    el.querySelector('[data-fx="echo"]').setAttribute('aria-pressed', String(!!d.echo));
+    el.querySelector('[data-fx="filterSweep"]').setAttribute('aria-pressed', String(!!d.sweep));
     // One turn per 1.8 s of music, like a record at 33 1/3: the disc shows where the song is.
     el.querySelector('.dj-platter-disc').style.transform = `rotate(${((d.positionS / 1.8) % 1) * 360}deg)`;
     field('onair').hidden = state.onAir !== side;
@@ -365,6 +399,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
       return;
     }
     translatePage(root);
+    root.querySelector('.dj-brand').title = t('dj.keysHelp');
     root.hidden = false;
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];

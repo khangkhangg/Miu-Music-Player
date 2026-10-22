@@ -71,6 +71,10 @@ pub struct DeckStatus {
     pub tempo: f64,
     pub level: f32,
     pub loading: bool,
+    pub hot_cues: [Option<f64>; 4],
+    pub loop_s: Option<(f64, f64)>,
+    pub echo: bool,
+    pub sweep: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -341,6 +345,10 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                         tempo: d.tempo(),
                         level: levels[i],
                         loading,
+                        hot_cues: d.hot_cues(),
+                        loop_s: d.loop_s(),
+                        echo: mixer.effects(side).0,
+                        sweep: mixer.effects(side).1,
                     };
                 }
                 s.crossfader = mixer.crossfader();

@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 
-use super::actions::{Action, Band, Deck as Side};
+use super::actions::{Action, Band, Deck as Side, Effect};
 use super::analysis::Analysis;
 use super::autodj::{self, Transition};
 use super::deck::Deck;
@@ -33,6 +33,7 @@ struct Mixing {
     duration_s: f64,
     incoming: Side,
     incoming_started: bool,
+    echoing: bool,
 }
 
 #[derive(Default)]
@@ -164,7 +165,7 @@ impl AutoMix {
                 m.apply(&Action::Sync { deck: incoming });
             }
             flatten(m, incoming);
-            self.mixing = Some(Mixing { transition, start_s: pos, duration_s: transition.duration_s(&from), incoming, incoming_started: false });
+            self.mixing = Some(Mixing { transition, start_s: pos, duration_s: transition.duration_s(&from), incoming, incoming_started: false, echoing: false });
         }
         self.step(m, live)
     }
@@ -193,11 +194,16 @@ impl AutoMix {
             mx.incoming_started = true;
         }
         let mv = autodj::moves(mx.transition, progress);
+        let echoing = mx.echoing;
+        mx.echoing = mv.outgoing_echo;
         let incoming = mx.incoming;
         m.apply(&Action::Crossfader { value: mv.crossfader * full(incoming) });
         m.apply(&Action::Eq { deck: live, band: Band::Low, value: mv.outgoing_low });
         m.apply(&Action::Eq { deck: incoming, band: Band::Low, value: mv.incoming_low });
         m.apply(&Action::Filter { deck: live, value: mv.outgoing_filter });
+        if mv.outgoing_echo != echoing {
+            m.apply(&Action::Effect { deck: live, effect: Effect::Echo, on: mv.outgoing_echo });
+        }
         if progress < 1.0 {
             return None;
         }

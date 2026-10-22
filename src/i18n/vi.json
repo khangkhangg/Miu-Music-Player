@@ -614,5 +614,19 @@
   "dj.enterFailed": "Không mở được chế độ DJ: {message}",
   "dj.played": "Đã phát",
   "dj.nothingOnAir": "Chưa phát bài nào",
-  "dj.mixer": "Bàn trộn"
+  "dj.mixer": "Bàn trộn",
+  "dj.hotCues": "Điểm nhớ",
+  "dj.hotCueHint": "Nhấp để đặt hoặc nhảy tới, nhấp chuột phải để xóa",
+  "dj.loop": "Lặp (phách)",
+  "dj.loopOff": "Thoát vòng lặp",
+  "dj.fx": "Hiệu ứng",
+  "dj.fx.echo": "Vang",
+  "dj.fx.sweep": "Quét lọc",
+  "dj.fx.spin": "Quay ngược",
+  "dj.pads": "Hiệu ứng tiệc",
+  "dj.pad.0": "Còi hơi",
+  "dj.pad.1": "Còi hú",
+  "dj.pad.2": "Laser",
+  "dj.pad.3": "Bass rơi",
+  "dj.keysHelp": "Phím: bàn A Z phát, X cue, C đồng bộ, 1-4 điểm nhớ, Q W E lặp, A S D hiệu ứng; bàn B M phát, N cue, B đồng bộ, 7-0 điểm nhớ, U I O lặp, J K L hiệu ứng; F1-F4 hiệu ứng tiệc; mũi tên: cần chuyển"
 }

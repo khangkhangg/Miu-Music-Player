@@ -614,5 +614,19 @@
   "dj.enterFailed": "DJ mode could not start: {message}",
   "dj.played": "Played",
   "dj.nothingOnAir": "Nothing on air yet",
-  "dj.mixer": "Mixer"
+  "dj.mixer": "Mixer",
+  "dj.hotCues": "Hot cues",
+  "dj.hotCueHint": "Click to set or jump, right-click to clear",
+  "dj.loop": "Loop (beats)",
+  "dj.loopOff": "End the loop",
+  "dj.fx": "Effects",
+  "dj.fx.echo": "Echo",
+  "dj.fx.sweep": "Sweep",
+  "dj.fx.spin": "Spin back",
+  "dj.pads": "Party pads",
+  "dj.pad.0": "Air horn",
+  "dj.pad.1": "Siren",
+  "dj.pad.2": "Laser",
+  "dj.pad.3": "Drop",
+  "dj.keysHelp": "Keys: deck A Z play, X cue, C sync, 1-4 hot cues, Q W E loop, A S D effects; deck B M play, N cue, B sync, 7-0 hot cues, U I O loop, J K L effects; F1-F4 pads; arrows crossfader"
 }

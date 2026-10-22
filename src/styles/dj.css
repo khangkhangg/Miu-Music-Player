@@ -67,7 +67,7 @@
 /* The desk: deck A | mixer | deck B */
 .dj-desk { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; min-height: 0; }
 .dj-deck, .dj-mixer, .dj-browser { background: var(--dj-panel); border: 1px solid var(--dj-line); border-radius: var(--dj-radius); }
-.dj-deck { padding: 12px; display: grid; gap: 12px; align-content: start; border-top: 3px solid var(--deck); }
+.dj-deck { padding: 12px; display: grid; gap: 12px; align-content: start; border-top: 3px solid var(--deck); min-width: 0; }
 .dj-deck-head { display: grid; grid-template-columns: auto 52px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .dj-letter { font-weight: 700; font-size: 18px; color: var(--deck, var(--dj-muted)); width: 22px; text-align: center; }
 .dj-cover { width: 52px; height: 52px; border-radius: 6px; background: var(--dj-panel-2); overflow: hidden; }
@@ -113,6 +113,23 @@
 .dj-cue { color: var(--deck); }
 .dj-sync.on { border-color: var(--deck); color: var(--deck); }
 .dj-nudge { min-width: 40px; }
+
+/* Hands-on: hot cues, loops, effects */
+.dj-hands { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.dj-hands [role="group"] { display: flex; gap: 4px; align-items: center; }
+.dj-loop-icon { width: 16px; height: 16px; color: var(--dj-muted); margin-right: 2px; }
+.dj-hands button, .dj-pads button {
+  height: 32px; min-width: 34px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--dj-line);
+  background: var(--dj-panel-2); color: var(--dj-muted); font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.dj-hotpad { border-color: color-mix(in srgb, var(--deck) 45%, transparent); color: var(--dj-text); }
+.dj-hands button svg { width: 14px; height: 14px; }
+.dj-hotpad.set { background: var(--deck); color: #111; border-color: transparent; }
+.dj-loops button.on, .dj-fx button[aria-pressed="true"] { border-color: var(--deck); color: var(--deck); }
+.dj-fx { margin-left: auto; }
+.dj-pads { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+.dj-pads button { font-size: 11px; padding: 0 6px; color: var(--dj-text); }
+.dj-pads button:active { background: var(--dj-a); color: #111; }
 
 /* Mixer */
 .dj-mixer { padding: 12px; display: grid; gap: 12px; align-content: space-between; }

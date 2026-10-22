@@ -178,6 +178,65 @@ impl DjFilter {
     }
 }
 
+/// Beat echo: repeats of what went in while it was on, each a little quieter. Turned off, the
+/// repeats already in it ring on and die away (the "echo out" of a song).
+pub struct Echo {
+    buf: Vec<f32>,
+    pos: usize,
+    delay: usize,
+    rate: u32,
+    on: bool,
+    /// Frames until the tail has died away once off (no work after that).
+    ringing: usize,
+}
+
+const ECHO_FEEDBACK: f32 = 0.45;
+const ECHO_MAX_S: f32 = 2.0;
+
+impl Echo {
+    pub fn new(rate: u32) -> Self {
+        let frames = (rate as f32 * ECHO_MAX_S) as usize;
+        Self { buf: vec![0.0; frames * 2], pos: 0, delay: rate as usize / 4, rate, on: false, ringing: 0 }
+    }
+
+    pub fn set_delay_s(&mut self, s: f32) {
+        let frames = self.buf.len() / 2;
+        self.delay = ((s * self.rate as f32) as usize).clamp(1, frames - 1);
+    }
+
+    pub fn set_on(&mut self, on: bool) {
+        self.on = on;
+    }
+
+    pub fn is_on(&self) -> bool {
+        self.on
+    }
+
+    /// Feeds `input` (while on) and adds the repeats to `out`; both stereo, same length.
+    pub fn process(&mut self, input: &[f32], out: &mut [f32]) {
+        let frames = self.buf.len() / 2;
+        if self.on {
+            self.ringing = self.delay * 12; // 0.45^12: well under hearing
+        } else if self.ringing == 0 {
+            return;
+        }
+        for (inp, o) in input.chunks_exact(2).zip(out.chunks_exact_mut(2)) {
+            let read = (self.pos + frames - self.delay) % frames;
+            for ch in 0..2 {
+                let d = self.buf[read * 2 + ch];
+                o[ch] += d;
+                let feed = if self.on { inp[ch] } else { 0.0 };
+                self.buf[self.pos * 2 + ch] = feed + d * ECHO_FEEDBACK;
+            }
+            self.pos = (self.pos + 1) % frames;
+            self.ringing = self.ringing.saturating_sub(1);
+        }
+        if !self.on && self.ringing == 0 {
+            self.buf.fill(0.0);
+        }
+    }
+}
+
 /// Gain trim: 0..1 with 0.5 = unity, ±12 dB at the ends.
 pub fn gain(v: f32) -> f32 {
     10f32.powf((v.clamp(0.0, 1.0) - 0.5) * 24.0 / 20.0)

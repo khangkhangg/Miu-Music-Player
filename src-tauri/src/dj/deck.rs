@@ -69,7 +69,18 @@ pub struct Deck {
     cue_point: f64,
     /// Cue held from a pause: the deck plays only while held.
     previewing: bool,
+    /// Hot cue points (frames).
+    hot: [Option<f64>; HOT_CUES],
+    /// A loop playing between these frames.
+    looping: Option<(f64, f64)>,
+    /// Spin-back in progress: the current (negative) speed.
+    spin: Option<f64>,
 }
+
+pub const HOT_CUES: usize = 4;
+/// Spin-back: starts at three times normal speed backwards and stops within this long.
+const SPIN_SPEED: f64 = 3.0;
+const SPIN_S: f64 = 1.0;
 
 impl Deck {
     /// Puts a song on the deck, paused at its first beat (the cue point).
@@ -195,6 +206,70 @@ impl Deck {
         }
     }
 
+    /// The beat at or before (`nearest`: closest to) `s`, when the song has a beat grid.
+    fn snap(&self, s: f64, nearest: bool) -> Option<f64> {
+        let (bpm, downbeat) = self.track.as_ref()?.beat()?;
+        let beat = 60.0 / bpm;
+        let n = (s - downbeat) / beat;
+        let n = if nearest { n.round() } else { (n + 1e-9).floor() };
+        Some((downbeat + n * beat).max(0.0))
+    }
+
+    /// Hot cue button: jump to it (playing on if playing), or set it here on the nearest beat.
+    pub fn hot_cue(&mut self, slot: usize) {
+        if self.track.is_none() || slot >= HOT_CUES {
+            return;
+        }
+        match self.hot[slot] {
+            Some(p) => {
+                self.pos = p;
+                self.ended = false;
+            }
+            None => {
+                let s = self.position_s();
+                self.hot[slot] = Some(self.snap(s, true).unwrap_or(s) * self.rate());
+            }
+        }
+    }
+
+    pub fn clear_hot_cue(&mut self, slot: usize) {
+        if slot < HOT_CUES {
+            self.hot[slot] = None;
+        }
+    }
+
+    /// Hot cue points in seconds.
+    pub fn hot_cues(&self) -> [Option<f64>; HOT_CUES] {
+        self.hot.map(|h| h.map(|p| p / self.rate()))
+    }
+
+    /// Loop `beats` whole beats from the beat at or before here, or end the loop (`None`).
+    /// False when the song has no beat grid.
+    pub fn set_loop(&mut self, beats: Option<u8>) -> bool {
+        let Some(beats) = beats else {
+            self.looping = None;
+            return true;
+        };
+        let (Some(start), Some((bpm, _))) = (self.snap(self.position_s(), false), self.track.as_ref().and_then(|t| t.beat())) else {
+            return false;
+        };
+        let end = start + beats as f64 * 60.0 / bpm;
+        self.looping = Some((start * self.rate(), end * self.rate()));
+        true
+    }
+
+    pub fn loop_s(&self) -> Option<(f64, f64)> {
+        self.looping.map(|(a, b)| (a / self.rate(), b / self.rate()))
+    }
+
+    /// The record is spun back by hand and stops (a party trick to end a song).
+    pub fn spin_back(&mut self) {
+        if self.playing {
+            self.spin = Some(-SPIN_SPEED);
+            self.looping = None;
+        }
+    }
+
     /// Match `other`'s tempo (counting half and double time) and line this deck's bars up with
     /// its bars. False, with nothing changed, when either has no beat or the tempo is out of reach.
     pub fn sync_to(&mut self, other: &Deck) -> bool {
@@ -263,7 +338,21 @@ impl Deck {
                 step *= self.jog_bend.0;
                 self.jog_bend.1 -= 1;
             }
-            self.pos += step;
+            if let Some(spin) = self.spin.as_mut() {
+                // Backwards, slowing down to a stop.
+                step = track.rate as f64 / out_rate as f64 * *spin;
+                *spin += SPIN_SPEED / (SPIN_S * out_rate as f64);
+                if *spin >= 0.0 {
+                    self.spin = None;
+                    self.playing = false;
+                }
+            }
+            self.pos = (self.pos + step).max(0.0);
+            if let Some((start, end)) = self.looping {
+                if self.pos >= end {
+                    self.pos -= end - start;
+                }
+            }
         }
     }
 }
@@ -383,6 +472,58 @@ mod tests {
         assert!((b.bpm().unwrap() - 120.0).abs() < 0.01);
         assert!((b.bar_phase().unwrap() - a.bar_phase().unwrap()).abs() < 1e-3, "{:?} vs {:?}", b.bar_phase(), a.bar_phase());
         assert!((b.position_s() - 3.0).abs() < 1.0, "the jump stays within two beats");
+    }
+
+    #[test]
+    fn hot_cues_are_set_on_the_beat_and_jumped_to() {
+        let mut d = Deck::default();
+        d.load(track(OUT, 60.0, Some(analysis(120.0, 0.0, 0.0)))); // a beat every 0.5 s
+        d.seek_s(10.2);
+        d.hot_cue(0); // empty: set it, snapped to the nearest beat
+        assert_eq!(d.hot_cues()[0], Some(10.0));
+        d.seek_s(30.0);
+        d.play();
+        d.hot_cue(0); // set: jump there and keep playing
+        assert!((d.position_s() - 10.0).abs() < 1e-9);
+        assert!(d.is_playing());
+        d.clear_hot_cue(0);
+        assert_eq!(d.hot_cues()[0], None);
+        let mut plain = Deck::default();
+        plain.load(track(OUT, 60.0, None));
+        plain.seek_s(10.2);
+        plain.hot_cue(3);
+        assert!((plain.hot_cues()[3].unwrap() - 10.2).abs() < 1e-9, "no beat grid: exactly where it is");
+    }
+
+    #[test]
+    fn a_loop_repeats_whole_beats_until_released() {
+        let mut d = Deck::default();
+        d.load(track(OUT, 60.0, Some(analysis(120.0, 0.0, 0.0))));
+        d.seek_s(10.1);
+        d.play();
+        assert!(d.set_loop(Some(4))); // from the beat at 10.0 for 2 s
+        assert_eq!(d.loop_s(), Some((10.0, 12.0)));
+        render_secs(&mut d, 5.0);
+        let p = d.position_s();
+        assert!((10.0..12.0).contains(&p), "still inside the loop: {p}");
+        d.set_loop(None);
+        render_secs(&mut d, 3.0);
+        assert!(d.position_s() > 12.0, "released: plays on");
+        let mut plain = Deck::default();
+        plain.load(track(OUT, 60.0, None));
+        assert!(!plain.set_loop(Some(4)), "no beat grid, no beat loop");
+    }
+
+    #[test]
+    fn spin_back_winds_the_record_back_and_stops() {
+        let mut d = Deck::default();
+        d.load(track(OUT, 60.0, None));
+        d.seek_s(20.0);
+        d.play();
+        d.spin_back();
+        render_secs(&mut d, 2.0);
+        assert!(!d.is_playing(), "stopped at the end of the spin");
+        assert!(d.position_s() < 19.0 && d.position_s() > 15.0, "{}", d.position_s());
     }
 
     #[test]

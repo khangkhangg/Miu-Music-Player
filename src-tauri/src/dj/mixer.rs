@@ -2,20 +2,32 @@
 //! the crossfader into the master (speakers, with a limiter so two loud songs never clip), and a
 //! headphone mix of the cued decks (before their faders) blended with the master.
 
-use super::actions::{Action, Band, Deck as Side};
+use std::sync::Arc;
+
+use super::actions::{Action, Band, Deck as Side, Effect};
 use super::deck::Deck;
-use super::dsp::{self, DjFilter, ThreeBand};
+use super::dsp::{self, DjFilter, Echo, ThreeBand};
 
 /// The limiter leaves the music alone below this and bends it smoothly under 1.0 above.
 const KNEE: f32 = 0.8;
 /// How fast the meters fall back, per block.
 const METER_FALL: f32 = 0.85;
+/// The filter sweep effect opens the high-pass this far over this many beats.
+const SWEEP_TO: f32 = 0.9;
+const SWEEP_BEATS: f32 = 8.0;
+/// Echo repeats every three quarters of a beat.
+const ECHO_BEATS: f32 = 0.75;
 
 /// One deck's channel strip and its control positions.
 struct Channel {
     eq: ThreeBand,
     eq_values: [f32; 3],
     filter: DjFilter,
+    /// Where the filter knob is (the sweep effect moves the filter from here and back).
+    filter_value: f32,
+    /// Filter sweep effect in progress, 0..1.
+    sweep: Option<f32>,
+    echo: Echo,
     gain: f32,
     volume: f32,
     cue: bool,
@@ -26,7 +38,7 @@ struct Channel {
 
 impl Channel {
     fn new(rate: u32) -> Self {
-        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0 }
+        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0 }
     }
 }
 
@@ -41,6 +53,9 @@ pub struct Mixer {
     /// Master and headphone volume reached at the end of the last block.
     last_out: (f32, f32),
     scratch: [Vec<f32>; 2],
+    /// Party pad sounds, and the ones playing (sound, position).
+    pads: Vec<Arc<Vec<f32>>>,
+    voices: Vec<(Arc<Vec<f32>>, usize)>,
 }
 
 fn index(side: Side) -> usize {
@@ -82,6 +97,8 @@ impl Mixer {
             phones_volume: 1.0,
             last_out: (1.0, 1.0),
             scratch: [Vec::new(), Vec::new()],
+            pads: (0..super::pads::PADS).map(|p| Arc::new(super::pads::sound(p, rate))).collect(),
+            voices: Vec::new(),
         }
     }
 
@@ -100,6 +117,12 @@ impl Mixer {
     /// Meter levels (peak, 0..1+) of deck A and B after their faders.
     pub fn levels(&self) -> [f32; 2] {
         [self.channels[0].level, self.channels[1].level]
+    }
+
+    /// Whether the echo and the filter sweep are on for a deck.
+    pub fn effects(&self, side: Side) -> (bool, bool) {
+        let ch = &self.channels[index(side)];
+        (ch.echo.is_on(), ch.sweep.is_some())
     }
 
     pub fn crossfader(&self) -> f32 {
@@ -136,7 +159,40 @@ impl Mixer {
                 let [l, m, h] = ch.eq_values;
                 ch.eq.set(l, m, h);
             }
-            Action::Filter { deck, value } => self.channels[index(deck)].filter.set(value),
+            Action::Filter { deck, value } => {
+                let ch = &mut self.channels[index(deck)];
+                ch.filter_value = value.clamp(-1.0, 1.0);
+                if ch.sweep.is_none() {
+                    ch.filter.set(ch.filter_value);
+                }
+            }
+            Action::HotCue { deck, slot } => self.deck_mut(deck).hot_cue(slot as usize),
+            Action::ClearHotCue { deck, slot } => self.deck_mut(deck).clear_hot_cue(slot as usize),
+            Action::Loop { deck, beats } => {
+                let _ = self.deck_mut(deck).set_loop(beats);
+            }
+            Action::Effect { deck, effect, on } => {
+                let ch = &mut self.channels[index(deck)];
+                match effect {
+                    Effect::Echo => ch.echo.set_on(on),
+                    Effect::FilterSweep => {
+                        ch.sweep = on.then_some(0.0);
+                        if !on {
+                            ch.filter.set(ch.filter_value);
+                        }
+                    }
+                    Effect::SpinBack => {
+                        if on {
+                            self.deck_mut(deck).spin_back();
+                        }
+                    }
+                }
+            }
+            Action::Pad { slot } => {
+                if let Some(sound) = self.pads.get(slot as usize) {
+                    self.voices.push((sound.clone(), 0));
+                }
+            }
             Action::Volume { deck, value } => self.channels[index(deck)].volume = value.clamp(0.0, 1.0),
             Action::Gain { deck, value } => self.channels[index(deck)].gain = value.clamp(0.0, 1.0),
             Action::Crossfader { value } => self.crossfader = value.clamp(-1.0, 1.0),
@@ -157,14 +213,22 @@ impl Mixer {
         let mut cue = vec![0.0f32; n];
         let mut cued = false;
         let (xa, xb) = dsp::crossfader(self.crossfader);
+        let block_s = (n / 2) as f32 / self.rate as f32;
         for i in 0..2 {
             let buf = &mut self.scratch[i];
             buf.resize(n, 0.0);
             self.decks[i].render(buf, self.rate);
+            // Beat-timed effects follow the tempo heard now (or a steady 120 BPM without a beat grid).
+            let beat_s = self.decks[i].bpm().map_or(0.5, |b| 60.0 / b) as f32;
             let ch = &mut self.channels[i];
             let trim = dsp::gain(ch.gain);
             ramp(buf, ch.last.0, trim);
             ch.eq.process(buf);
+            if let Some(p) = ch.sweep.as_mut() {
+                *p = (*p + block_s / (SWEEP_BEATS * beat_s)).min(1.0);
+                let from = ch.filter_value.max(0.0);
+                ch.filter.set(from + (SWEEP_TO - from) * *p);
+            }
             ch.filter.process(buf);
             if ch.cue {
                 cued = true;
@@ -181,8 +245,19 @@ impl Mixer {
             for (m, s) in master.iter_mut().zip(buf.iter()) {
                 *m += s;
             }
+            // After the crossfader, so the repeats ring on when the deck is faded out.
+            ch.echo.set_delay_s(ECHO_BEATS * beat_s);
+            ch.echo.process(buf, master);
             ch.last = (trim, fader, x);
         }
+        self.voices.retain_mut(|(sound, pos)| {
+            for (frame, s) in master.chunks_exact_mut(2).zip(sound[*pos..].iter()) {
+                frame[0] += s;
+                frame[1] += s;
+            }
+            *pos += n / 2;
+            *pos < sound.len()
+        });
         let master_gain = dsp::fader(self.master_volume);
         let phones_gain = dsp::fader(self.phones_volume);
         let (last_master, last_phones) = self.last_out;
@@ -203,7 +278,7 @@ impl Mixer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dj::actions::{Action, Band, Deck as D};
+    use crate::dj::actions::{Action, Band, Deck as D, Effect};
     use crate::dj::deck::Track;
     use std::sync::Arc;
 
@@ -345,5 +420,97 @@ mod tests {
         assert!((m.deck(D::B).bpm().unwrap() - 124.8).abs() < 0.01);
         m.apply(&Action::PlayPause { deck: D::B });
         assert!(m.deck(D::B).is_playing());
+        m.apply(&Action::HotCue { deck: D::B, slot: 1 });
+        assert!(m.deck(D::B).hot_cues()[1].is_some());
+        m.apply(&Action::ClearHotCue { deck: D::B, slot: 1 });
+        assert!(m.deck(D::B).hot_cues()[1].is_none());
+        m.apply(&Action::Loop { deck: D::B, beats: Some(8) });
+        assert!(m.deck(D::B).loop_s().is_some());
+        m.apply(&Action::Effect { deck: D::B, effect: Effect::SpinBack, on: true });
+        run(&mut m, 1.5);
+        assert!(!m.deck(D::B).is_playing(), "spun back to a stop");
+    }
+
+    /// A 120 BPM song that is silent except for one click at 0.1 s.
+    fn click() -> Arc<Track> {
+        let mut pcm = vec![0i16; RATE as usize * 4 * 2];
+        for s in &mut pcm[(RATE as usize / 10) * 2..(RATE as usize / 10 + 48) * 2] {
+            *s = 20_000;
+        }
+        let mut a = crate::dj::analysis::analyze(&[0.0; 100], RATE);
+        a.bpm = 120.0;
+        Arc::new(Track { song_id: 9, rate: RATE, pcm, analysis: Some(a) })
+    }
+
+    /// Master output for `secs`, all of it.
+    fn record(m: &mut Mixer, secs: f32) -> Vec<f32> {
+        let mut all = Vec::new();
+        let (mut master, mut phones) = (vec![0.0; 960], vec![0.0; 960]);
+        for _ in 0..(secs * RATE as f32 / 480.0) as usize {
+            m.render(&mut master, &mut phones);
+            all.extend_from_slice(&master);
+        }
+        all
+    }
+
+    fn peak_between(x: &[f32], from_s: f32, to_s: f32) -> f32 {
+        let i = |s: f32| (s * RATE as f32) as usize * 2;
+        peak(&x[i(from_s)..i(to_s).min(x.len())])
+    }
+
+    #[test]
+    fn echo_repeats_on_the_beat_and_rings_on_after_the_deck_is_faded_out() {
+        let silent = Arc::new(Track { song_id: 2, rate: RATE, pcm: vec![0; RATE as usize * 8], analysis: None });
+        let mut m = mixer(click(), silent);
+        m.apply(&Action::Crossfader { value: -1.0 });
+        let dry = record(&mut m, 1.0);
+        assert!(peak_between(&dry, 0.3, 1.0) < 0.01, "no echo while it is off");
+
+        let mut m = mixer(click(), Arc::new(Track { song_id: 2, rate: RATE, pcm: vec![0; RATE as usize * 8], analysis: None }));
+        m.apply(&Action::Crossfader { value: -1.0 });
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::Echo, on: true });
+        let start = record(&mut m, 0.2);
+        // Echo off and the deck faded out: the repeats carry on and die away.
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::Echo, on: false });
+        m.apply(&Action::Crossfader { value: 1.0 });
+        let tail = [start, record(&mut m, 2.8)].concat();
+        let beat = 0.375; // three quarters of a beat at 120 BPM
+        let first = peak_between(&tail, 0.1 + beat - 0.02, 0.1 + beat + 0.03);
+        let later = peak_between(&tail, 0.1 + 3.0 * beat - 0.02, 0.1 + 3.0 * beat + 0.03);
+        assert!(first > 0.1, "the first repeat: {first}");
+        assert!(later > 0.01 && later < first, "fading repeats: {later} < {first}");
+        assert!(peak_between(&tail, 2.6, 3.0) < 0.02, "and gone");
+    }
+
+    #[test]
+    fn the_filter_sweep_rises_over_two_bars_and_lets_go() {
+        let mut low = tone(60.0, 0.5);
+        Arc::get_mut(&mut low).unwrap().analysis = Some({
+            let mut a = crate::dj::analysis::analyze(&[0.0; 100], RATE);
+            a.bpm = 240.0; // two bars in 2 s
+            a
+        });
+        let mut m = mixer(low, tone(60.0, 0.0));
+        m.apply(&Action::Crossfader { value: -1.0 });
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::FilterSweep, on: true });
+        let (early, _) = run(&mut m, 0.3);
+        assert!(peak(&early) > 0.3, "starts open: {}", peak(&early));
+        let (late, _) = run(&mut m, 1.9);
+        assert!(peak(&late) < 0.05, "two bars later the bass is gone: {}", peak(&late));
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::FilterSweep, on: false });
+        let (back, _) = run(&mut m, 0.3);
+        assert!(peak(&back) > 0.4, "back to the knob: {}", peak(&back));
+    }
+
+    #[test]
+    fn party_pads_play_over_the_mix() {
+        let mut m = Mixer::new(RATE);
+        assert_eq!(peak(&run(&mut m, 0.1).0), 0.0);
+        m.apply(&Action::Pad { slot: 0 });
+        let (now, phones) = run(&mut m, 0.1);
+        assert!(peak(&now) > 0.3, "air horn");
+        assert!(peak(&phones) > 0.3, "heard in the headphones with the master");
+        run(&mut m, 3.0);
+        assert_eq!(peak(&run(&mut m, 0.1).0), 0.0, "and over");
     }
 }

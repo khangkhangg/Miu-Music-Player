@@ -5,7 +5,7 @@ import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, keysCompatible, fits,
-  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns,
+  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats,
 } from '../../src/js/dj.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
@@ -123,4 +123,31 @@ test('dragging round the platter turns it (clockwise is forward)', () => {
   assert.ok(Math.abs(jogTurns({ x: 0, y: -10 }, { x: 10, y: 0 }, c) - 0.25) < 1e-9, 'a quarter turn clockwise');
   assert.ok(Math.abs(jogTurns({ x: 10, y: 0 }, { x: 0, y: -10 }, c) + 0.25) < 1e-9);
   assert.ok(Math.abs(jogTurns({ x: -10, y: 1 }, { x: -10, y: -1 }, c) - 0.0318) < 0.001, 'across the 180 degree line');
+});
+
+test('the DJ keyboard: deck A on the left hand, deck B on the right', () => {
+  const state = { crossfader: 0.95, decks: [{ echo: false, sweep: false }, { echo: true, sweep: false }] };
+  const k = (code, shiftKey = false) => keyAction({ code, shiftKey }, state);
+  assert.deepEqual(k('KeyZ').down, { type: 'playPause', deck: 'A' });
+  assert.deepEqual(k('KeyM').down, { type: 'playPause', deck: 'B' });
+  assert.deepEqual(k('KeyX'), { down: { type: 'cue', deck: 'A', pressed: true }, up: { type: 'cue', deck: 'A', pressed: false } });
+  assert.deepEqual(k('KeyC').down, { type: 'sync', deck: 'A' });
+  assert.deepEqual(k('Digit2').down, { type: 'hotCue', deck: 'A', slot: 1 });
+  assert.deepEqual(k('Digit2', true).down, { type: 'clearHotCue', deck: 'A', slot: 1 });
+  assert.deepEqual(k('Digit9').down, { type: 'hotCue', deck: 'B', slot: 2 });
+  assert.deepEqual(k('KeyQ').down, { type: 'loop', deck: 'A', beats: 4 });
+  assert.deepEqual(k('KeyE').down, { type: 'loop', deck: 'A', beats: null });
+  assert.deepEqual(k('KeyA').down, { type: 'effect', deck: 'A', effect: 'echo', on: true });
+  assert.deepEqual(k('KeyJ').down, { type: 'effect', deck: 'B', effect: 'echo', on: false }, 'toggles off');
+  assert.deepEqual(k('KeyL').down, { type: 'effect', deck: 'B', effect: 'spinBack', on: true });
+  assert.deepEqual(k('F3').down, { type: 'pad', slot: 2 });
+  assert.deepEqual(k('ArrowRight').down, { type: 'crossfader', value: 1 });
+  assert.deepEqual(k('ArrowLeft').down, { type: 'crossfader', value: 0.85 });
+  assert.equal(k('KeyY'), null);
+});
+
+test('a loop is shown by its length in beats (of the song, whatever the tempo)', () => {
+  assert.equal(loopBeats({ loopS: [10, 12], bpm: 120, tempo: 0 }), 4);
+  assert.equal(loopBeats({ loopS: [10, 14], bpm: 124.8, tempo: 0.5 }), 8, 'the song is at 120, played 4 % faster');
+  assert.equal(loopBeats({ loopS: null, bpm: 120, tempo: 0 }), null);
 });

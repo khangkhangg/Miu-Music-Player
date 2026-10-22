@@ -8,5 +8,6 @@ pub mod deck;
 pub mod dsp;
 pub mod engine;
 pub mod mixer;
+pub mod pads;
 pub mod service;
 pub mod store;

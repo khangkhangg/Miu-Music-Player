@@ -138,8 +138,54 @@ export function filterSongsForDj(songs, analyses, { query, fitsWith, played }) {
   return [...list.filter((s) => !played.has(s.id)), ...list.filter((s) => played.has(s.id))];
 }
 
+// The DJ keyboard, by physical key (any layout): deck A under the left hand, deck B under the right.
+const DECK_KEYS = {
+  A: { play: 'KeyZ', cue: 'KeyX', sync: 'KeyC', hot: ['Digit1', 'Digit2', 'Digit3', 'Digit4'], loop4: 'KeyQ', loop8: 'KeyW', loopOff: 'KeyE', echo: 'KeyA', sweep: 'KeyS', spin: 'KeyD' },  // i18n-ignore
+  B: { play: 'KeyM', cue: 'KeyN', sync: 'KeyB', hot: ['Digit7', 'Digit8', 'Digit9', 'Digit0'], loop4: 'KeyU', loop8: 'KeyI', loopOff: 'KeyO', echo: 'KeyJ', sweep: 'KeyK', spin: 'KeyL' },  // i18n-ignore
+};
+const PAD_KEYS = ['F1', 'F2', 'F3', 'F4'];
+
+/**
+ * The DJ action for a key (`code`, `shiftKey`), as { down, up? } (up: for keys held like Cue),
+ * or null. `state` is the engine state, for toggles and the crossfader.
+ */
+export function keyAction({ code, shiftKey }, state) {
+  for (const [i, deck] of ['A', 'B'].entries()) {
+    const k = DECK_KEYS[deck];
+    const d = state?.decks?.[i] ?? {};
+    const hot = k.hot.indexOf(code);
+    if (hot >= 0) return { down: { type: shiftKey ? 'clearHotCue' : 'hotCue', deck, slot: hot } };
+    switch (code) {
+      case k.play: return { down: { type: 'playPause', deck } };
+      case k.cue: return { down: { type: 'cue', deck, pressed: true }, up: { type: 'cue', deck, pressed: false } };
+      case k.sync: return { down: { type: 'sync', deck } };
+      case k.loop4: return { down: { type: 'loop', deck, beats: 4 } };
+      case k.loop8: return { down: { type: 'loop', deck, beats: 8 } };
+      case k.loopOff: return { down: { type: 'loop', deck, beats: null } };
+      case k.echo: return { down: { type: 'effect', deck, effect: 'echo', on: !d.echo } };
+      case k.sweep: return { down: { type: 'effect', deck, effect: 'filterSweep', on: !d.sweep } };
+      case k.spin: return { down: { type: 'effect', deck, effect: 'spinBack', on: true } };
+      default:
+    }
+  }
+  const pad = PAD_KEYS.indexOf(code);
+  if (pad >= 0) return { down: { type: 'pad', slot: pad } };
+  if (code === 'ArrowLeft' || code === 'ArrowRight') {
+    const x = (state?.crossfader ?? 0) + (code === 'ArrowLeft' ? -0.1 : 0.1);
+    return { down: { type: 'crossfader', value: Math.round(Math.min(1, Math.max(-1, x)) * 100) / 100 } };
+  }
+  return null;
+}
+
 /** "Analysing songs: 3 of 10" while the library is being analysed. */
 export function analysisText(p) {
   if (!p || p.done >= p.total) return '';
   return t('dj.analysing', { done: p.done, total: p.total });
+}
+
+/** Length of the deck's loop in beats of the song (the tempo control does not change it). */
+export function loopBeats(deck) {
+  if (!deck?.loopS || !deck.bpm) return null;
+  const songBpm = deck.bpm / (1 + deck.tempo * (TEMPO_RANGE / 100));
+  return Math.round(((deck.loopS[1] - deck.loopS[0]) * songBpm) / 60);
 }

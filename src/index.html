@@ -724,6 +724,26 @@
           <button class="dj-pad dj-nudge" type="button" data-ctl="nudge" data-amount="-1" aria-label="Nudge back (hold)" title="Nudge back (hold)" data-i18n-attr="aria-label:dj.nudgeBack;title:dj.nudgeBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
           <button class="dj-pad dj-nudge" type="button" data-ctl="nudge" data-amount="1" aria-label="Nudge ahead (hold)" title="Nudge ahead (hold)" data-i18n-attr="aria-label:dj.nudgeAhead;title:dj.nudgeAhead"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
         </div>
+        <div class="dj-hands">
+          <div class="dj-hot" role="group" aria-label="Hot cues" data-i18n-attr="aria-label:dj.hotCues">
+            <button class="dj-hotpad" type="button" data-slot="0" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">1</button>
+            <button class="dj-hotpad" type="button" data-slot="1" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">2</button>
+            <button class="dj-hotpad" type="button" data-slot="2" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">3</button>
+            <button class="dj-hotpad" type="button" data-slot="3" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">4</button>
+          </div>
+          <div class="dj-loops" role="group" aria-label="Loop" data-i18n-attr="aria-label:dj.loop">
+            <svg class="dj-loop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l3 3-3 3"/><path d="M3 11V9a4 4 0 0 1 4-4h13"/><path d="M7 22l-3-3 3-3"/><path d="M21 13v2a4 4 0 0 1-4 4H4"/></svg>
+            <button type="button" data-loop="4">4</button>
+            <button type="button" data-loop="8">8</button>
+            <button type="button" data-loop="16">16</button>
+            <button type="button" data-loop="off" aria-label="End the loop" title="End the loop" data-i18n-attr="aria-label:dj.loopOff;title:dj.loopOff"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+          <div class="dj-fx" role="group" aria-label="Effects" data-i18n-attr="aria-label:dj.fx">
+            <button type="button" data-fx="echo" aria-pressed="false" data-i18n="dj.fx.echo">Echo</button>
+            <button type="button" data-fx="filterSweep" aria-pressed="false" data-i18n="dj.fx.sweep">Sweep</button>
+            <button type="button" data-fx="spinBack" data-i18n="dj.fx.spin">Spin back</button>
+          </div>
+        </div>
       </section>
 
       <section class="dj-mixer" aria-label="Mixer" data-i18n-attr="aria-label:dj.mixer">
@@ -741,6 +761,12 @@
             <div class="dj-knob-wrap"><div class="dj-knob" role="slider" tabindex="0" data-ctl="master" data-min="0" data-max="1" data-reset="1" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" aria-label="Master" title="Drag up or down" data-i18n-attr="aria-label:dj.master;title:dj.knobHint"><i></i></div><span data-i18n="dj.master">Master</span></div>
             <div class="dj-knob-wrap"><div class="dj-knob" role="slider" tabindex="0" data-ctl="cueMix" data-min="0" data-max="1" data-reset="0.5" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.5" aria-label="Cue / master" title="Drag up or down" data-i18n-attr="aria-label:dj.cueMix;title:dj.knobHint"><i></i></div><span data-i18n="dj.cueMix">Cue / master</span></div>
             <div class="dj-knob-wrap"><div class="dj-knob" role="slider" tabindex="0" data-ctl="phonesVolume" data-min="0" data-max="1" data-reset="1" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" aria-label="Headphone volume" title="Drag up or down" data-i18n-attr="aria-label:dj.phonesVolume;title:dj.knobHint"><i></i></div><span data-i18n="dj.phones">Headphones</span></div>
+            <div class="dj-pads" role="group" aria-label="Party pads" data-i18n-attr="aria-label:dj.pads">
+              <button type="button" data-pad="0" data-i18n="dj.pad.0">Air horn</button>
+              <button type="button" data-pad="1" data-i18n="dj.pad.1">Siren</button>
+              <button type="button" data-pad="2" data-i18n="dj.pad.2">Laser</button>
+              <button type="button" data-pad="3" data-i18n="dj.pad.3">Drop</button>
+            </div>
           </div>
           <div class="dj-strip" data-deck="B">
             <div class="dj-knob-wrap"><div class="dj-knob" role="slider" tabindex="0" data-ctl="gain" data-min="0" data-max="1" data-reset="0.5" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.5" aria-label="Gain" title="Drag up or down" data-i18n-attr="aria-label:dj.gain;title:dj.knobHint"><i></i></div><span data-i18n="dj.gain">Gain</span></div>
@@ -784,6 +810,26 @@
           <button class="dj-pad dj-sync" type="button" data-ctl="sync" data-i18n="dj.sync">Sync</button>
           <button class="dj-pad dj-nudge" type="button" data-ctl="nudge" data-amount="-1" aria-label="Nudge back (hold)" title="Nudge back (hold)" data-i18n-attr="aria-label:dj.nudgeBack;title:dj.nudgeBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
           <button class="dj-pad dj-nudge" type="button" data-ctl="nudge" data-amount="1" aria-label="Nudge ahead (hold)" title="Nudge ahead (hold)" data-i18n-attr="aria-label:dj.nudgeAhead;title:dj.nudgeAhead"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <div class="dj-hands">
+          <div class="dj-hot" role="group" aria-label="Hot cues" data-i18n-attr="aria-label:dj.hotCues">
+            <button class="dj-hotpad" type="button" data-slot="0" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">1</button>
+            <button class="dj-hotpad" type="button" data-slot="1" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">2</button>
+            <button class="dj-hotpad" type="button" data-slot="2" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">3</button>
+            <button class="dj-hotpad" type="button" data-slot="3" title="Click to set or jump, right-click to clear" data-i18n-attr="title:dj.hotCueHint">4</button>
+          </div>
+          <div class="dj-loops" role="group" aria-label="Loop" data-i18n-attr="aria-label:dj.loop">
+            <svg class="dj-loop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l3 3-3 3"/><path d="M3 11V9a4 4 0 0 1 4-4h13"/><path d="M7 22l-3-3 3-3"/><path d="M21 13v2a4 4 0 0 1-4 4H4"/></svg>
+            <button type="button" data-loop="4">4</button>
+            <button type="button" data-loop="8">8</button>
+            <button type="button" data-loop="16">16</button>
+            <button type="button" data-loop="off" aria-label="End the loop" title="End the loop" data-i18n-attr="aria-label:dj.loopOff;title:dj.loopOff"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+          <div class="dj-fx" role="group" aria-label="Effects" data-i18n-attr="aria-label:dj.fx">
+            <button type="button" data-fx="echo" aria-pressed="false" data-i18n="dj.fx.echo">Echo</button>
+            <button type="button" data-fx="filterSweep" aria-pressed="false" data-i18n="dj.fx.sweep">Sweep</button>
+            <button type="button" data-fx="spinBack" data-i18n="dj.fx.spin">Spin back</button>
+          </div>
         </div>
       </section>
     </div>

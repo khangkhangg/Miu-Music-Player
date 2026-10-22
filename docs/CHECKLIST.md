@@ -352,7 +352,13 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   transition, analysis progress, headphones picker; song list with load to A/B and Auto DJ queue; party screen
   with cover, title, next song and a guest lock (hold 2 s to leave). en + vi. Tried in the app on this PC: entering,
   loading two songs, playing, Auto DJ planning, party screen and leaving (the engine stops).
-- [ ] **D.5 Hands-on** — hot cues, loops, effects, party pads, keyboard map.
+- [x] **D.5 Hands-on** — *Test first:* hot cues set on the nearest beat and jumped to (playing on), cleared; loops of
+  whole beats from the beat before, held until released; spin-back winds back and stops; echo repeats every 3/4 beat
+  and rings on after the deck is faded out (and Auto DJ's echo out now uses it); filter sweep over two bars and
+  back to the knob; party pads (air horn, siren, laser, bass drop, made in code) over the mix and in the headphones;
+  keyboard map by physical key (any layout); loop length in song beats. Screen: hot cue pads (right-click clears),
+  loop 4/8/16 and end, Echo / Sweep / Spin back, pads in the mixer, key list on the title. Tried in the app: keys
+  played a deck, set a hot cue, looped 4 beats and turned the echo on.
 - [ ] **D.6 Controllers** — MIDI, five built-in mappings, MIDI learn.
 
 ## Phase 6 – Packaging

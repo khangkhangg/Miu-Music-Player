@@ -164,6 +164,8 @@ pub struct Moves {
     pub outgoing_low: f32,
     pub incoming_low: f32,
     pub outgoing_filter: f32,
+    /// Echo on the outgoing song (turned off at the drop, so its repeats ring over the new one).
+    pub outgoing_echo: bool,
 }
 
 /// Where the echo out drops the new song in.
@@ -171,7 +173,7 @@ const DROP_AT: f32 = 0.75;
 
 pub fn moves(t: Transition, progress: f32) -> Moves {
     let p = progress.clamp(0.0, 1.0);
-    let flat = Moves { crossfader: -1.0, outgoing_low: 0.0, incoming_low: 0.0, outgoing_filter: 0.0 };
+    let flat = Moves { crossfader: -1.0, outgoing_low: 0.0, incoming_low: 0.0, outgoing_filter: 0.0, outgoing_echo: false };
     match t {
         Transition::BeatBlend { .. } => {
             let swapped = p >= 0.5;
@@ -185,6 +187,7 @@ pub fn moves(t: Transition, progress: f32) -> Moves {
         Transition::EchoOut => Moves {
             crossfader: if p >= DROP_AT { 1.0 } else { -1.0 },
             outgoing_filter: 0.8 * (p / DROP_AT).min(1.0),
+            outgoing_echo: (0.5..DROP_AT).contains(&p),
             ..flat
         },
         Transition::Crossfade { .. } => Moves { crossfader: -1.0 + 2.0 * p, ..flat },
@@ -299,6 +302,8 @@ mod tests {
         assert!(at(0.5).outgoing_filter > 0.3, "high-pass sweep");
         assert_eq!(at(0.5).crossfader, -1.0, "the new song is not in yet");
         assert_eq!(at(0.76).crossfader, 1.0, "the drop");
+        assert!(!at(0.3).outgoing_echo && at(0.6).outgoing_echo, "echo on before the drop");
+        assert!(!at(0.8).outgoing_echo, "off at the drop: the repeats ring over the new song");
     }
 
     #[test]
