@@ -514,5 +514,18 @@
   "player.leftAlone.one": "{n} file changed on the player was left there.",
   "player.leftAlone.other": "{n} files changed on the player were left there.",
   "player.noSpace": "Not enough space on the player: needs {need}, {available} available.",
-  "player.mtpHint": "Keep the phone unlocked and set to File transfer while it syncs."
+  "player.mtpHint": "Keep the phone unlocked and set to File transfer while it syncs.",
+  "update.available": "Miu Music {version} is available",
+  "update.downloading": "Downloading the update: {done} of {total}",
+  "update.downloadingUnknown": "Downloading the update: {done}",
+  "update.checkFailed": "Could not check for updates: {error}",
+  "update.upToDate": "Miu Music is up to date.",
+  "update.install": "Update and restart",
+  "update.later": "Later",
+  "update.notes": "What is new",
+  "update.installing": "Installing. Miu Music will restart.",
+  "settings.updates": "Updates",
+  "settings.autoUpdate": "Check for updates automatically",
+  "settings.checkNow": "Check now",
+  "settings.checking": "Checking…"
 }

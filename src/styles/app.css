@@ -27,6 +27,13 @@ button, input, select { font: inherit; }
 .work { display: flex; align-items: center; gap: 10px; padding: 8px 28px 0; font-size: 11px; color: var(--text-muted); }
 .work-bar { width: 120px; height: 3px; background: var(--surface-muted); overflow: hidden; flex: none; }
 .work-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.3s ease; }
+/* A new version is out (in-app updates) */
+.update-banner { display: flex; align-items: flex-start; gap: 12px; margin: 12px 28px 0; padding: 12px 14px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-card); font-size: 13px; }
+.update-banner > svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--accent-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.update-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.update-notes summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }
+.update-notes p { margin: 4px 0 0; white-space: pre-line; color: var(--text-muted); max-height: 160px; overflow-y: auto; }
+.update-progress { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-muted); }
 .app { display: grid; grid-template-columns: 228px minmax(0, 1fr) 320px; height: 100%; }
 
 /* ---- Left: library ---- */

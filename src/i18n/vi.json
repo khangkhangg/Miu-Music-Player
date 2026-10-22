@@ -514,5 +514,18 @@
   "player.leftAlone.one": "{n} tệp đã bị sửa trên máy nghe nhạc được giữ nguyên.",
   "player.leftAlone.other": "{n} tệp đã bị sửa trên máy nghe nhạc được giữ nguyên.",
   "player.noSpace": "Máy nghe nhạc không đủ chỗ: cần {need}, còn {available}.",
-  "player.mtpHint": "Giữ điện thoại mở khoá và ở chế độ Truyền tệp trong lúc đồng bộ."
+  "player.mtpHint": "Giữ điện thoại mở khoá và ở chế độ Truyền tệp trong lúc đồng bộ.",
+  "update.available": "Đã có Miu Music {version}",
+  "update.downloading": "Đang tải bản cập nhật: {done} / {total}",
+  "update.downloadingUnknown": "Đang tải bản cập nhật: {done}",
+  "update.checkFailed": "Không kiểm tra được bản cập nhật: {error}",
+  "update.upToDate": "Miu Music đã là bản mới nhất.",
+  "update.install": "Cập nhật và khởi động lại",
+  "update.later": "Để sau",
+  "update.notes": "Có gì mới",
+  "update.installing": "Đang cài đặt. Miu Music sẽ khởi động lại.",
+  "settings.updates": "Cập nhật",
+  "settings.autoUpdate": "Tự động kiểm tra bản cập nhật",
+  "settings.checkNow": "Kiểm tra ngay",
+  "settings.checking": "Đang kiểm tra…"
 }

@@ -136,6 +136,19 @@
     </aside>
 
     <main class="main">
+      <section class="update-banner" id="update-banner" role="status" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>
+        <div class="update-body">
+          <strong id="update-title"></strong>
+          <details class="update-notes" id="update-notes-box"><summary data-i18n="update.notes">What is new</summary><p id="update-notes"></p></details>
+          <div class="update-progress" id="update-progress" hidden>
+            <div class="work-bar"><div class="work-fill" id="update-fill"></div></div>
+            <span id="update-progress-text"></span>
+          </div>
+        </div>
+        <button class="eq-btn accent-btn" id="update-install" type="button" data-i18n="update.install">Update and restart</button>
+        <button class="eq-btn" id="update-later" type="button" data-i18n="update.later">Later</button>
+      </section>
       <div class="work" id="work" role="status" hidden>
         <div class="work-bar"><div class="work-fill" id="work-fill"></div></div>
         <span class="work-text" id="work-text"></span>
@@ -440,6 +453,12 @@
             <div class="setting"><span data-i18n="settings.coversNote">Look up covers online for albums that have none (iTunes and MusicBrainz, free). Your music files are not changed.</span>
               <button class="eq-btn" id="covers-find" type="button" data-i18n="settings.coversFind">Find missing covers</button></div>
             <p class="muted setting-note" id="covers-result" role="status"></p>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="settings.updates">Updates</legend>
+            <label class="setting check"><input type="checkbox" id="set-auto-update"><span data-i18n="settings.autoUpdate">Check for updates automatically</span></label>
+            <div class="setting"><span id="update-check-result" role="status"></span>
+              <button class="eq-btn" id="update-check" type="button" data-i18n="settings.checkNow">Check now</button></div>
           </fieldset>
           <fieldset>
             <legend data-i18n="settings.help">Help</legend>

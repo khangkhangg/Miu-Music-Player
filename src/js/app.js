@@ -16,6 +16,7 @@ import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLa
 import { errorState } from './errors.js';
 import { wizard } from './wizard.js';
 import { workState } from './progress.js';
+import { bannerState, downloadState, checkResultText } from './update.js';
 import { episodeMeta, episodeState, markSubscribed, lengthLabel } from './podcasts.js';
 import { BOOK_LANGUAGES, languageName, bookMeta, bookAction, bookProgress, markAdded } from './audiobooks.js';
 import { language } from './i18n.js';
@@ -68,6 +69,7 @@ if (invoke) {
   setupSettings(languageSetting);
   setupTaskbar();
   setupWizard();
+  setupUpdates();
   invoke('app_info').then(info => {
     document.getElementById('app-version').textContent = `${info.name} ${info.version}`;
   });
@@ -1226,6 +1228,7 @@ function showSettings(s) {
   $('set-hires').value = s.conversion.hiRes;
   $('set-exclusive').checked = s.exclusiveOutput;
   $('set-podcast-cleanup').value = s.podcastCleanupDays == null ? 'never' : String(s.podcastCleanupDays);
+  $('set-auto-update').checked = s.autoUpdate;
 }
 
 function setupSettings(languageSetting) {
@@ -1323,6 +1326,47 @@ function setupSettings(languageSetting) {
   window.__TAURI__.event.listen('settings-changed', ev => showSettings(ev.payload));
   window.__TAURI__.event.listen('mini-on-top', reload);
   reload();
+}
+
+// ---- In-app updates ----
+// The app looks for updates in the background and tells us with update-available. Nothing is
+// downloaded or installed (and playback never stops) until the user clicks "Update and restart".
+function setupUpdates() {
+  const $ = id => document.getElementById(id);
+  const showBanner = info => {
+    const b = bannerState(info);
+    $('update-banner').hidden = !b.show;
+    $('update-title').textContent = b.title;
+    $('update-notes').textContent = b.notes;
+    $('update-notes-box').hidden = !b.notes;
+  };
+  window.__TAURI__.event.listen('update-available', e => showBanner(e.payload));
+  window.__TAURI__.event.listen('update-progress', e => {
+    const d = downloadState(e.payload);
+    $('update-progress').hidden = false;
+    $('update-fill').style.width = `${d.percent}%`;
+    $('update-progress-text').textContent = d.percent >= 100 ? t('update.installing') : d.text;
+  });
+  $('update-later').addEventListener('click', () => { $('update-banner').hidden = true; });
+  $('update-install').addEventListener('click', () => {
+    $('update-install').disabled = true;
+    $('update-later').disabled = true;
+    invoke('install_update').catch(err => {
+      $('update-install').disabled = false;
+      $('update-later').disabled = false;
+      $('update-progress').hidden = false;
+      $('update-progress-text').textContent = String(err);
+    });
+  });
+  $('set-auto-update').addEventListener('change', e => invoke('set_app_setting', { name: 'autoUpdate', value: e.target.checked }).then(showSettings));
+  $('update-check').addEventListener('click', () => {
+    $('update-check').disabled = true;
+    $('update-check-result').textContent = t('settings.checking');
+    invoke('check_update')
+      .then(info => { $('update-check-result').textContent = checkResultText(info); showBanner(info); })
+      .catch(err => { $('update-check-result').textContent = checkResultText(String(err)); })
+      .finally(() => { $('update-check').disabled = false; });
+  });
 }
 
 // ---- First-run wizard (F6.2) ----
