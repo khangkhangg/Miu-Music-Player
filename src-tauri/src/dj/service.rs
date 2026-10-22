@@ -1,14 +1,19 @@
-//! The background analyser (D.1): works through the library one song at a time at background
-//! priority, so DJ mode knows every song's tempo, key and energy. Progress goes out as
-//! `dj-analysis-progress` { done, total }.
+//! DJ mode for the app: the background analyser (D.1), which works through the library one song
+//! at a time at background priority so DJ mode knows every song's tempo, key and energy (progress
+//! goes out as `dj-analysis-progress` { done, total }), and the commands that run the DJ engine (D.2).
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter, State};
 
+use super::actions::{Action, Deck as Side};
 use super::analysis::{self, Analysis};
+use super::engine::{DjEngine, EngineStatus};
 use super::store;
+use crate::audio::service::SharedPlayer;
 use crate::library::service::SharedDb;
+use crate::settings;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -109,11 +114,93 @@ pub fn dj_song_analysis(song_id: i64, db: State<'_, SharedDb>) -> Result<Option<
     store::get(&*db.lock().map_err(|e| e.to_string())?, song_id).map_err(|e| e.to_string())
 }
 
+
+/// The running DJ engine, while DJ mode is open.
+pub type SharedDj = Arc<Mutex<Option<DjEngine>>>;
+
+fn engine_do<T>(dj: &SharedDj, f: impl FnOnce(&DjEngine) -> T) -> Result<T, String> {
+    let g = dj.lock().map_err(|e| e.to_string())?;
+    g.as_ref().map(f).ok_or_else(|| "DJ mode is not open".to_string())
+}
+
+/// Opens DJ mode: the normal player pauses and the DJ engine takes the speakers (the player's
+/// output) and the chosen headphones.
+#[tauri::command]
+pub fn dj_enter(db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: State<'_, SharedDj>) -> Result<EngineStatus, String> {
+    let mut g = dj.lock().map_err(|e| e.to_string())?;
+    if let Some(e) = g.as_ref() {
+        return Ok(e.status());
+    }
+    let _ = player.run(crate::media_controls::Command::Pause);
+    let (master, phones, exclusive) = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d))
+    };
+    let engine = DjEngine::start(master, phones).map_err(|e| {
+        if exclusive { format!("{e} (exclusive mode holds the speakers: turn it off for DJ mode)") } else { e }
+    })?;
+    let s = engine.status();
+    *g = Some(engine);
+    Ok(s)
+}
+
+/// Closes DJ mode and gives the speakers back to the normal player.
+#[tauri::command]
+pub fn dj_leave(dj: State<'_, SharedDj>) -> Result<(), String> {
+    let old = dj.lock().map_err(|e| e.to_string())?.take();
+    drop(old); // waits for the engine to close its devices
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dj_action(action: Action, dj: State<'_, SharedDj>) -> Result<(), String> {
+    engine_do(&dj, |e| e.apply(action))
+}
+
+/// Puts a library song on a deck; it plays from its first beat when started.
+#[tauri::command]
+pub fn dj_load(deck: Side, song_id: i64, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    let (path, analysis) = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        let path = crate::library::songs::paths_for(&d, &[song_id]).map_err(|e| e.to_string())?.pop().map(|(_, p)| p);
+        (path.ok_or(format!("song {song_id} is not in the library"))?, store::get(&d, song_id).map_err(|e| e.to_string())?)
+    };
+    engine_do(&dj, |e| e.load(deck, path, song_id, analysis))
+}
+
+/// Decks, meters and devices for the DJ screen (`None` when DJ mode is closed).
+#[tauri::command]
+pub fn dj_state(dj: State<'_, SharedDj>) -> Result<Option<EngineStatus>, String> {
+    Ok(dj.lock().map_err(|e| e.to_string())?.as_ref().map(DjEngine::status))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DjOutputs {
+    pub devices: Vec<crate::audio::player::OutputDevice>,
+    pub phones: Option<String>,
+}
+
+#[tauri::command]
+pub fn dj_outputs(db: State<'_, SharedDb>) -> Result<DjOutputs, String> {
+    let phones = settings::dj_phones(&*db.lock().map_err(|e| e.to_string())?);
+    Ok(DjOutputs { devices: crate::audio::player::output_devices(), phones })
+}
+
+/// Chooses the headphones (`None`: no headphone cue); switches at once when DJ mode is open.
+#[tauri::command]
+pub fn dj_set_phones(name: Option<String>, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    settings::set_dj_phones(&*db.lock().map_err(|e| e.to_string())?, name.as_deref()).map_err(|e| e.to_string())?;
+    if let Some(e) = dj.lock().map_err(|e| e.to_string())?.as_ref() {
+        e.set_phones(name);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::library::db::Db;
-    use std::sync::{Arc, Mutex};
 
     fn library(paths: &[&str]) -> SharedDb {
         let db = Db::open_in_memory().unwrap();

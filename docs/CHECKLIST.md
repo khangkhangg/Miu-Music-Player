@@ -329,7 +329,13 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
 - [x] **D.1 Background analyser** — *Test first:* results kept per song and file version (re-analysed when the
   file changes, removed with the song), liked songs first, disliked skipped, undecodable files recorded once.
   Runs at background priority a minute after launch and when DJ mode asks for progress.
-- [ ] **D.2 DJ engine** — two decks, tempo ±8 %, 3-band EQ with kill, filter, gain, crossfader, headphone cue.
+- [x] **D.2 DJ engine** — *Test first:* 3-band EQ (flat keeps every frequency, each band killed or +6 dB), filter knob
+  low-pass → off → high-pass, gain trim, fader taper, constant-power crossfader; decks play untouched at their own
+  speed, other sample rates, tempo ±8 %, stop at the end, cue preview and return, sync of tempo and bars (half/double
+  time, refused when out of reach); mixer: crossfader, headphones hear the cued deck pre-fader, cue/master blend,
+  EQ and filter reach the master, limiter never clips, faders ramp without clicks, meters; whole-song decoding to
+  16-bit stereo, channel spreading, headphone buffer correction. Machine test: a deck plays on this PC's default
+  output and keeps time with it (0.99 s after 1 s). The headphones can be switched while playing.
 - [ ] **D.3 Auto DJ** — picker (key, tempo, energy curve) and transition planner.
 - [ ] **D.4 DJ screen and party screen**.
 - [ ] **D.5 Hands-on** — hot cues, loops, effects, party pads, keyboard map.

@@ -119,6 +119,17 @@ pub fn set_second_output(db: &Db, name: Option<&str>) -> Result<()> {
     db.set_setting_json(SECOND_OUTPUT, &name)
 }
 
+const DJ_PHONES: &str = "dj_phones";
+
+/// The headphones DJ mode cues to (D.2); `None` = no headphone cue.
+pub fn dj_phones(db: &Db) -> Option<String> {
+    db.setting_json::<Option<String>>(DJ_PHONES).ok().flatten().flatten()
+}
+
+pub fn set_dj_phones(db: &Db, name: Option<&str>) -> Result<()> {
+    db.set_setting_json(DJ_PHONES, &name)
+}
+
 /// Same sound on both outputs (default) or stereo split.
 pub fn dual_mode(db: &Db) -> crate::audio::dual::DualMode {
     db.setting_json(DUAL_MODE).ok().flatten().unwrap_or_default()
@@ -831,5 +842,20 @@ mod shortcut_tests {
         change(&db, "shortcutsEnabled", &serde_json::json!(false)).unwrap();
         assert!(!shortcuts_enabled(&db));
         assert!(!all(&db).shortcuts_enabled);
+    }
+}
+
+#[cfg(test)]
+mod dj_tests {
+    use super::*;
+
+    #[test]
+    fn the_dj_headphones_are_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dj_phones(&db), None);
+        set_dj_phones(&db, Some("Headphones (USB Audio)")).unwrap();
+        assert_eq!(dj_phones(&db).as_deref(), Some("Headphones (USB Audio)"));
+        set_dj_phones(&db, None).unwrap();
+        assert_eq!(dj_phones(&db), None);
     }
 }

@@ -99,6 +99,7 @@ pub fn run() {
         .manage(visualizer_on.clone())
         .manage(library::service::LastEdit::default())
         .manage(podcast_downloads.clone())
+        .manage(dj::service::SharedDj::default())
         .manage(std::sync::Arc::new(podcast::service::DiscoverCache::default()))
         .manage(std::sync::Arc::new(audiobook::service::RecentCache::default()))
         .register_uri_scheme_protocol("miuart", {
@@ -189,6 +190,13 @@ pub fn run() {
             lyrics::service::song_lyrics,
             dj::service::dj_analysis_progress,
             dj::service::dj_song_analysis,
+            dj::service::dj_enter,
+            dj::service::dj_leave,
+            dj::service::dj_action,
+            dj::service::dj_load,
+            dj::service::dj_state,
+            dj::service::dj_outputs,
+            dj::service::dj_set_phones,
             audio::service::player_shuffle,
             audio::service::play_episode,
             audio::service::play_chapters,

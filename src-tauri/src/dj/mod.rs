@@ -2,5 +2,9 @@
 
 pub mod actions;
 pub mod analysis;
+pub mod deck;
+pub mod dsp;
+pub mod engine;
+pub mod mixer;
 pub mod service;
 pub mod store;
