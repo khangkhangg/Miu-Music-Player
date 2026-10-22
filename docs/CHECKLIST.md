@@ -303,6 +303,16 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   Logic built 2026-10-20 (sync/journal.rs, tested); used once transfers exist (Phase 2).
 - [ ] **F6.4 Diagnostics export** — *Test first:* export contains logs + device info and **no** `.sqlitedb`, account IDs or paths under `research/`.
   Built 2026-10-20, tests green, **waiting for your check in the app**: Settings → Help → Export diagnostics….
+- [ ] **F6.5 In-app updates** — *Test first:* latest.json shape (`tools/latest-json.mjs`), updater config (endpoint, public
+  key, passive install, updater artifacts), "autoUpdate" on by default and checked at most once a day, version compare, banner,
+  download bar and Check now texts (JS).
+  Built 2026-10-22 with tauri-plugin-updater, tests green. The app checks ~20 s after start and then daily, shows a card with the
+  release notes; "Update and restart" downloads, verifies the signature, runs the NSIS installer passively (per-user, no admin)
+  and restarts. Release: `.\tools\build-release.ps1` asks for the key password and writes the installer, `.sig` and
+  `latest.json` to `src-tauri/target/release/github/<version>/`; upload all three to the GitHub release `v<version>`.
+  The private key is `%USERPROFILE%\.tauri\miu-music.key` (on this PC `C:\Users\duykh\.tauri`, made with
+  `tools/new-updater-key.ps1`, not in git): without it and its password, installed copies cannot
+  be updated. **Still to verify:** an installed 0.3.1 finds and installs a later test version.
 - [ ] **Manual:** clean install on a fresh Windows 11 VM works end to end.
 
 ## Fallbacks (only if needed)
