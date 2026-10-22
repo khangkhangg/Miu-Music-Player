@@ -1,6 +1,6 @@
 [package]
 name = "miu-music"
-version = "0.3.1"
+version = "0.3.2"
 description = "Miu Music - light music player that syncs liked songs to iPhone"
 edition = "2021"
 default-run = "miu-music"
