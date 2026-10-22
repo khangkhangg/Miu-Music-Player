@@ -538,5 +538,22 @@
   "lyrics.notTimed": "không có thời gian",
   "lyrics.seek": "Phát từ dòng này",
   "settings.lyricsOnline": "Tìm lời bài hát trên mạng (LRCLIB, miễn phí) khi bài hát không có sẵn lời",
-  "lyrics.unreachable": "Không kết nối được dịch vụ lời bài hát. Hãy thử lại sau."
+  "lyrics.unreachable": "Không kết nối được dịch vụ lời bài hát. Hãy thử lại sau.",
+  "shortcuts.title": "Phím tắt",
+  "shortcuts.enabled": "Dùng phím tắt ở mọi nơi trong Windows",
+  "shortcuts.note": "Phím tắt vẫn hoạt động khi đang dùng ứng dụng khác. Bấm vào một phím tắt rồi nhấn tổ hợp phím mới; Delete để tắt, Esc để giữ nguyên.",
+  "shortcuts.reset": "Đặt lại mặc định",
+  "shortcuts.off": "Tắt",
+  "shortcuts.press": "Nhấn tổ hợp phím…",
+  "shortcuts.used": "Đã dùng cho {action}",
+  "shortcuts.taken": "Windows không nhận tổ hợp phím này; có thể ứng dụng khác đang dùng. Hãy chọn tổ hợp khác.",
+  "shortcuts.needsModifier": "Hãy dùng Ctrl, Alt, Shift hoặc Win cùng với phím.",
+  "shortcuts.playPause": "Phát / tạm dừng",
+  "shortcuts.next": "Bài tiếp theo",
+  "shortcuts.previous": "Bài trước",
+  "shortcuts.like": "Thích",
+  "shortcuts.dislike": "Không thích và bỏ qua",
+  "shortcuts.miniPlayer": "Trình phát mini",
+  "shortcuts.restore": "Mở lại Miu",
+  "shortcuts.sync": "Đồng bộ"
 }

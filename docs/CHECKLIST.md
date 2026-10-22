@@ -310,6 +310,16 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   highlight following the song. Sampling 15 library songs found lyrics for 5 (several others have junk tags).
 - [ ] **Manual:** sing along to a few Vietnamese songs; check LRCLIB coverage for your library.
 
+## Phase 11 – Keyboard shortcuts
+- [x] **K.1 Shortcuts anywhere in Windows** — *Test first:* actions and defaults, key combinations read into one
+  spelling (Ctrl, Alt, Shift, Win, then one key; a bare key refused except F13–F24), duplicates found, settings (default
+  keys, change, turn one off, reset, all on/off, keys already used refused naming the action), the plugin accepts every
+  default, a key press read as keys in Settings. Defaults: Ctrl+Alt+P play/pause, Ctrl+Alt+→/← next/previous,
+  Ctrl+Alt+↑/↓ like/dislike (and skip), Ctrl+Alt+M mini player, Ctrl+Alt+R bring Miu back, Ctrl+Alt+S sync
+  (Ctrl+Alt+Space was taken by another app on this PC, so play/pause is P). Like, dislike and sync press the app's own
+  buttons. Tried with real key presses on this PC: every action did its job; rebinding, clash message, Esc, Delete
+  and reset checked in Settings. Keys Windows will not give Miu are marked in Settings.
+
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
   2026-10-20: path resolution tested (next to the app, or `src-tauri/binaries` from `target/<profile>`); `externalBin` + licence

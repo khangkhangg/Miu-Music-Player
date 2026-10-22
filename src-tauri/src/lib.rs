@@ -10,6 +10,8 @@ pub mod player;
 pub mod podcast;
 pub mod audiobook;
 pub mod settings;
+pub mod shortcuts;
+pub mod shortcuts_service;
 mod windows;
 pub mod sync;
 pub mod taskbar;
@@ -87,6 +89,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(shortcuts_service::plugin())
         .manage(update::Pending::default())
         .manage(registry.clone())
         .manage(db.clone())
@@ -108,6 +111,7 @@ pub fn run() {
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db.clone(), library_watch);
             update::start(app.handle().clone(), db.clone());
+            shortcuts_service::apply(app.handle(), &db);
             audio::eq_service::start(&db, &player);
             #[cfg(windows)]
             media_controls_win::start(app.handle(), player.clone());
@@ -119,6 +123,11 @@ pub fn run() {
             app_info,
             update::check_update,
             update::install_update,
+            shortcuts_service::shortcuts_state,
+            shortcuts_service::set_shortcut_keys,
+            shortcuts_service::reset_shortcut_keys,
+            shortcuts_service::set_shortcuts_enabled,
+            shortcuts_service::pause_shortcuts,
             check_prereqs,
             list_devices,
             library::service::list_folders,

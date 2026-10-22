@@ -329,6 +329,11 @@ div.tile { cursor: default; }
 .setting select, .language { font-size: 13px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); max-width: 60%; }
 .setting input[type="checkbox"], .eq-switch input { accent-color: var(--accent); }
 .setting-note { font-size: 12px; margin: 6px 0 0; clear: both; }
+.shortcut-list { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; font-size: 13px; margin: 6px 0; }
+.shortcut-keys { min-width: 150px; font: 12px/1.4 var(--mono, ui-monospace, monospace); padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); cursor: pointer; text-align: center; }
+.shortcut-keys.off { color: var(--text-muted); }
+.shortcut-keys.listening { border-color: var(--accent); color: var(--accent-ink, var(--accent)); }
+.shortcut-keys.taken { border-color: var(--danger); }
 
 /* ---- Right: now playing ---- */
 .np-column { background: var(--sidebar); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }

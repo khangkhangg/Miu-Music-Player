@@ -10,6 +10,7 @@ import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
 import { lineAt, livePosition, lyricsNote } from './lyrics.js';
+import { keysFromEvent, keysLabel } from './shortcuts.js';
 import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel, connectionRows, calibrationText } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
@@ -149,6 +150,7 @@ if (invoke) {
   setupEq();
   setupOutput();
   setupLyrics();
+  setupShortcuts();
   document.getElementById('open-mini').addEventListener('click', () => invoke('open_mini'));
   window.__TAURI__.event.listen('tauri://drag-drop', e => e.payload.paths.forEach(addFolder));
   document.getElementById('add-folder').addEventListener('click', pickFolder);
@@ -1018,6 +1020,88 @@ function renderSecond(state) {
   $('out-calibrate').disabled = !state.mics.length;
   $('out-balance').value = String(state.balance);
   $('out-balance-val').textContent = balanceLabel(state.balance);
+}
+
+// ---- Keyboard shortcuts (K.1) ----
+let shortcutState = null;
+let shortcutListening = null; // the action whose new keys are being pressed
+
+function setupShortcuts() {
+  const $ = id => document.getElementById(id);
+  // Like, dislike and sync press the same buttons as a click would.
+  window.__TAURI__.event.listen('shortcut', e => {
+    const id = { like: 'np-like', dislike: 'np-dislike', sync: 'sync-btn' }[e.payload];
+    const button = id && $(id);
+    if (button && !button.disabled && !button.closest('[hidden]')) button.click();
+  });
+  const fail = message => { $('shortcut-error').textContent = String(message); };
+  $('set-shortcuts').addEventListener('change', e => invoke('set_shortcuts_enabled', { on: e.target.checked }).then(renderShortcuts).catch(fail));
+  $('shortcuts-reset').addEventListener('click', () => {
+    stopListening();
+    invoke('reset_shortcut_keys').then(renderShortcuts).catch(fail);
+  });
+  $('shortcut-list').addEventListener('click', e => {
+    const b = e.target.closest('button[data-action]');
+    if (!b) return;
+    if (shortcutListening === b.dataset.action) { stopListening(); return; }
+    shortcutListening = b.dataset.action;
+    $('shortcut-error').textContent = '';
+    // Windows would swallow keys that are shortcuts already: pause them while choosing.
+    invoke('pause_shortcuts', { paused: true }).catch(() => {});
+    renderShortcuts(shortcutState);
+  });
+  document.addEventListener('keydown', e => {
+    if (!shortcutListening) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const plain = !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+    if (e.key === 'Escape') { stopListening(); return; }
+    if (plain && (e.key === 'Delete' || e.key === 'Backspace')) { saveShortcut(null); return; } // i18n-ignore: key names
+    const keys = keysFromEvent(e);
+    if (!keys) return; // only Ctrl, Alt, Shift or Win so far
+    if (plain && !/^F(1[3-9]|2[0-4])$/.test(keys)) { fail(t('shortcuts.needsModifier')); return; }
+    const other = shortcutState?.items.find(i => i.keys === keys && i.action !== shortcutListening);
+    if (other) { fail(t('shortcuts.used', { action: t(`shortcuts.${other.action}`) })); return; }
+    saveShortcut(keys);
+  }, true);
+  invoke('shortcuts_state').then(renderShortcuts).catch(() => {});
+}
+
+function saveShortcut(keys) {
+  const action = shortcutListening;
+  shortcutListening = null;
+  invoke('set_shortcut_keys', { action, keys })
+    .then(renderShortcuts)
+    .catch(message => { document.getElementById('shortcut-error').textContent = String(message); stopListening(); });
+}
+
+function stopListening() {
+  shortcutListening = null;
+  invoke('pause_shortcuts', { paused: false }).catch(() => {});
+  if (shortcutState) renderShortcuts(shortcutState);
+}
+
+function renderShortcuts(state) {
+  shortcutState = state;
+  const $ = id => document.getElementById(id);
+  $('set-shortcuts').checked = state.enabled;
+  $('shortcut-list').replaceChildren(...state.items.flatMap(item => {
+    const label = document.createElement('span');
+    label.textContent = t(`shortcuts.${item.action}`);
+    const keys = document.createElement('button');
+    keys.type = 'button';
+    keys.className = 'shortcut-keys';
+    keys.dataset.action = item.action;
+    const listening = shortcutListening === item.action;
+    keys.textContent = listening ? t('shortcuts.press') : keysLabel(item.keys);
+    keys.classList.toggle('listening', listening);
+    keys.classList.toggle('off', !item.keys);
+    keys.classList.toggle('taken', state.enabled && item.taken);
+    keys.title = state.enabled && item.taken ? t('shortcuts.taken') : '';
+    keys.disabled = !state.enabled;
+    return [label, keys];
+  }));
+  if (state.enabled && state.items.some(i => i.taken)) $('shortcut-error').textContent = t('shortcuts.taken');
 }
 
 // ---- Lyrics (L) ----

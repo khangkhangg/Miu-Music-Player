@@ -538,5 +538,22 @@
   "lyrics.notTimed": "not timed",
   "lyrics.seek": "Play from this line",
   "settings.lyricsOnline": "Look up lyrics online (LRCLIB, free) when a song has none of its own",
-  "lyrics.unreachable": "Could not reach the lyrics service. Try again later."
+  "lyrics.unreachable": "Could not reach the lyrics service. Try again later.",
+  "shortcuts.title": "Keyboard shortcuts",
+  "shortcuts.enabled": "Use keyboard shortcuts anywhere in Windows",
+  "shortcuts.note": "They work even while another app is in front. Click a shortcut, then press the new keys; Delete turns it off, Esc keeps it.",
+  "shortcuts.reset": "Reset to defaults",
+  "shortcuts.off": "Off",
+  "shortcuts.press": "Press keys…",
+  "shortcuts.used": "Already used for {action}",
+  "shortcuts.taken": "Windows would not take these keys; another app may use them. Choose others.",
+  "shortcuts.needsModifier": "Use Ctrl, Alt, Shift or Win with the key.",
+  "shortcuts.playPause": "Play / pause",
+  "shortcuts.next": "Next song",
+  "shortcuts.previous": "Previous song",
+  "shortcuts.like": "Like",
+  "shortcuts.dislike": "Dislike and skip",
+  "shortcuts.miniPlayer": "Mini player",
+  "shortcuts.restore": "Bring Miu back",
+  "shortcuts.sync": "Sync"
 }

@@ -410,7 +410,6 @@
             <legend data-i18n="settings.miniPlayer">Mini player</legend>
             <label class="setting check"><input type="checkbox" id="set-mini-minimize"><span data-i18n="settings.miniOnMinimize">Open the mini player when the window is minimised</span></label>
             <label class="setting check"><input type="checkbox" id="set-mini-top"><span data-i18n="settings.miniOnTop">Keep the mini player above other windows</span></label>
-            <label class="setting check"><input type="checkbox" id="set-lyrics-online"><span data-i18n="settings.lyricsOnline">Look up lyrics online (LRCLIB, free) when a song has none of its own</span></label>
             <label class="setting check"><input type="checkbox" id="set-viz"><span data-i18n="settings.visualizer">Show the visualizer</span></label>
             <label class="setting"><span data-i18n="settings.visualizerStyle">Visualizer style</span>
               <select id="set-viz-style">
@@ -418,6 +417,14 @@
                 <option value="mirrored" data-i18n="viz.mirrored">Mirrored bars</option>
                 <option value="line" data-i18n="viz.line">Line</option>
               </select></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="shortcuts.title">Keyboard shortcuts</legend>
+            <label class="setting check"><input type="checkbox" id="set-shortcuts"><span data-i18n="shortcuts.enabled">Use keyboard shortcuts anywhere in Windows</span></label>
+            <div class="shortcut-list" id="shortcut-list"></div>
+            <p class="muted setting-note" data-i18n="shortcuts.note">They work even while another app is in front. Click a shortcut, then press the new keys; Delete turns it off, Esc keeps it.</p>
+            <p class="eq-error setting-note" id="shortcut-error" role="alert"></p>
+            <button class="eq-btn" id="shortcuts-reset" type="button" data-i18n="shortcuts.reset">Reset to defaults</button>
           </fieldset>
           <fieldset>
             <legend data-i18n="settings.conversion">Songs on the iPhone</legend>
@@ -435,6 +442,7 @@
           </fieldset>
           <fieldset>
             <legend data-i18n="settings.playback">Playback on this PC</legend>
+            <label class="setting check"><input type="checkbox" id="set-lyrics-online"><span data-i18n="settings.lyricsOnline">Look up lyrics online (LRCLIB, free) when a song has none of its own</span></label>
             <label class="setting check"><input type="checkbox" id="set-exclusive"><span data-i18n="output.exclusive">Exclusive mode (bit-perfect)</span></label>
             <p class="muted setting-note" data-i18n="output.exclusiveNote">Miu takes the device for itself.</p>
           </fieldset>

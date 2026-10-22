@@ -228,6 +228,8 @@ pub struct AppSettings {
     pub lyrics_online: bool,
     /// The lyrics view is open in the now-playing column.
     pub lyrics_shown: bool,
+    /// Keyboard shortcuts work anywhere in Windows (K.1).
+    pub shortcuts_enabled: bool,
 }
 
 pub fn all(db: &Db) -> AppSettings {
@@ -244,6 +246,7 @@ pub fn all(db: &Db) -> AppSettings {
         auto_update: auto_update(db),
         lyrics_online: lyrics_online(db),
         lyrics_shown: lyrics_shown(db),
+        shortcuts_enabled: shortcuts_enabled(db),
     }
 }
 
@@ -272,8 +275,53 @@ pub fn change(db: &Db, name: &str, value: &serde_json::Value) -> std::result::Re
         "autoUpdate" => db.set_setting_json(AUTO_UPDATE, &get::<bool>(value)?).map_err(db_err),
         "lyricsOnline" => db.set_setting_json(LYRICS_ONLINE, &get::<bool>(value)?).map_err(db_err),
         "lyricsShown" => db.set_setting_json(LYRICS_SHOWN, &get::<bool>(value)?).map_err(db_err),
+        "shortcutsEnabled" => db.set_setting_json(SHORTCUTS_ENABLED, &get::<bool>(value)?).map_err(db_err),
         _ => Err(format!("unknown setting {name:?}")),
     }
+}
+
+const SHORTCUTS_ENABLED: &str = "shortcuts_enabled";
+const SHORTCUT_KEYS: &str = "shortcut_keys";
+
+/// Keyboard shortcuts work anywhere in Windows (default: yes).
+pub fn shortcuts_enabled(db: &Db) -> bool {
+    db.setting_json::<bool>(SHORTCUTS_ENABLED).ok().flatten().unwrap_or(true)
+}
+
+/// The keys of every action (`shortcuts::ACTIONS` order): the saved ones, else the default;
+/// `None` = turned off. A saved value that no longer reads as keys falls back to the default.
+pub fn shortcut_bindings(db: &Db) -> Vec<(crate::shortcuts::Action, Option<String>)> {
+    let saved: std::collections::HashMap<crate::shortcuts::Action, String> = db.setting_json(SHORTCUT_KEYS).ok().flatten().unwrap_or_default();
+    crate::shortcuts::ACTIONS
+        .iter()
+        .map(|&a| {
+            let keys = match saved.get(&a) {
+                None => Some(a.default_keys().to_string()),
+                Some(k) if k.is_empty() => None,
+                Some(k) => Some(crate::shortcuts::normalize(k).unwrap_or_else(|_| a.default_keys().to_string())),
+            };
+            (a, keys)
+        })
+        .collect()
+}
+
+/// Give `action` new keys (`None` turns it off). Refused when another action has them.
+pub fn set_shortcut(db: &Db, action: crate::shortcuts::Action, keys: Option<&str>) -> std::result::Result<(), String> {
+    let keys = keys.map(str::trim).filter(|k| !k.is_empty()).map(crate::shortcuts::normalize).transpose()?;
+    if let Some(k) = &keys {
+        if let Some((other, _)) = shortcut_bindings(db).into_iter().find(|(a, b)| *a != action && b.as_deref() == Some(k.as_str())) {
+            let name = serde_json::to_value(other).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
+            return Err(format!("{k} is already used for {name}"));
+        }
+    }
+    let mut saved: std::collections::HashMap<crate::shortcuts::Action, String> = db.setting_json(SHORTCUT_KEYS).ok().flatten().unwrap_or_default();
+    saved.insert(action, keys.unwrap_or_default());
+    db.set_setting_json(SHORTCUT_KEYS, &saved).map_err(|e| e.to_string())
+}
+
+/// Every action back to its default keys.
+pub fn reset_shortcuts(db: &Db) -> Result<()> {
+    db.set_setting_json(SHORTCUT_KEYS, &std::collections::HashMap::<crate::shortcuts::Action, String>::new())
 }
 
 const LYRICS_ONLINE: &str = "lyrics_online";
@@ -625,6 +673,7 @@ mod schema_tests {
             auto_update: true,
             lyrics_online: true,
             lyrics_shown: false,
+            shortcuts_enabled: true,
         });
     }
 
@@ -737,5 +786,50 @@ mod update_tests {
         assert!(update_check_due(&db, now - 3600), "a clock set back does not stop checks for good");
         change(&db, "autoUpdate", &serde_json::json!(false)).unwrap();
         assert!(!update_check_due(&db, now + 48 * 3600), "off means off");
+    }
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::*;
+    use crate::shortcuts::{Action, ACTIONS};
+
+    #[test]
+    fn shortcuts_are_on_with_their_default_keys_at_first() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(shortcuts_enabled(&db));
+        let b = shortcut_bindings(&db);
+        assert_eq!(b.len(), ACTIONS.len());
+        assert!(b.iter().all(|(a, k)| k.as_deref() == Some(a.default_keys())));
+    }
+
+    #[test]
+    fn a_shortcut_can_be_changed_turned_off_and_reset() {
+        let db = Db::open_in_memory().unwrap();
+        set_shortcut(&db, Action::Sync, Some("shift+ctrl+y")).unwrap();
+        set_shortcut(&db, Action::Like, None).unwrap();
+        let b: std::collections::HashMap<_, _> = shortcut_bindings(&db).into_iter().collect();
+        assert_eq!(b[&Action::Sync].as_deref(), Some("Ctrl+Shift+Y"), "saved in its one spelling");
+        assert_eq!(b[&Action::Like], None);
+        reset_shortcuts(&db).unwrap();
+        assert!(shortcut_bindings(&db).iter().all(|(a, k)| k.as_deref() == Some(a.default_keys())));
+    }
+
+    #[test]
+    fn keys_already_used_or_unusable_are_refused() {
+        let db = Db::open_in_memory().unwrap();
+        let err = set_shortcut(&db, Action::Sync, Some("Ctrl+Alt+P")).unwrap_err();
+        assert!(err.contains("playPause"), "says which action has them: {err}");
+        assert!(set_shortcut(&db, Action::Sync, Some("Space")).is_err());
+        set_shortcut(&db, Action::PlayPause, Some("Ctrl+Alt+P")).unwrap();
+        assert_eq!(shortcut_bindings(&db)[0].1.as_deref(), Some("Ctrl+Alt+P"), "giving an action its own keys again is fine");
+    }
+
+    #[test]
+    fn shortcuts_can_be_turned_off_altogether() {
+        let db = Db::open_in_memory().unwrap();
+        change(&db, "shortcutsEnabled", &serde_json::json!(false)).unwrap();
+        assert!(!shortcuts_enabled(&db));
+        assert!(!all(&db).shortcuts_enabled);
     }
 }
