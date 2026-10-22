@@ -336,7 +336,13 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   EQ and filter reach the master, limiter never clips, faders ramp without clicks, meters; whole-song decoding to
   16-bit stereo, channel spreading, headphone buffer correction. Machine test: a deck plays on this PC's default
   output and keeps time with it (0.99 s after 1 s). The headphones can be switched while playing.
-- [ ] **D.3 Auto DJ** — picker (key, tempo, energy curve) and transition planner.
+- [x] **D.3 Auto DJ** — *Test first:* picker (compatible key and reachable tempo, never repeats, queued songs first,
+  energy curve warm up / keep / build up / wind down, liked preferred), planner (beat blend, half time, echo out for
+  tempo or key jumps, crossfade for ballads, cut for high energy far apart), start on a downbeat to end at the mix
+  out, bass swap half way, echo-out sweep and drop; in the engine: starts a loaded song, does nothing while off,
+  beat blend synced with bars lined up and handed over (old song off the deck), ballad crossfade from the mix-in
+  point, a song ending with nothing mixed in, off mid-transition leaves the mix; the controller keeps the free deck
+  loaded. Machine test: mixes two real songs offline into a WAV to listen to.
 - [ ] **D.4 DJ screen and party screen**.
 - [ ] **D.5 Hands-on** — hot cues, loops, effects, party pads, keyboard map.
 - [ ] **D.6 Controllers** — MIDI, five built-in mappings, MIDI learn.

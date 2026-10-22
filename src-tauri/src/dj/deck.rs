@@ -30,6 +30,18 @@ impl Track {
         self.frames() as f64 / self.rate as f64
     }
 
+    /// The whole song in `bins` peaks (0..255), for the waveform overview on the screen.
+    pub fn overview(&self, bins: usize) -> Vec<u8> {
+        let frames = self.frames();
+        (0..bins)
+            .map(|b| {
+                let (from, to) = (b * frames / bins, ((b + 1) * frames / bins).min(frames));
+                let peak = self.pcm[from * 2..to * 2].iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
+                (peak as u32 * 255 / 32768) as u8
+            })
+            .collect()
+    }
+
     /// The beat grid (tempo, downbeat), when the song has one.
     fn beat(&self) -> Option<(f64, f64)> {
         let a = self.analysis.as_ref()?;
@@ -367,6 +379,20 @@ mod tests {
         assert!((b.bpm().unwrap() - 120.0).abs() < 0.01);
         assert!((b.bar_phase().unwrap() - a.bar_phase().unwrap()).abs() < 1e-3, "{:?} vs {:?}", b.bar_phase(), a.bar_phase());
         assert!((b.position_s() - 3.0).abs() < 1.0, "the jump stays within two beats");
+    }
+
+    #[test]
+    fn the_overview_shows_where_the_song_is_loud() {
+        let mut pcm = vec![0i16; 2000 * 2];
+        for s in &mut pcm[2000..] {
+            *s = 16384; // the second half at half scale
+        }
+        let t = Track { song_id: 1, rate: 1000, pcm, analysis: None };
+        let o = t.overview(4);
+        assert_eq!(o.len(), 4);
+        assert_eq!(&o[..2], &[0, 0]);
+        assert!(o[2] > 120 && o[2] < 135 && o[3] == o[2], "{o:?}");
+        assert!(Track { song_id: 1, rate: 1000, pcm: vec![], analysis: None }.overview(4).iter().all(|v| *v == 0));
     }
 
     #[test]

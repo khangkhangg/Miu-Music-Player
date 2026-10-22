@@ -2,6 +2,7 @@
 //! at a time at background priority so DJ mode knows every song's tempo, key and energy (progress
 //! goes out as `dj-analysis-progress` { done, total }), and the commands that run the DJ engine (D.2).
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -9,6 +10,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::actions::{Action, Deck as Side};
 use super::analysis::{self, Analysis};
+use super::autodj::{self, EnergyCurve};
 use super::engine::{DjEngine, EngineStatus};
 use super::store;
 use crate::audio::service::SharedPlayer;
@@ -115,12 +117,119 @@ pub fn dj_song_analysis(song_id: i64, db: State<'_, SharedDb>) -> Result<Option<
 }
 
 
-/// The running DJ engine, while DJ mode is open.
-pub type SharedDj = Arc<Mutex<Option<DjEngine>>>;
+/// Auto DJ's choices for this session: the energy curve, songs queued by hand, what has played.
+#[derive(Default)]
+pub struct AutoPrefs {
+    pub curve: EnergyCurve,
+    pub queue: Vec<i64>,
+    pub played: HashSet<i64>,
+    pub seed: u64,
+}
+
+/// DJ mode while it is open: the engine and Auto DJ's choices.
+pub struct DjSession {
+    pub engine: DjEngine,
+    pub auto: AutoPrefs,
+    /// Cleared when DJ mode closes, which stops the Auto DJ controller.
+    alive: Arc<AtomicBool>,
+}
+
+impl Drop for DjSession {
+    fn drop(&mut self) {
+        self.alive.store(false, Ordering::Release);
+    }
+}
+
+pub type SharedDj = Arc<Mutex<Option<DjSession>>>;
 
 fn engine_do<T>(dj: &SharedDj, f: impl FnOnce(&DjEngine) -> T) -> Result<T, String> {
     let g = dj.lock().map_err(|e| e.to_string())?;
-    g.as_ref().map(f).ok_or_else(|| "DJ mode is not open".to_string())
+    g.as_ref().map(|s| f(&s.engine)).ok_or_else(|| "DJ mode is not open".to_string())
+}
+
+/// With Auto DJ on: the deck that needs a song and the song on air (if any) to choose after.
+/// A first song goes on deck A; after that the free deck beside the one on air.
+pub fn needs_song(s: &EngineStatus) -> Option<(Side, Option<i64>)> {
+    if !s.auto_dj || s.decks.iter().any(|d| d.loading) {
+        return None;
+    }
+    let free = |i: usize| s.decks[i].song_id.is_none();
+    match s.on_air {
+        None if free(0) && free(1) => Some((Side::A, None)),
+        None => None,
+        Some(live) => {
+            let other = 1 - live as usize;
+            free(other).then(|| (if other == 0 { Side::A } else { Side::B }, s.decks[live as usize].song_id))
+        }
+    }
+}
+
+fn song_path(db: &SharedDb, song_id: i64) -> Option<std::path::PathBuf> {
+    let d = db.lock().ok()?;
+    crate::library::songs::paths_for(&d, &[song_id]).ok()?.pop().map(|(_, p)| p)
+}
+
+/// Keeps Auto DJ supplied: whenever a deck is free, picks the next song and loads it there.
+fn auto_controller(dj: SharedDj, db: SharedDb, alive: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        while alive.load(Ordering::Acquire) {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let (status, curve, queue, mut played, seed) = {
+                let Ok(g) = dj.lock() else { return };
+                let Some(s) = g.as_ref() else { return };
+                (s.engine.status(), s.auto.curve, s.auto.queue.clone(), s.auto.played.clone(), s.auto.seed)
+            };
+            // Whatever has been on a deck counts as played, by hand or by Auto DJ.
+            played.extend(status.decks.iter().filter_map(|d| d.song_id));
+            let pick = needs_song(&status).and_then(|(deck, current)| {
+                let candidates = db.lock().ok().and_then(|d| store::candidates(&d).ok())?;
+                let now = current
+                    .and_then(|id| candidates.iter().find(|c| c.song_id == id).map(|c| c.analysis.clone()))
+                    .unwrap_or(Analysis { bpm: 0.0, beat_confidence: 0.0, first_beat_s: 0.0, downbeat_s: 0.0, key: None, energy: 5, mix_in_s: 0.0, mix_out_s: 0.0, duration_s: 0.0 });
+                let next = autodj::pick(&now, &candidates, &played, &queue, curve, seed)?;
+                let analysis = candidates.iter().find(|c| c.song_id == next).map(|c| c.analysis.clone());
+                Some((deck, next, song_path(&db, next)?, analysis))
+            });
+            let Ok(mut g) = dj.lock() else { return };
+            let Some(s) = g.as_mut() else { return };
+            s.auto.played.extend(played);
+            if let Some((deck, next, path, analysis)) = pick {
+                s.engine.load(deck, path, next, analysis);
+                s.auto.played.insert(next);
+                s.auto.queue.retain(|id| *id != next);
+            }
+        }
+    });
+}
+
+#[tauri::command]
+pub fn dj_overview(deck: Side, dj: State<'_, SharedDj>) -> Result<Option<super::engine::Overview>, String> {
+    engine_do(&dj, |e| e.overview(deck))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DjSong {
+    pub song_id: i64,
+    #[serde(flatten)]
+    pub analysis: Analysis,
+}
+
+/// Tempo, key and energy of every analysed song, for the DJ song list.
+#[tauri::command]
+pub fn dj_library(db: State<'_, SharedDb>) -> Result<Vec<DjSong>, String> {
+    let c = store::candidates(&*db.lock().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok(c.into_iter().map(|c| DjSong { song_id: c.song_id, analysis: c.analysis }).collect())
+}
+
+/// Auto DJ's energy curve and the songs queued by hand (played first, in order).
+#[tauri::command]
+pub fn dj_set_auto(curve: EnergyCurve, queue: Vec<i64>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    let mut g = dj.lock().map_err(|e| e.to_string())?;
+    let s = g.as_mut().ok_or("DJ mode is not open")?;
+    s.auto.curve = curve;
+    s.auto.queue = queue;
+    Ok(())
 }
 
 /// Opens DJ mode: the normal player pauses and the DJ engine takes the speakers (the player's
@@ -128,8 +237,8 @@ fn engine_do<T>(dj: &SharedDj, f: impl FnOnce(&DjEngine) -> T) -> Result<T, Stri
 #[tauri::command]
 pub fn dj_enter(db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: State<'_, SharedDj>) -> Result<EngineStatus, String> {
     let mut g = dj.lock().map_err(|e| e.to_string())?;
-    if let Some(e) = g.as_ref() {
-        return Ok(e.status());
+    if let Some(s) = g.as_ref() {
+        return Ok(s.engine.status());
     }
     let _ = player.run(crate::media_controls::Command::Pause);
     let (master, phones, exclusive) = {
@@ -139,9 +248,12 @@ pub fn dj_enter(db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: St
     let engine = DjEngine::start(master, phones).map_err(|e| {
         if exclusive { format!("{e} (exclusive mode holds the speakers: turn it off for DJ mode)") } else { e }
     })?;
-    let s = engine.status();
-    *g = Some(engine);
-    Ok(s)
+    let status = engine.status();
+    let alive = Arc::new(AtomicBool::new(true));
+    let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+    *g = Some(DjSession { engine, auto: AutoPrefs { seed, ..Default::default() }, alive: alive.clone() });
+    auto_controller(dj.inner().clone(), db.inner().clone(), alive);
+    Ok(status)
 }
 
 /// Closes DJ mode and gives the speakers back to the normal player.
@@ -171,7 +283,7 @@ pub fn dj_load(deck: Side, song_id: i64, db: State<'_, SharedDb>, dj: State<'_, 
 /// Decks, meters and devices for the DJ screen (`None` when DJ mode is closed).
 #[tauri::command]
 pub fn dj_state(dj: State<'_, SharedDj>) -> Result<Option<EngineStatus>, String> {
-    Ok(dj.lock().map_err(|e| e.to_string())?.as_ref().map(DjEngine::status))
+    Ok(dj.lock().map_err(|e| e.to_string())?.as_ref().map(|s| s.engine.status()))
 }
 
 #[derive(serde::Serialize)]
@@ -191,8 +303,8 @@ pub fn dj_outputs(db: State<'_, SharedDb>) -> Result<DjOutputs, String> {
 #[tauri::command]
 pub fn dj_set_phones(name: Option<String>, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
     settings::set_dj_phones(&*db.lock().map_err(|e| e.to_string())?, name.as_deref()).map_err(|e| e.to_string())?;
-    if let Some(e) = dj.lock().map_err(|e| e.to_string())?.as_ref() {
-        e.set_phones(name);
+    if let Some(s) = dj.lock().map_err(|e| e.to_string())?.as_ref() {
+        s.engine.set_phones(name);
     }
     Ok(())
 }
@@ -200,7 +312,30 @@ pub fn dj_set_phones(name: Option<String>, db: State<'_, SharedDb>, dj: State<'_
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dj::engine::DeckStatus;
     use crate::library::db::Db;
+
+    fn deck(song_id: Option<i64>, loading: bool) -> DeckStatus {
+        DeckStatus { song_id, loading, ..Default::default() }
+    }
+
+    fn status(a: DeckStatus, b: DeckStatus, on_air: Option<Side>) -> EngineStatus {
+        EngineStatus { decks: [a, b], auto_dj: true, on_air, ..Default::default() }
+    }
+
+    #[test]
+    fn auto_dj_keeps_the_free_deck_loaded() {
+        let empty = || deck(None, false);
+        assert_eq!(needs_song(&status(empty(), empty(), None)), Some((Side::A, None)), "a first song");
+        assert_eq!(needs_song(&status(deck(Some(4), false), empty(), Some(Side::A))), Some((Side::B, Some(4))));
+        assert_eq!(needs_song(&status(empty(), deck(Some(5), false), Some(Side::B))), Some((Side::A, Some(5))));
+        assert_eq!(needs_song(&status(deck(Some(4), false), deck(None, true), Some(Side::A))), None, "already loading");
+        assert_eq!(needs_song(&status(deck(Some(4), false), deck(Some(6), false), Some(Side::A))), None, "both full");
+        assert_eq!(needs_song(&status(deck(Some(4), false), empty(), None)), None, "waiting for the first to start");
+        let mut off = status(empty(), empty(), None);
+        off.auto_dj = false;
+        assert_eq!(needs_song(&off), None);
+    }
 
     fn library(paths: &[&str]) -> SharedDb {
         let db = Db::open_in_memory().unwrap();

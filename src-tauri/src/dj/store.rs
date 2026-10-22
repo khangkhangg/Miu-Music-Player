@@ -4,6 +4,7 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::analysis::Analysis;
+use super::autodj::Candidate;
 use crate::library::db::{Db, Result};
 
 /// A song still waiting for analysis.
@@ -63,6 +64,24 @@ pub fn pending(db: &Db, limit: usize) -> Result<Vec<Pending>> {
         Ok(Pending { song_id: r.get(0)?, path: r.get(1)?, size: r.get(2)?, mtime: r.get(3)? })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Every song Auto DJ may choose: analysed (current file), not disliked.
+pub fn candidates(db: &Db) -> Result<Vec<Candidate>> {
+    let mut stmt = db.conn().prepare(
+        "SELECT s.id, s.rating, a.data FROM songs s
+         JOIN dj_analysis a ON a.song_id = s.id AND a.size = s.size AND a.mtime = s.mtime
+         WHERE s.rating >= 0 ORDER BY s.id",
+    )?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?)))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (song_id, rating, data) = row?;
+        if let Ok(analysis) = serde_json::from_str(&data) {
+            out.push(Candidate { song_id, analysis, liked: rating > 0 });
+        }
+    }
+    Ok(out)
 }
 
 /// (analysed, total) over the songs DJ mode can play, for the progress line.
@@ -145,6 +164,24 @@ mod tests {
         assert_eq!(progress(&db).unwrap(), (0, 2));
         save(&db, liked, 10, 100, &sample(), 5).unwrap();
         assert_eq!(progress(&db).unwrap(), (1, 2));
+    }
+
+    #[test]
+    fn candidates_are_the_analysed_songs_dj_mode_may_play() {
+        let db = Db::open_in_memory().unwrap();
+        let liked = song(&db, "C:/M/a.mp3", 1);
+        let plain = song(&db, "C:/M/b.mp3", 0);
+        let disliked = song(&db, "C:/M/c.mp3", -1);
+        let failed = song(&db, "C:/M/d.mp3", 0);
+        song(&db, "C:/M/e.mp3", 0); // not analysed yet
+        for id in [liked, plain, disliked] {
+            save(&db, id, 10, 100, &sample(), 5).unwrap();
+        }
+        save_failed(&db, failed, 10, 100, 5).unwrap();
+        let c = candidates(&db).unwrap();
+        let ids: Vec<(i64, bool)> = c.iter().map(|c| (c.song_id, c.liked)).collect();
+        assert_eq!(ids, vec![(liked, true), (plain, false)]);
+        assert_eq!(c[0].analysis, sample());
     }
 
     #[test]

@@ -14,6 +14,7 @@ use serde::Serialize;
 use super::actions::{Action, Deck as Side};
 use super::analysis::Analysis;
 use super::deck::Track;
+use super::automix::{AutoMix, Event, Next};
 use super::mixer::Mixer;
 use crate::audio::dual::{VarResampler, MAX_CORRECTION};
 
@@ -82,6 +83,11 @@ pub struct EngineStatus {
     pub phones: Option<String>,
     /// What went wrong with a device (unplugged, refused).
     pub problem: Option<String>,
+    pub auto_dj: bool,
+    /// The deck the speakers play (Auto DJ's view).
+    pub on_air: Option<Side>,
+    pub next: Option<Next>,
+    pub mixing: bool,
 }
 
 enum Cmd {
@@ -162,9 +168,20 @@ fn open(name: Option<&str>) -> Result<DeviceOut, String> {
     Ok(DeviceOut { _stream: stream, producer, rate, channels, name, lost })
 }
 
+/// Peaks across the whole song on a deck, for the waveform overview.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Overview {
+    pub song_id: i64,
+    pub peaks: Vec<u8>,
+}
+
+const OVERVIEW_BINS: usize = 600;
+
 pub struct DjEngine {
     tx: Sender<Cmd>,
     status: Arc<Mutex<EngineStatus>>,
+    overviews: Arc<Mutex<[Option<Overview>; 2]>>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -190,7 +207,7 @@ impl DjEngine {
             .spawn(move || run(rx, st, master, phones, ready_tx))
             .map_err(|e| e.to_string())?;
         ready_rx.recv().map_err(|_| "DJ engine stopped".to_string())??;
-        Ok(Self { tx, status, thread: Some(thread) })
+        Ok(Self { tx, status, overviews: Arc::default(), thread: Some(thread) })
     }
 
     pub fn apply(&self, action: Action) {
@@ -202,9 +219,12 @@ impl DjEngine {
         if let Ok(mut s) = self.status.lock() {
             s.decks[side as usize].loading = true;
         }
-        let (tx, status) = (self.tx.clone(), self.status.clone());
+        let (tx, status, overviews) = (self.tx.clone(), self.status.clone(), self.overviews.clone());
         std::thread::spawn(move || match decode_track(&path, song_id, analysis) {
             Ok(t) => {
+                if let Ok(mut o) = overviews.lock() {
+                    o[side as usize] = Some(Overview { song_id, peaks: t.overview(OVERVIEW_BINS) });
+                }
                 let _ = tx.send(Cmd::Loaded(side, Arc::new(t)));
             }
             Err(e) => {
@@ -215,6 +235,11 @@ impl DjEngine {
                 }
             }
         });
+    }
+
+    /// The waveform overview of the song last loaded on `side`.
+    pub fn overview(&self, side: Side) -> Option<Overview> {
+        self.overviews.lock().ok()?[side as usize].clone()
     }
 
     /// Switch the headphones to another device (`None`: no headphone cue) while playing.
@@ -250,6 +275,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
     let (mut phones_out, mut resampler) = open_phones(phones.as_deref(), &out);
     let _ = ready.send(Ok(()));
     let mut mixer = Mixer::new(out.rate);
+    let mut auto = AutoMix::default();
     let target = (out.rate as f64 * TARGET_S) as usize;
     let (mut master_buf, mut phones_buf) = (vec![0.0; BLOCK * 2], vec![0.0; BLOCK * 2]);
     let mut last_status = Instant::now() - STATUS_EVERY;
@@ -257,6 +283,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
     loop {
         match rx.recv_timeout(Duration::from_millis(2)) {
             Ok(Cmd::Stop) | Err(RecvTimeoutError::Disconnected) => break,
+            Ok(Cmd::Action(Action::AutoDj { on })) => auto.set_on(on),
             Ok(Cmd::Action(a)) => {
                 mixer.apply(&a);
             }
@@ -276,6 +303,9 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
             Err(RecvTimeoutError::Timeout) => {}
         }
         while out.buffered_frames() < target {
+            if let Some(Event::OnAir { deck, song_id }) = auto.tick(&mut mixer) {
+                log::info!("Auto DJ: song {song_id} on air on deck {deck:?}");
+            }
             mixer.render(&mut master_buf, &mut phones_buf);
             out.write(&spread(&master_buf, out.channels));
             if let (Some(p), Some(r)) = (phones_out.as_mut(), resampler.as_mut()) {
@@ -314,6 +344,10 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                     };
                 }
                 s.crossfader = mixer.crossfader();
+                s.auto_dj = auto.is_on();
+                s.on_air = auto.live().filter(|_| auto.is_on());
+                s.next = auto.next();
+                s.mixing = auto.is_mixing();
                 s.master = out.name.clone();
                 s.phones = phones_out.as_ref().map(|p| p.name.clone());
                 if problem.is_some() {

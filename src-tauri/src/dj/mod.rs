@@ -2,6 +2,8 @@
 
 pub mod actions;
 pub mod analysis;
+pub mod autodj;
+pub mod automix;
 pub mod deck;
 pub mod dsp;
 pub mod engine;
