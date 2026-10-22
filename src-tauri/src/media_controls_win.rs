@@ -37,6 +37,15 @@ struct State {
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
 /// Attach the controls to the main window; presses go straight to `player`. Call once at setup.
+/// Declare Miu's app identity (`media_controls::APP_ID`). Must run before any window exists.
+pub fn declare_app_id() {
+    use ::windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+    // SAFETY: a plain call with a valid, NUL-terminated wide string that outlives it.
+    if let Err(e) = unsafe { SetCurrentProcessExplicitAppUserModelID(&HSTRING::from(crate::media_controls::APP_ID)) } {
+        log::warn!("could not set the app identity: {e}");
+    }
+}
+
 pub fn start(app: &AppHandle, player: SharedPlayer) {
     let Some(hwnd) = app.get_webview_window("main").and_then(|w| w.hwnd().ok()) else {
         log::warn!("media controls: no main window");

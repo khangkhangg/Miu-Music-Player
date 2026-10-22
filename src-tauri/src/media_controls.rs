@@ -4,6 +4,11 @@
 
 use std::path::Path;
 
+/// Miu's Windows app identity (AppUserModelID), as on the Start menu shortcut the installer makes.
+/// The process declares it at start so Windows can tie the media session (lock screen) and the
+/// taskbar button to the installed app.
+pub const APP_ID: &str = "com.khangkhangg.miumusic";
+
 /// What the controls show the player doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -261,5 +266,16 @@ mod tests {
         assert!(c.due(s, true, 10_000, 7_750), "seek back while playing");
         assert!(c.due(Some(Track::Song(2)), true, 0, 8_000), "next song");
         assert!(c.due(None, false, 0, 8_250), "stopped");
+    }
+}
+
+#[cfg(test)]
+mod app_id_tests {
+    #[test]
+    fn the_app_id_is_the_one_the_installer_gives_the_start_menu_shortcut() {
+        // The NSIS installer stamps the shortcut with the bundle identifier; Windows ties the media
+        // controls (and the taskbar button) to the installed app only when the process says the same.
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(super::APP_ID, conf["identifier"].as_str().unwrap());
     }
 }

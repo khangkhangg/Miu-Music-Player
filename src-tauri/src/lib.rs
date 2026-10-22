@@ -57,6 +57,9 @@ pub fn run() {
         eprintln!("logging disabled: {e}");
     }
     log::info!("Miu Music {} started", env!("CARGO_PKG_VERSION"));
+    // Before any window: Windows reads the app identity when the window is made.
+    #[cfg(windows)]
+    media_controls_win::declare_app_id();
 
     let db_path = util::paths::db_path_in(&util::paths::appdata_root());
     let db = match library::db::Db::open(&db_path) {
