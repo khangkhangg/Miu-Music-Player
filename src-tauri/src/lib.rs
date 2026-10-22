@@ -1,6 +1,7 @@
 pub mod apple;
 pub mod audio;
 pub mod device;
+pub mod dj;
 pub mod library;
 pub mod lyrics;
 pub mod media_controls;
