@@ -223,6 +223,7 @@ pub struct AppSettings {
     pub conversion: crate::library::convert::Policy,
     pub exclusive_output: bool,
     pub podcast_cleanup_days: Option<u32>,
+    pub auto_update: bool,
 }
 
 pub fn all(db: &Db) -> AppSettings {
@@ -236,6 +237,7 @@ pub fn all(db: &Db) -> AppSettings {
         conversion: conversion_policy(db),
         exclusive_output: exclusive_output(db),
         podcast_cleanup_days: podcast_cleanup_days(db),
+        auto_update: auto_update(db),
     }
 }
 
@@ -261,6 +263,7 @@ pub fn change(db: &Db, name: &str, value: &serde_json::Value) -> std::result::Re
         "conversion" => set_conversion_policy(db, &get(value)?).map_err(db_err),
         "exclusiveOutput" => set_exclusive_output(db, get(value)?).map_err(db_err),
         "podcastCleanupDays" => set_podcast_cleanup_days(db, get(value)?).map_err(db_err),
+        "autoUpdate" => db.set_setting_json(AUTO_UPDATE, &get::<bool>(value)?).map_err(db_err),
         _ => Err(format!("unknown setting {name:?}")),
     }
 }
@@ -277,6 +280,26 @@ pub fn podcast_cleanup_days(db: &Db) -> Option<u32> {
 
 pub fn set_podcast_cleanup_days(db: &Db, days: Option<u32>) -> Result<()> {
     db.set_setting_json(PODCAST_CLEANUP_DAYS, &days)
+}
+
+const AUTO_UPDATE: &str = "auto_update";
+const LAST_UPDATE_CHECK: &str = "last_update_check";
+
+/// Look for a new version of Miu in the background (default: yes).
+pub fn auto_update(db: &Db) -> bool {
+    db.setting_json::<bool>(AUTO_UPDATE).ok().flatten().unwrap_or(true)
+}
+
+/// Remember when updates were last looked for (unix seconds).
+pub fn set_last_update_check(db: &Db, now: i64) -> Result<()> {
+    db.set_setting_json(LAST_UPDATE_CHECK, &now)
+}
+
+/// An automatic check is due when it is on and the last one was a day ago or more (or in the future).
+pub fn update_check_due(db: &Db, now: i64) -> bool {
+    const DAY: i64 = 24 * 3600;
+    let last = db.setting_json::<i64>(LAST_UPDATE_CHECK).ok().flatten();
+    auto_update(db) && last.is_none_or(|t| now - t >= DAY || now < t)
 }
 
 const SHUFFLE: &str = "shuffle";
@@ -578,6 +601,7 @@ mod schema_tests {
             conversion: Policy { hi_res: HiRes::Alac24_48, lossless: Lossless::Alac },
             exclusive_output: false,
             podcast_cleanup_days: Some(7),
+            auto_update: true,
         });
     }
 
@@ -659,5 +683,33 @@ mod balance_tests {
         assert_eq!(dual_balance(&db, "Bose", "Klipsch"), -4.5, "turning the second down = turning the first down the other way round");
         set_dual_balance(&db, "Klipsch", "Bose", 80.0).unwrap();
         assert_eq!(dual_balance(&db, "Klipsch", "Bose"), crate::audio::dual::MAX_BALANCE_DB);
+    }
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+
+    #[test]
+    fn updates_are_checked_automatically_by_default_and_the_choice_is_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(auto_update(&db));
+        assert!(all(&db).auto_update);
+        change(&db, "autoUpdate", &serde_json::json!(false)).unwrap();
+        assert!(!auto_update(&db));
+        assert!(!all(&db).auto_update);
+    }
+
+    #[test]
+    fn an_automatic_check_is_due_at_most_once_a_day() {
+        let db = Db::open_in_memory().unwrap();
+        let now = 1_800_000_000;
+        assert!(update_check_due(&db, now), "never checked");
+        set_last_update_check(&db, now).unwrap();
+        assert!(!update_check_due(&db, now + 3600));
+        assert!(update_check_due(&db, now + 24 * 3600));
+        assert!(update_check_due(&db, now - 3600), "a clock set back does not stop checks for good");
+        change(&db, "autoUpdate", &serde_json::json!(false)).unwrap();
+        assert!(!update_check_due(&db, now + 48 * 3600), "off means off");
     }
 }

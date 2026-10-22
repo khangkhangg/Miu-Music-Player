@@ -1,6 +1,6 @@
 [package]
 name = "miu-music"
-version = "0.3.0"
+version = "0.3.1"
 description = "Miu Music - light music player that syncs liked songs to iPhone"
 edition = "2021"
 default-run = "miu-music"
@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 cpal = "0.16"
 rtrb = "0.3"
 rubato = "0.16"

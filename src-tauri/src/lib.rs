@@ -12,6 +12,7 @@ pub mod taskbar;
 #[cfg(windows)]
 pub mod taskbar_win;
 pub mod util;
+pub mod update;
 
 use serde::Serialize;
 
@@ -78,6 +79,8 @@ pub fn run() {
     let podcast_downloads: podcast::service::SharedDownloads = std::sync::Arc::new(podcast::service::Downloads::default());
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(update::Pending::default())
         .manage(registry.clone())
         .manage(db.clone())
         .manage(library_watch.clone())
@@ -97,6 +100,7 @@ pub fn run() {
             player::service::start(app.handle().clone(), db.clone());
             windows::setup(app.handle(), db.clone());
             library::service::start(app.handle().clone(), db.clone(), library_watch);
+            update::start(app.handle().clone(), db.clone());
             audio::eq_service::start(&db, &player);
             audio::service::start(app.handle().clone(), player.clone(), db.clone());
             audio::visualizer::start(app.handle().clone(), player, visualizer_on);
@@ -104,6 +108,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            update::check_update,
+            update::install_update,
             check_prereqs,
             list_devices,
             library::service::list_folders,
@@ -216,5 +222,19 @@ mod tests {
         let info = app_info();
         assert_eq!(conf["productName"], info.name);
         assert_eq!(conf["version"], info.version);
+    }
+
+    #[test]
+    fn updates_come_signed_from_the_latest_github_release_and_install_quietly() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let updater = &conf["plugins"]["updater"];
+        assert_eq!(
+            updater["endpoints"],
+            serde_json::json!(["https://github.com/khangkhangg/Miu-Music-Player/releases/latest/download/latest.json"])
+        );
+        assert!(updater["pubkey"].as_str().is_some_and(|k| k.len() > 40), "the public key is set");
+        assert_eq!(updater["windows"]["installMode"], "passive");
+        assert_eq!(conf["bundle"]["createUpdaterArtifacts"], true);
     }
 }
