@@ -30,14 +30,18 @@ impl Track {
         self.frames() as f64 / self.rate as f64
     }
 
-    /// The whole song in `bins` peaks (0..255), for the waveform overview on the screen.
+    /// The whole song in `bins` loudness levels (RMS, 0..255), for the waveform overview: peaks
+    /// would draw today's loud masters as one solid bar.
     pub fn overview(&self, bins: usize) -> Vec<u8> {
         let frames = self.frames();
         (0..bins)
             .map(|b| {
-                let (from, to) = (b * frames / bins, ((b + 1) * frames / bins).min(frames));
-                let peak = self.pcm[from * 2..to * 2].iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
-                (peak as u32 * 255 / 32768) as u8
+                let s = &self.pcm[b * frames / bins * 2..((b + 1) * frames / bins).min(frames) * 2];
+                if s.is_empty() {
+                    return 0;
+                }
+                let rms = (s.iter().map(|&v| (v as f64) * (v as f64)).sum::<f64>() / s.len() as f64).sqrt();
+                (rms * 255.0 / 32768.0).min(255.0) as u8
             })
             .collect()
     }
@@ -393,6 +397,11 @@ mod tests {
         assert_eq!(&o[..2], &[0, 0]);
         assert!(o[2] > 120 && o[2] < 135 && o[3] == o[2], "{o:?}");
         assert!(Track { song_id: 1, rate: 1000, pcm: vec![], analysis: None }.overview(4).iter().all(|v| *v == 0));
+        // Loudness, not peaks: one full-scale click in a quiet bin barely shows.
+        let mut pcm = vec![0i16; 4000 * 2];
+        pcm[100] = i16::MAX;
+        let t = Track { song_id: 1, rate: 1000, pcm, analysis: None };
+        assert!(t.overview(4)[0] < 20, "{:?}", t.overview(4));
     }
 
     #[test]

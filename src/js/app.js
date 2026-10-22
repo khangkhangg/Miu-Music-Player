@@ -26,6 +26,7 @@ import { formatBytes } from './device.js';
 import { select } from './selection.js';
 import { groupAlbums, groupArtists, libraryStats, splitTitle, syncRuleFor, hasSyncRule, needsArtwork } from './library.js';
 import { formatDuration } from './songs.js';
+import { setupDj } from './djscreen.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
 } from './editor.js';
@@ -1433,6 +1434,8 @@ function setupSettings(languageSetting) {
   setupPodcasts();
   go('nav-audiobooks', () => showView('books'));
   setupBooks();
+  const dj = setupDj({ invoke, listen: window.__TAURI__.event.listen, songs: () => rawSongs, artUrl });
+  go('nav-dj', () => dj.open());
   setupSync();
   go('nav-settings', () => showView('settings'));
   $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));

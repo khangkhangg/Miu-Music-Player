@@ -1,0 +1,184 @@
+/* DJ mode (D.4): a dark booth in both themes (decks are read in dim light), deck A in the app's
+   yellow, deck B in teal. Everything is a variable so the look can change in one place. */
+.dj, .dj-party {
+  --dj-bg: #111115;
+  --dj-panel: #1b1b21;
+  --dj-panel-2: #24242c;
+  --dj-line: rgba(255, 255, 255, 0.08);
+  --dj-text: #ededf2;
+  --dj-muted: #9a9aa8;
+  --dj-a: #f2c12e;
+  --dj-b: #39c6c0;
+  --dj-hot: #ff5d4f;
+  --dj-ok: #6fd27c;
+  --dj-radius: 10px;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--dj-bg);
+  color: var(--dj-text);
+  font-family: var(--font);
+}
+.dj[hidden], .dj-party[hidden] { display: none; }
+.dj { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 10px; padding: 10px 14px 14px; }
+.dj svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dj [data-deck="A"] { --deck: var(--dj-a); }
+.dj [data-deck="B"] { --deck: var(--dj-b); }
+.dj-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Top bar */
+.dj-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.dj-brand { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+.dj-brand svg { width: 22px; height: 22px; color: var(--dj-a); }
+.dj-spacer { flex: 1; }
+.dj-field { display: inline-flex; align-items: center; gap: 6px; color: var(--dj-muted); font-size: 12px; }
+.dj-field svg { width: 18px; height: 18px; }
+.dj select, .dj input[type="search"] {
+  background: var(--dj-panel-2); color: var(--dj-text); border: 1px solid var(--dj-line);
+  border-radius: 6px; padding: 5px 8px; font-size: 13px;
+}
+.dj-next { font-size: 13px; color: var(--dj-text); padding: 4px 10px; border-radius: 999px; background: var(--dj-panel-2); }
+.dj-next:empty, .dj-analysis:empty { display: none; }
+.dj-analysis { font-size: 12px; color: var(--dj-muted); }
+.dj-top-btn {
+  background: var(--dj-panel-2); color: var(--dj-text); border: 1px solid var(--dj-line); border-radius: 6px;
+  padding: 6px 12px; cursor: pointer; font-size: 13px; position: relative; overflow: hidden;
+}
+.dj-top-btn:hover { border-color: rgba(255, 255, 255, 0.25); }
+.dj-exit { background: transparent; }
+
+/* Auto DJ switch */
+.dj-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.dj-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.dj-switch-track { width: 38px; height: 22px; border-radius: 999px; background: var(--dj-panel-2); border: 1px solid var(--dj-line); position: relative; transition: background 0.15s; }
+.dj-switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dj-muted); transition: transform 0.15s, background 0.15s; }
+.dj-switch input:checked + .dj-switch-track { background: var(--dj-a); }
+.dj-switch input:checked + .dj-switch-track::after { transform: translateX(16px); background: #111; }
+.dj-switch input:focus-visible + .dj-switch-track { outline: 2px solid var(--dj-a); outline-offset: 2px; }
+
+/* Waveform overviews */
+.dj-waves { display: grid; gap: 4px; }
+.dj-wave { position: relative; height: 40px; background: var(--dj-panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.dj-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dj-wave path { fill: var(--deck); stroke: none; opacity: 0.85; }
+.dj-wave-played { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(0, 0, 0, 0.55); pointer-events: none; }
+.dj-wave-head { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #fff; pointer-events: none; }
+
+/* The desk: deck A | mixer | deck B */
+.dj-desk { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; min-height: 0; }
+.dj-deck, .dj-mixer, .dj-browser { background: var(--dj-panel); border: 1px solid var(--dj-line); border-radius: var(--dj-radius); }
+.dj-deck { padding: 12px; display: grid; gap: 12px; align-content: start; border-top: 3px solid var(--deck); }
+.dj-deck-head { display: grid; grid-template-columns: auto 52px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.dj-letter { font-weight: 700; font-size: 18px; color: var(--deck, var(--dj-muted)); width: 22px; text-align: center; }
+.dj-cover { width: 52px; height: 52px; border-radius: 6px; background: var(--dj-panel-2); overflow: hidden; }
+.dj-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dj-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dj-artist { color: var(--dj-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dj-deck.empty .dj-title { color: var(--dj-muted); font-weight: 400; }
+.dj-onair { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #111; background: var(--deck); border-radius: 4px; padding: 3px 7px; }
+.dj-readout { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.dj-bpm b { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--deck); }
+.dj-bpm small { margin-left: 4px; color: var(--dj-muted); font-size: 12px; }
+.dj-key { font-weight: 700; font-size: 15px; padding: 2px 8px; border-radius: 5px; background: var(--dj-panel-2); }
+.dj-key:empty, .dj-energy:empty { display: none; }
+.dj-key.fits { background: var(--dj-ok); color: #111; }
+.dj-energy { color: var(--dj-muted); font-size: 13px; }
+.dj-time { margin-left: auto; font-size: 22px; font-variant-numeric: tabular-nums; }
+.dj-platter {
+  justify-self: center; width: min(100%, 230px); aspect-ratio: 1; border-radius: 50%; cursor: grab; touch-action: none;
+  background: radial-gradient(circle, #2c2c35 0 62%, #0d0d10 63% 100%); box-shadow: 0 0 0 4px var(--dj-panel-2), 0 0 0 5px var(--deck); padding: 10px;
+}
+.dj-platter:active { cursor: grabbing; }
+.dj-platter-disc {
+  position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+  background: repeating-radial-gradient(circle, #1a1a20 0 2px, #141418 2px 4px);
+}
+.dj-platter-disc img { position: absolute; inset: 30%; width: 40%; height: 40%; border-radius: 50%; object-fit: cover; }
+.dj-platter-mark { position: absolute; left: 50%; top: 4px; width: 4px; height: 22%; margin-left: -2px; border-radius: 2px; background: var(--deck); }
+.dj-tempo { display: grid; grid-template-columns: auto minmax(0, 1fr) 64px; gap: 10px; align-items: center; color: var(--dj-muted); font-size: 12px; }
+.dj-tempo output { text-align: right; font-variant-numeric: tabular-nums; color: var(--dj-text); }
+.dj input[type="range"] { accent-color: var(--deck, var(--dj-text)); }
+.dj-transport { display: flex; gap: 8px; }
+.dj-pad {
+  min-width: 52px; height: 48px; border-radius: 8px; border: 1px solid var(--dj-line); background: var(--dj-panel-2);
+  color: var(--dj-text); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; cursor: pointer; display: grid; place-items: center;
+}
+.dj-pad svg { width: 20px; height: 20px; }
+.dj-pad:active { transform: translateY(1px); }
+.dj-play { min-width: 64px; }
+.dj-play svg { fill: currentColor; stroke: none; }
+.dj-play .i-pause, .dj-play.on .i-play { display: none; }
+.dj-play.on .i-pause { display: inline; }
+.dj-play.on { background: var(--deck); color: #111; }
+.dj-cue { color: var(--deck); }
+.dj-sync.on { border-color: var(--deck); color: var(--deck); }
+.dj-nudge { min-width: 40px; }
+
+/* Mixer */
+.dj-mixer { padding: 12px; display: grid; gap: 12px; align-content: space-between; }
+.dj-strips { display: grid; grid-template-columns: repeat(3, auto); gap: 14px; }
+.dj-strip, .dj-master { display: grid; gap: 8px; justify-items: center; align-content: start; }
+.dj-master { border-left: 1px solid var(--dj-line); border-right: 1px solid var(--dj-line); padding: 0 14px; }
+.dj-knob-wrap { display: grid; justify-items: center; gap: 2px; font-size: 10px; color: var(--dj-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.dj-knob {
+  --turn: 0deg;
+  width: 38px; height: 38px; border-radius: 50%; cursor: ns-resize; position: relative;
+  background: radial-gradient(circle at 35% 30%, #3a3a45, #1e1e25 70%); border: 1px solid var(--dj-line);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.03);
+}
+.dj-knob i { position: absolute; left: 50%; top: 4px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px; background: var(--deck, var(--dj-text)); transform-origin: 50% 15px; transform: rotate(var(--turn)); }
+.dj-knob.killed i { background: var(--dj-hot); }
+.dj-knob:focus-visible { outline: 2px solid var(--deck, var(--dj-a)); outline-offset: 2px; }
+.dj-pfl { width: 38px; height: 30px; border-radius: 6px; border: 1px solid var(--dj-line); background: var(--dj-panel-2); color: var(--dj-muted); cursor: pointer; display: grid; place-items: center; }
+.dj-pfl svg { width: 18px; height: 18px; }
+.dj-pfl[aria-pressed="true"] { background: var(--deck); color: #111; }
+.dj-fader-row { display: flex; gap: 6px; align-items: stretch; height: 130px; }
+.dj-meter { width: 8px; border-radius: 3px; background: #0b0b0e; position: relative; overflow: hidden; }
+.dj-meter div { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(to top, var(--dj-ok) 0 70%, var(--dj-a) 70% 90%, var(--dj-hot) 90%); background-size: 100% 130px; background-position: bottom; }
+.dj-fader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 130px; }
+.dj-xfader-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.dj-xfader-row .dj-letter:first-child { color: var(--dj-a); }
+.dj-xfader-row .dj-letter:last-child { color: var(--dj-b); }
+.dj-xfader { width: 100%; accent-color: var(--dj-text); }
+
+/* Song list */
+.dj-browser { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.dj-browser-bar { display: flex; gap: 14px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--dj-line); }
+.dj-browser-bar input[type="search"] { width: min(360px, 50%); }
+.dj-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dj-muted); cursor: pointer; }
+.dj-list { overflow-y: auto; min-height: 0; }
+.dj-row { display: grid; grid-template-columns: minmax(0, 1fr) 70px 46px 90px auto; gap: 10px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--dj-line); font-size: 13px; }
+.dj-row:hover { background: var(--dj-panel-2); }
+.dj-row.played { opacity: 0.45; }
+.dj-row .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dj-row .who small { color: var(--dj-muted); margin-left: 8px; }
+.dj-row .num { font-variant-numeric: tabular-nums; color: var(--dj-muted); }
+.dj-row .k { font-weight: 700; text-align: center; border-radius: 4px; }
+.dj-row .k.fits { background: var(--dj-ok); color: #111; }
+.dj-row .acts { display: flex; gap: 4px; }
+.dj-row button { border: 1px solid var(--dj-line); background: var(--dj-panel-2); color: var(--dj-text); border-radius: 5px; padding: 3px 9px; cursor: pointer; font-weight: 700; font-size: 12px; }
+.dj-row button[data-load="A"] { color: var(--dj-a); }
+.dj-row button[data-load="B"] { color: var(--dj-b); }
+.dj-row button.queued { background: var(--dj-a); color: #111; }
+.dj-problem { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--dj-hot); color: #111; padding: 8px 14px; border-radius: 8px; font-weight: 600; margin: 0; }
+
+/* Party screen */
+.dj-party { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; gap: 5vw; padding: 6vh 6vw; overflow: hidden; }
+.dj-party-art { aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: linear-gradient(135deg, #2b2b35, #15151b); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); z-index: 1; }
+.dj-party-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dj-party-now { z-index: 1; display: grid; gap: 14px; }
+.dj-party-title { font-size: clamp(28px, 5vw, 72px); font-weight: 700; line-height: 1.05; }
+.dj-party-artist { font-size: clamp(18px, 2.4vw, 34px); color: var(--dj-muted); }
+.dj-party-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.dj-party-bar div { height: 100%; width: 0; background: var(--dj-a); }
+.dj-party-next { font-size: clamp(14px, 1.5vw, 20px); color: var(--dj-muted); }
+.dj-party-pulse { position: absolute; inset: -20%; background: radial-gradient(circle at 30% 50%, rgba(242, 193, 46, 0.22), transparent 55%); opacity: 0.3; transition: opacity 0.08s linear; pointer-events: none; }
+.dj-party-controls { position: absolute; right: 18px; bottom: 16px; display: flex; gap: 8px; z-index: 2; }
+.dj-party.locked .dj-party-controls { opacity: 0.25; }
+.dj-party #dj-party-lock[aria-pressed="true"] { background: var(--dj-a); color: #111; }
+.dj-hold { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(242, 193, 46, 0.35); }
+
+@media (max-width: 1100px) {
+  .dj-desk { grid-template-columns: 1fr 1fr; }
+  .dj-mixer { grid-column: 1 / -1; grid-row: 2; }
+}

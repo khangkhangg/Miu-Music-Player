@@ -1,0 +1,394 @@
+// DJ mode screen (D.4): the booth over the app. Every control sends a DJ action to the engine;
+// the engine's state is read about 20 times a second while the screen is open.
+
+import { t, translatePage } from './i18n.js';
+import {
+  bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, fits, songMeta,
+  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns,
+} from './dj.js';
+
+const POLL_MS = 50;
+const LIST_MAX = 300;
+const SIDES = ['A', 'B'];
+
+export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
+  const $ = (id) => document.getElementById(id);
+  const root = $('dj-mode');
+  const party = $('dj-party-screen');
+  const deckEl = (side) => root.querySelector(`.dj-deck[data-deck="${side}"]`);
+  const stripEl = (side) => root.querySelector(`.dj-strip[data-deck="${side}"]`);
+  const waveEl = (side) => root.querySelector(`.dj-wave[data-deck="${side}"]`);
+
+  let timer = null;
+  let state = null;
+  let analyses = new Map();
+  let shownIds = [undefined, undefined];
+  let overviewIds = [undefined, undefined];
+  const played = new Set();
+  let queue = [];
+  let listKey = '';
+  let dragging = null; // the control being dragged, so polling does not move it back
+
+  const act = (action) => invoke('dj_action', { action }).catch(() => {});
+  const songById = (id) => songs().find((s) => s.id === id);
+
+  // ---- Controls ----
+
+  function setKnob(knob, value) {
+    const min = Number(knob.dataset.min);
+    const max = Number(knob.dataset.max);
+    knob.setAttribute('aria-valuenow', String(value));
+    knob.style.setProperty('--turn', `${((value - min) / (max - min)) * 270 - 135}deg`);
+    knob.classList.toggle('killed', knob.dataset.ctl === 'eq' && value <= -1);
+  }
+
+  function knobAction(knob, value) {
+    const deck = knob.closest('[data-deck]')?.dataset.deck;
+    switch (knob.dataset.ctl) {
+      case 'gain': return { type: 'gain', deck, value };
+      case 'eq': return { type: 'eq', deck, band: knob.dataset.band, value };
+      case 'filter': return { type: 'filter', deck, value };
+      case 'master': return { type: 'masterVolume', value };
+      case 'cueMix': return { type: 'cueMix', value };
+      default: return { type: 'headphoneVolume', value };
+    }
+  }
+
+  function turn(knob, value) {
+    setKnob(knob, value);
+    act(knobAction(knob, value));
+  }
+
+  for (const knob of root.querySelectorAll('.dj-knob')) {
+    const range = { min: Number(knob.dataset.min), max: Number(knob.dataset.max), reset: Number(knob.dataset.reset) };
+    setKnob(knob, range.reset);
+    knob.addEventListener('pointerdown', (e) => {
+      knob.setPointerCapture(e.pointerId);
+      const start = { y: e.clientY, value: Number(knob.getAttribute('aria-valuenow')) };
+      const move = (ev) => turn(knob, knobDrag(start.value, start.y - ev.clientY, range));
+      const up = () => { knob.removeEventListener('pointermove', move); knob.removeEventListener('pointerup', up); };
+      knob.addEventListener('pointermove', move);
+      knob.addEventListener('pointerup', up);
+    });
+    knob.addEventListener('dblclick', () => turn(knob, range.reset));
+    knob.addEventListener('keydown', (e) => {
+      const v = knobKey(Number(knob.getAttribute('aria-valuenow')), e.key, { ...range, step: (range.max - range.min) / 40 });
+      if (v == null) return;
+      e.preventDefault();
+      turn(knob, v);
+    });
+  }
+
+  for (const side of SIDES) {
+    const deck = deckEl(side);
+    const tempo = deck.querySelector('[data-ctl="tempo"]');
+    tempo.addEventListener('input', () => { dragging = tempo; act({ type: 'tempo', deck: side, value: Number(tempo.value) }); });
+    tempo.addEventListener('change', () => { dragging = null; });
+    tempo.addEventListener('dblclick', () => { tempo.value = '0'; act({ type: 'tempo', deck: side, value: 0 }); });
+    deck.querySelector('[data-ctl="play"]').addEventListener('click', () => act({ type: 'playPause', deck: side }));
+    deck.querySelector('[data-ctl="sync"]').addEventListener('click', () => act({ type: 'sync', deck: side }));
+    const cue = deck.querySelector('[data-ctl="cue"]');
+    cue.addEventListener('pointerdown', () => act({ type: 'cue', deck: side, pressed: true }));
+    for (const ev of ['pointerup', 'pointerleave']) cue.addEventListener(ev, (e) => { if (ev === 'pointerup' || e.buttons) act({ type: 'cue', deck: side, pressed: false }); });
+    for (const nudge of deck.querySelectorAll('[data-ctl="nudge"]')) {
+      nudge.addEventListener('pointerdown', () => act({ type: 'nudge', deck: side, amount: Number(nudge.dataset.amount) }));
+      for (const ev of ['pointerup', 'pointerleave']) nudge.addEventListener(ev, () => act({ type: 'nudge', deck: side, amount: 0 }));
+    }
+    // The platter: drag round it to nudge a playing song or move through a paused one.
+    const platter = deck.querySelector('.dj-platter');
+    platter.addEventListener('pointerdown', (e) => {
+      platter.setPointerCapture(e.pointerId);
+      const r = platter.getBoundingClientRect();
+      const center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      let last = { x: e.clientX, y: e.clientY };
+      const move = (ev) => {
+        const now = { x: ev.clientX, y: ev.clientY };
+        const delta = jogTurns(last, now, center);
+        last = now;
+        if (delta) act({ type: 'jog', deck: side, delta });
+      };
+      const up = () => { platter.removeEventListener('pointermove', move); platter.removeEventListener('pointerup', up); };
+      platter.addEventListener('pointermove', move);
+      platter.addEventListener('pointerup', up);
+    });
+    const strip = stripEl(side);
+    const fader = strip.querySelector('[data-ctl="volume"]');
+    fader.addEventListener('input', () => act({ type: 'volume', deck: side, value: Number(fader.value) }));
+    const pfl = strip.querySelector('[data-ctl="phones"]');
+    pfl.addEventListener('click', () => {
+      const on = pfl.getAttribute('aria-pressed') !== 'true';
+      pfl.setAttribute('aria-pressed', String(on));
+      act({ type: 'headphoneCue', deck: side, on });
+    });
+    // Click on the overview to jump there (only on a paused deck: no accidental jumps on air).
+    waveEl(side).addEventListener('click', (e) => {
+      const d = state?.decks[SIDES.indexOf(side)];
+      if (!d?.durationS || d.playing) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const turns = (((e.clientX - r.left) / r.width) * d.durationS - d.positionS) / 1.8;
+      act({ type: 'jog', deck: side, delta: turns });
+    });
+  }
+
+  const xfader = $('dj-xfader');
+  xfader.addEventListener('input', () => { dragging = xfader; act({ type: 'crossfader', value: Number(xfader.value) }); });
+  xfader.addEventListener('change', () => { dragging = null; });
+  xfader.addEventListener('dblclick', () => { xfader.value = '0'; act({ type: 'crossfader', value: 0 }); });
+
+  const sendAuto = () => invoke('dj_set_auto', { curve: $('dj-curve').value, queue }).catch(() => {});
+  $('dj-auto').addEventListener('change', (e) => act({ type: 'autoDj', on: e.target.checked }));
+  $('dj-curve').addEventListener('change', sendAuto);
+  $('dj-phones').addEventListener('change', (e) => invoke('dj_set_phones', { name: e.target.value || null }).catch(showProblem));
+  $('dj-search').addEventListener('input', () => renderList(true));
+  $('dj-fits').addEventListener('change', () => renderList(true));
+  $('dj-exit').addEventListener('click', close);
+
+  $('dj-list').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    const id = Number(b?.closest('[data-id]')?.dataset.id);
+    if (!b || !id) return;
+    if (b.dataset.load) {
+      invoke('dj_load', { deck: b.dataset.load, songId: id }).catch(showProblem);
+    } else {
+      queue = queue.includes(id) ? queue.filter((q) => q !== id) : [...queue, id];
+      sendAuto();
+      renderList(true);
+    }
+  });
+
+  // ---- Party screen and guest lock ----
+
+  let locked = false;
+  $('dj-party').addEventListener('click', () => { party.hidden = false; });
+  $('dj-party-lock').addEventListener('click', (e) => {
+    locked = !locked;
+    e.currentTarget.setAttribute('aria-pressed', String(locked));
+    party.classList.toggle('locked', locked);
+  });
+  const back = $('dj-party-back');
+  let holdStart = null;
+  let holdFrame = null;
+  const hold = () => {
+    const p = holdProgress(performance.now() - holdStart);
+    back.querySelector('.dj-hold').style.width = `${p * 100}%`;
+    if (p >= 1) { endHold(); party.hidden = true; locked = false; party.classList.remove('locked'); $('dj-party-lock').setAttribute('aria-pressed', 'false'); return; }
+    holdFrame = requestAnimationFrame(hold);
+  };
+  const endHold = () => { cancelAnimationFrame(holdFrame); holdStart = null; back.querySelector('.dj-hold').style.width = '0'; };
+  back.addEventListener('pointerdown', () => {
+    if (!locked) { party.hidden = true; return; }
+    holdStart = performance.now();
+    hold();
+  });
+  for (const ev of ['pointerup', 'pointerleave']) back.addEventListener(ev, () => { if (holdStart != null) endHold(); });
+  back.title = t('dj.unlockHold');
+
+  // ---- State ----
+
+  let problemTimer = null;
+  function showProblem(message) {
+    const el = $('dj-problem');
+    el.textContent = String(message);
+    el.hidden = false;
+    clearTimeout(problemTimer);
+    problemTimer = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+
+  async function loadOverview(side, i, songId) {
+    overviewIds[i] = songId;
+    const path = waveEl(side).querySelector('path');
+    path.setAttribute('d', '');
+    if (songId == null) return;
+    const o = await invoke('dj_overview', { deck: side }).catch(() => null);
+    if (o && o.songId === songId && overviewIds[i] === songId) path.setAttribute('d', waveformPath(o.peaks, 1000, 40));
+    else overviewIds[i] = null; // not decoded yet: ask again on the next poll
+  }
+
+  function onAirAnalysis() {
+    const i = state?.onAir ? SIDES.indexOf(state.onAir) : state?.decks.findIndex((d) => d.playing);
+    const d = state?.decks[i];
+    const a = d?.songId != null ? analyses.get(d.songId) : null;
+    return a ? { bpm: d.bpm ?? a.bpm, key: a.key, songId: d.songId } : null;
+  }
+
+  function renderDeck(side, i) {
+    const d = state.decks[i];
+    const el = deckEl(side);
+    const field = (f) => el.querySelector(`[data-f="${f}"]`);
+    if (shownIds[i] !== d.songId) {
+      shownIds[i] = d.songId;
+      const song = d.songId != null ? songById(d.songId) : null;
+      field('title').textContent = song?.title ?? (d.loading ? t('dj.loading') : t('dj.empty'));
+      field('artist').textContent = song?.artist ?? '';
+      el.classList.toggle('empty', !song);
+      for (const [img, size] of [[el.querySelector('.dj-cover img'), 120], [el.querySelector('.dj-platter img'), 240]]) { // i18n-ignore
+        img.hidden = !song;
+        if (song) { img.onerror = () => { img.hidden = true; }; img.src = artUrl(song.id, size); }
+      }
+      const a = d.songId != null ? analyses.get(d.songId) : null;
+      field('key').textContent = a?.key ?? '';
+      field('energy').textContent = a ? t('dj.energy', { n: a.energy }) : '';
+    }
+    if (d.loading && d.songId == null) field('title').textContent = t('dj.loading');
+    if (overviewIds[i] !== d.songId) loadOverview(side, i, d.songId);
+    field('bpm').textContent = bpmLabel(d.bpm);
+    field('time').textContent = timeLeft(d);
+    field('tempo').textContent = tempoLabel(d.tempo);
+    const tempo = el.querySelector('[data-ctl="tempo"]');
+    if (dragging !== tempo) tempo.value = String(d.tempo);
+    el.querySelector('[data-ctl="play"]').classList.toggle('on', d.playing);
+    // One turn per 1.8 s of music, like a record at 33 1/3: the disc shows where the song is.
+    el.querySelector('.dj-platter-disc').style.transform = `rotate(${((d.positionS / 1.8) % 1) * 360}deg)`;
+    field('onair').hidden = state.onAir !== side;
+    const air = onAirAnalysis();
+    const a = d.songId != null ? analyses.get(d.songId) : null;
+    field('key').classList.toggle('fits', !!air && air.songId !== d.songId && fits(air, a));
+    stripEl(side).querySelector('.dj-meter div').style.height = `${meterHeight(d.level) * 100}%`;  // i18n-ignore
+    const p = d.durationS ? Math.min(1, d.positionS / d.durationS) : 0;
+    const wave = waveEl(side);
+    wave.querySelector('.dj-wave-played').style.width = `${p * 100}%`;
+    wave.querySelector('.dj-wave-head').style.left = `${p * 100}%`;
+  }
+
+  function renderParty() {
+    if (party.hidden) return;
+    const i = state.onAir ? SIDES.indexOf(state.onAir) : state.decks.findIndex((d) => d.playing);
+    const d = state.decks[i];
+    const song = d?.songId != null ? songById(d.songId) : null;
+    $('dj-party-title').textContent = song?.title ?? t('dj.nothingOnAir');
+    $('dj-party-artist').textContent = song?.artist ?? '';
+    const img = $('dj-party-img');
+    if (song && img.dataset.id !== String(song.id)) { img.dataset.id = String(song.id); img.hidden = false; img.onerror = () => { img.hidden = true; }; img.src = artUrl(song.id, 600); }
+    if (!song) img.hidden = true;
+    $('dj-party-progress').style.width = `${d?.durationS ? (d.positionS / d.durationS) * 100 : 0}%`;
+    const other = state.decks[1 - i];
+    const next = other?.songId != null ? songById(other.songId) : null;
+    $('dj-party-next').textContent = next ? t('dj.upNext', { title: [next.title, next.artist].filter(Boolean).join(' · ') }) : '';
+    $('dj-party-pulse').style.opacity = String(0.15 + meterHeight(d?.level ?? 0) * 0.85);
+  }
+
+  function renderList(force = false) {
+    const air = $('dj-fits').checked ? onAirAnalysis() : null;
+    const key = [$('dj-search').value, air?.songId, air?.bpm?.toFixed(0), played.size, queue.join(','), analyses.size].join('|');
+    if (!force && key === listKey) return;
+    listKey = key;
+    const fitsAir = onAirAnalysis();
+    const list = filterSongsForDj(songs(), analyses, { query: $('dj-search').value, fitsWith: air, played }).slice(0, LIST_MAX);
+    const rows = list.map((s) => {
+      const a = analyses.get(s.id);
+      const row = document.createElement('div');
+      row.className = `dj-row${played.has(s.id) ? ' played' : ''}`;
+      row.setAttribute('role', 'listitem');
+      row.dataset.id = String(s.id);
+      row.title = songMeta(a);
+      const who = document.createElement('div');
+      who.className = 'who';
+      who.textContent = s.title ?? '';
+      const by = document.createElement('small');
+      by.textContent = s.artist ?? '';
+      who.append(by);
+      const bpm = document.createElement('div');
+      bpm.className = 'num';
+      bpm.textContent = a ? `${Math.round(a.bpm)} BPM` : ''; // i18n-ignore
+      if (!a) bpm.title = t('dj.notAnalysed');
+      const k = document.createElement('div');
+      k.className = `k${fitsAir && fitsAir.songId !== s.id && fits(fitsAir, a) ? ' fits' : ''}`;
+      k.textContent = a?.key ?? '';
+      const energy = document.createElement('div');
+      energy.className = 'num';
+      energy.textContent = a ? t('dj.energy', { n: a.energy }) : t('dj.notAnalysed');
+      const acts = document.createElement('div');
+      acts.className = 'acts';
+      for (const side of SIDES) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.load = side;
+        b.textContent = side;
+        b.title = t(side === 'A' ? 'dj.loadA' : 'dj.loadB');
+        b.setAttribute('aria-label', b.title);
+        acts.append(b);
+      }
+      const q = document.createElement('button');
+      q.type = 'button';
+      q.className = queue.includes(s.id) ? 'queued' : '';
+      q.textContent = '+';
+      q.title = queue.includes(s.id) ? t('dj.queued') : t('dj.queue');
+      q.setAttribute('aria-label', q.title);
+      acts.append(q);
+      row.append(who, bpm, k, energy, acts);
+      return row;
+    });
+    $('dj-list').replaceChildren(...rows);
+  }
+
+  async function poll() {
+    const s = await invoke('dj_state').catch(() => null);
+    if (!s || root.hidden) return;
+    state = s;
+    for (const d of s.decks) if (d.songId != null) played.add(d.songId);
+    if (queue.length && queue.some((id) => played.has(id))) { queue = queue.filter((id) => !played.has(id)); sendAuto(); }
+    SIDES.forEach((side, i) => renderDeck(side, i));
+    if (dragging !== xfader) xfader.value = String(s.crossfader);
+    $('dj-auto').checked = s.autoDj;
+    $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
+    if (s.problem) showProblem(s.problem);
+    renderParty();
+    renderList();
+  }
+
+  async function refreshLibrary() {
+    const list = await invoke('dj_library').catch(() => []);
+    analyses = new Map(list.map((x) => [x.songId, x]));
+    shownIds = [undefined, undefined];
+    renderList(true);
+  }
+
+  async function refreshOutputs() {
+    const o = await invoke('dj_outputs').catch(() => null);
+    if (!o) return;
+    const sel = $('dj-phones');
+    const none = new Option(t('dj.phonesNone'), '');
+    sel.replaceChildren(none, ...o.devices.map((d) => new Option(d.name, d.name)));
+    sel.value = o.phones ?? '';
+  }
+
+  listen('dj-analysis-progress', (e) => {
+    $('dj-analysis').textContent = analysisText(e.payload);
+    if (!root.hidden) refreshLibrary();
+  });
+
+  async function open() {
+    try {
+      state = await invoke('dj_enter');
+    } catch (e) {
+      showProblemOutside(e);
+      return;
+    }
+    translatePage(root);
+    root.hidden = false;
+    shownIds = [undefined, undefined];
+    overviewIds = [undefined, undefined];
+    await Promise.all([refreshLibrary(), refreshOutputs()]);
+    invoke('dj_analysis_progress').then((p) => { $('dj-analysis').textContent = analysisText(p); }).catch(() => {});
+    clearInterval(timer);
+    timer = setInterval(poll, POLL_MS);
+    poll();
+  }
+
+  function showProblemOutside(e) {
+    root.hidden = false;
+    showProblem(t('dj.enterFailed', { message: String(e) }));
+    setTimeout(() => { root.hidden = true; }, 6000);
+  }
+
+  async function close() {
+    clearInterval(timer);
+    timer = null;
+    party.hidden = true;
+    root.hidden = true;
+    await invoke('dj_leave').catch(() => {});
+    onClose?.();
+  }
+
+  return { open, close };
+}

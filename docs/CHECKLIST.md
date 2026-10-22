@@ -343,7 +343,15 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   beat blend synced with bars lined up and handed over (old song off the deck), ballad crossfade from the mix-in
   point, a song ending with nothing mixed in, off mid-transition leaves the mix; the controller keeps the free deck
   loaded. Machine test: mixes two real songs offline into a WAV to listen to.
-- [ ] **D.4 DJ screen and party screen**.
+- [x] **D.4 DJ screen and party screen** — *Test first:* readouts (BPM, tempo %, time left), knob drag and keys, meters
+  in dB, waveform outline, Camelot matches and "fits the song on air" (half/double time), song details, the coming
+  transition, guest-lock hold, the DJ song list (accent-insensitive search, fits only, played last), platter turns.
+  A booth over the app (sidebar "DJ mode"): waveform overviews (loudness, click to move a paused deck), two decks with
+  platter (drag to nudge or scrub), BPM, key, energy, tempo, cue/play/sync/nudge; mixer with gain, 3-band EQ, filter,
+  headphone cue, meters, faders, crossfader, master, cue/master, headphone volume; Auto DJ switch, energy curve, next
+  transition, analysis progress, headphones picker; song list with load to A/B and Auto DJ queue; party screen
+  with cover, title, next song and a guest lock (hold 2 s to leave). en + vi. Tried in the app on this PC: entering,
+  loading two songs, playing, Auto DJ planning, party screen and leaving (the engine stops).
 - [ ] **D.5 Hands-on** — hot cues, loops, effects, party pads, keyboard map.
 - [ ] **D.6 Controllers** — MIDI, five built-in mappings, MIDI learn.
 
