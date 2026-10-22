@@ -13,6 +13,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
 use crate::audio::decode::{AudioError, SourceFormat};
+use crate::audio::calibrate::CalibrationSignal;
 use crate::audio::dual::{balance_gains, route, ClickTrack, DelayLine, DriftController, DualMode, Side, VarResampler};
 use crate::audio::eq::{EqSettings, Equalizer};
 use crate::audio::health::{Health, HealthLog, RateWatch};
@@ -110,8 +111,8 @@ enum Cmd {
     /// Delays of the first and second output, ms.
     Delays([u32; 2]),
     Mode(DualMode),
-    /// Play the alignment clicks (true) or go back to the music (false).
-    Align(bool),
+    /// Play a test sound instead of the music (alignment clicks, calibration), or go back (`None`).
+    TestSound(Option<TestKind>),
     /// Balance between the outputs, dB (see `balance_gains`).
     Balance(f32),
     Stop,
@@ -375,8 +376,14 @@ impl Player {
     pub fn set_balance(&self, balance_db: f32) {
         let _ = self.tx.send(Cmd::Balance(balance_db));
     }
+    /// Play the calibration sound (`calibrate::duration_s` long; the music waits) for a microphone
+    /// to record. `align(false)` goes back to the music.
+    pub fn calibrate(&self) {
+        let _ = self.tx.send(Cmd::TestSound(Some(TestKind::Calibration)));
+    }
+    /// Alignment clicks on (the music waits) or off (the music carries on where it was).
     pub fn align(&self, on: bool) {
-        let _ = self.tx.send(Cmd::Align(on));
+        let _ = self.tx.send(Cmd::TestSound(on.then_some(TestKind::Clicks)));
     }
     pub fn status(&self) -> Status {
         self.status.lock().map(|s| s.clone()).unwrap_or_default()
@@ -513,6 +520,41 @@ fn open_exclusive(_: Option<&str>, _: u32, _: &Arc<Shared>, _: &Tap, _: &EqShare
 
 fn delay_frames(ms: u32, rate: u32) -> usize {
     ms.min(MAX_DELAY_MS) as usize * rate as usize / 1000
+}
+
+/// Test sounds played in stereo split instead of the music (F7.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestKind {
+    Clicks,
+    Calibration,
+}
+
+enum TestSound {
+    Clicks(ClickTrack),
+    Calibration(CalibrationSignal),
+}
+
+impl TestSound {
+    fn new(kind: TestKind, rate: u32, channels: usize) -> Self {
+        match kind {
+            TestKind::Clicks => Self::Clicks(ClickTrack::new(rate, channels)),
+            TestKind::Calibration => Self::Calibration(CalibrationSignal::new(rate, channels)),
+        }
+    }
+
+    fn kind(&self) -> TestKind {
+        match self {
+            Self::Clicks(_) => TestKind::Clicks,
+            Self::Calibration(_) => TestKind::Calibration,
+        }
+    }
+
+    fn next(&mut self, frames: usize) -> Vec<f32> {
+        match self {
+            Self::Clicks(c) => c.next(frames),
+            Self::Calibration(c) => c.next(frames),
+        }
+    }
 }
 
 /// How often the drift controller looks, and how soon after one realignment another may follow.
@@ -725,7 +767,7 @@ fn engine(
     let mut order = PlayOrder::new(0, 0, false, Repeat::Off, 1);
     let seed = || std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
     // Alignment clicks play instead of the music; where the music was, and whether it was paused.
-    let mut clicks: Option<ClickTrack> = None;
+    let mut clicks: Option<TestSound> = None;
     let mut resume_after_clicks: Option<(usize, u64, bool)> = None;
     let (mut measured_at, mut realigned_at) = (epoch, epoch);
     let mut health1 = HealthLog::default();
@@ -814,15 +856,20 @@ fn engine(
                         }
                     }
                 }
-                Cmd::Align(on) => {
-                    if on && clicks.is_none() && second.is_some() {
+                Cmd::TestSound(kind) => {
+                    let on = kind.is_some();
+                    if let (Some(k), true) = (kind, clicks.is_some()) {
+                        // Another test sound while one plays: switch, keeping where the music was.
+                        clicks = Some(TestSound::new(k, rate, channels));
+                        flush_clicks = true;
+                    } else if let (Some(k), true) = (kind, second.is_some()) {
                         let paused = shared.paused.load(Ordering::Acquire);
                         let here = restart_at.or_else(|| now_at(&feeder, &timeline, &delay1).map(|(t, f)| (t, f * 1000 / rate.max(1) as u64)));
                         resume_after_clicks = here.map(|(t, ms)| (t, ms, paused));
                         restart_at = None;
                         feeder = None;
                         timeline = Timeline::default();
-                        clicks = Some(ClickTrack::new(rate, channels));
+                        clicks = Some(TestSound::new(k, rate, channels));
                         flush_clicks = true;
                         set_paused(false, &second);
                     } else if !on && clicks.is_some() {
@@ -911,8 +958,8 @@ fn engine(
             }
         } else if flush_clicks {
             pending.clear();
-            if clicks.is_some() {
-                clicks = Some(ClickTrack::new(rate, channels));
+            if let Some(c) = clicks.as_mut() {
+                *c = TestSound::new(c.kind(), rate, channels);
             }
             flush_all(&mut second, &mut delay1);
         }

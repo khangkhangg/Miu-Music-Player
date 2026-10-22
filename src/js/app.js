@@ -9,7 +9,7 @@ import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
 import { presetOptions, bandLabel, dbLabel, withGain, clipText } from './eq.js';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel, connectionRows } from './output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, delaysFor, offsetOf, offsetLabel, balanceLabel, connectionRows, calibrationText } from './output.js';
 import { t, startInLanguage, translatePage } from './i18n.js';
 import { playerCard, targetOptions, withPlays, PLAYS, playerStageText, playerResult, playerStopped } from './players.js';
 import { planSummary, stageText, syncResult, syncStopped, showsGuide, lastSyncLabel } from './sync.js';
@@ -970,6 +970,16 @@ function setupSecondOutput() {
     balance.value = '0';
     balance.dispatchEvent(new Event('input'));
   });
+  $('out-calibrate').addEventListener('click', () => {
+    const btn = $('out-calibrate');
+    const result = $('out-calibrate-result');
+    btn.disabled = true;
+    result.textContent = t('output.calibrateRunning');
+    invoke('calibrate_outputs', { mic: $('out-mic').value })
+      .then(r => { result.textContent = calibrationText(r); return invoke('output_state').then(renderDevices); })
+      .catch(key => { result.textContent = t(String(key)) === String(key) ? String(key) : t(String(key)); })
+      .finally(() => { btn.disabled = false; });
+  });
   $('out-align').addEventListener('click', () => {
     invoke('output_align', { on: !playerState?.aligning }).catch(fail);
   });
@@ -992,6 +1002,15 @@ function renderSecond(state) {
   if (state.second) $('out-second-box').open = true;
   $('out-offset').value = String(offsetOf(state.delays));
   $('out-offset-val').textContent = offsetLabel(offsetOf(state.delays));
+  const mic = $('out-mic').value;
+  $('out-mic').replaceChildren(...(state.mics.length ? state.mics : ['']).map(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name || t('output.calibrateNoMics');
+    opt.selected = name === mic;
+    return opt;
+  }));
+  $('out-calibrate').disabled = !state.mics.length;
   $('out-balance').value = String(state.balance);
   $('out-balance-val').textContent = balanceLabel(state.balance);
 }

@@ -121,3 +121,15 @@ export function connectionRows(ev, batteries = {}) {
     return { health, text: `${speakerName(name)}: ${parts.join(' · ')}` };
   });
 }
+
+/** What auto-calibration heard (second output against the first) and the settings it made. */
+export function calibrationText({ offsetMs, louderDb, delays, balance }) {
+  const ms = Math.round(Math.abs(offsetMs));
+  const db = Math.round(Math.abs(louderDb) * 10) / 10;
+  const when = ms < 1 ? null : t(offsetMs > 0 ? 'output.calibrate.late' : 'output.calibrate.early', { ms });
+  const level = db < 0.5 ? null : t(louderDb > 0 ? 'output.calibrate.louder' : 'output.calibrate.quieter', { db });
+  const heard = !when && !level ? t('output.calibrate.even')
+    : [when ?? t('output.calibrate.together'), level ?? t('output.calibrate.equal')].join(', ');
+  const now = `${offsetLabel(offsetOf(delays))} · ${balanceLabel(balance)}`;
+  return t('output.calibrate.result', { heard, now });
+}

@@ -1,4 +1,5 @@
 pub mod bluetooth;
+pub mod calibrate;
 pub mod decode;
 pub mod dual;
 pub mod eq;

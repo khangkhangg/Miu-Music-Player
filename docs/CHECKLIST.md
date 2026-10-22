@@ -207,6 +207,9 @@ signing: Miu only drives iTunes through its documented COM automation interface.
   struggling Bluetooth link shows: it calls back on time but takes less), jumps blamed on the output that fell behind: steady / a few
   dropouts / keeps dropping out) and battery level where Windows has one (Bose: 40 %). No signal strength: Windows
   does not expose RSSI for connected Bluetooth audio devices.
+  Auto-calibrate (microphone at the listening spot): clicks for timing, short noise bursts for loudness (headset
+  mics gate out steady sound), sets and saves delay and balance; a speaker's own Bluetooth mic is never offered.
+  On Klipsch + Bose with a USB headset mic: run 1 heard +2.5 ms / +4.0 dB and corrected, run 2 heard +2 ms / -0.4 dB.
 - [ ] **Manual:** line up the two Bluetooth speakers by ear with the clicks, then stereo split on music; switch the
   second speaker off mid-song (should drop to one output after ~2 s); walk a speaker out of range and watch the
   connection row turn amber/red. Not tried yet.

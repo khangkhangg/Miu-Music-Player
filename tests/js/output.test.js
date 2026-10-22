@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel, balanceLabel, connectionRows } from '../../src/js/output.js';
+import { rateLabel, sourceLabel, signalPath, eqActive, deviceOptions, secondOptions, dualStatus, offsetOf, delaysFor, offsetLabel, balanceLabel, connectionRows, calibrationText } from '../../src/js/output.js';
 
 test('sample rates read like a spec sheet', () => {
   assert.deepEqual([44_100, 48_000, 96_000, 192_000, 88_200].map(rateLabel), ['44.1 kHz', '48 kHz', '96 kHz', '192 kHz', '88.2 kHz']);
@@ -123,4 +123,19 @@ test('a low battery is called out, and one output shows one row', () => {
     { health: 'poor', text: 'Bose Flex SoundLink: keeps dropping out · battery low (12%)' },
   ]);
   assert.deepEqual(connectionRows({ deviceName: '', health: 'good', second: null }, {}), []);
+});
+
+test('the calibration result says what was heard and what is set now', () => {
+  assert.equal(
+    calibrationText({ offsetMs: 23.4, louderDb: 4.2, delays: [23, 0], balance: 4 }),
+    'Heard: the second output 23 ms late, 4.2 dB louder. Now: First output waits 23 ms · Second output 4 dB quieter',
+  );
+  assert.equal(
+    calibrationText({ offsetMs: -0.4, louderDb: 0.2, delays: [0, 11], balance: 0 }),
+    'Heard: both together, equally loud. Now: Second output waits 11 ms · Even',
+  );
+  assert.equal(
+    calibrationText({ offsetMs: -12, louderDb: -3, delays: [0, 12], balance: -3 }),
+    'Heard: the second output 12 ms early, 3 dB quieter. Now: Second output waits 12 ms · First output 3 dB quieter',
+  );
 });

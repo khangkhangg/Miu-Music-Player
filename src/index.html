@@ -549,6 +549,14 @@
           </select>
         </div>
         <div id="out-dual" hidden>
+          <div class="out-calibrate">
+            <div class="eq-head out-row">
+              <select id="out-mic" aria-label="Microphone" data-i18n-attr="aria-label:output.calibrateMic"></select>
+              <button class="eq-btn" id="out-calibrate" type="button" data-i18n="output.calibrate">Auto-calibrate</button>
+            </div>
+            <p class="out-note" id="out-calibrate-result" role="status"></p>
+            <p class="out-note muted" data-i18n="output.calibrateHelp">Put a microphone where you sit, halfway between the speakers. Miu plays a short test sound and sets the delay and balance so both arrive there together and equally loud.</p>
+          </div>
           <div class="out-offset">
             <div class="out-offset-head"><label for="out-offset" data-i18n="output.offset">Line up the outputs</label><output id="out-offset-val" for="out-offset"></output></div>
             <input type="range" id="out-offset" min="-500" max="500" step="1">

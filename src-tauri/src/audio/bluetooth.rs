@@ -132,3 +132,45 @@ mod machine_tests {
         assert!(!d.is_empty(), "no Bluetooth devices present");
     }
 }
+
+/// Microphones that can listen during calibration: not one belonging to a speaker in `playing`
+/// (opening a Bluetooth speaker's microphone switches it into call mode, which ruins its sound).
+pub fn usable_mics(inputs: &[String], outputs: &[String]) -> Vec<String> {
+    let speakers: Vec<&str> = outputs.iter().filter_map(|o| speaker_name(o)).collect();
+    inputs
+        .iter()
+        .filter(|i| !i.contains("Hands-Free"))
+        .filter(|i| speaker_name(i).is_none_or(|s| !speakers.contains(&s)))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod mic_tests {
+    use super::*;
+
+    #[test]
+    fn a_speakers_own_microphone_is_never_offered() {
+        let inputs = vec![
+            "Microphone (USB Audio and HID)".to_string(),
+            "Headset Microphone (Bose Flex SoundLink)".to_string(),
+            "Microphone (Microsoft LifeCam NX-6000)".to_string(),
+        ];
+        let outputs = vec!["Headphones (Klipsch The One)".to_string(), "Speakers (Bose Flex SoundLink)".to_string()];
+        assert_eq!(usable_mics(&inputs, &outputs), vec!["Microphone (USB Audio and HID)".to_string(), "Microphone (Microsoft LifeCam NX-6000)".to_string()]);
+    }
+
+    #[test]
+    fn only_the_playing_speakers_mics_are_left_out() {
+        // A USB headset has both; its speaker side is not playing, so its microphone is fine.
+        let inputs = vec!["Microphone (USB Audio and HID)".to_string()];
+        let playing = vec!["Headphones (Klipsch The One)".to_string(), "Speakers (Bose Flex SoundLink)".to_string()];
+        assert_eq!(usable_mics(&inputs, &playing), inputs);
+    }
+
+    #[test]
+    fn hands_free_inputs_are_left_out_too() {
+        let inputs = vec!["Headset (JBL Flip 6 Hands-Free)".to_string()];
+        assert!(usable_mics(&inputs, &[]).is_empty());
+    }
+}

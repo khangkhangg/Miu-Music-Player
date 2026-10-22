@@ -159,6 +159,7 @@ pub fn run() {
             audio::service::set_dual_delays,
             audio::service::set_dual_balance,
             audio::service::output_align,
+            audio::service::calibrate_outputs,
             audio::service::player_shuffle,
             audio::service::play_episode,
             audio::service::play_chapters,

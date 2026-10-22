@@ -87,6 +87,44 @@ pub fn offset(samples: &[f32], rate: u32, max_apart: f64) -> Option<f64> {
     Some(gaps[gaps.len() / 2])
 }
 
+
+/// Microphones Windows offers, by name.
+pub fn microphones() -> Vec<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    cpal::default_host().input_devices().map(|it| it.filter_map(|d| d.name().ok()).collect()).unwrap_or_default()
+}
+
+/// Record `secs` from the microphone named `name`, mixed to mono: (samples, rate).
+pub fn record(name: &str, secs: f64) -> Result<(Vec<f32>, u32), String> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use std::sync::{Arc, Mutex};
+    let mic = cpal::default_host()
+        .input_devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| d.name().ok().as_deref() == Some(name))
+        .ok_or_else(|| format!("microphone {name:?} not found"))?;
+    let config = mic.default_input_config().map_err(|e| e.to_string())?;
+    let (rate, channels) = (config.sample_rate().0, config.channels() as usize);
+    let got = Arc::new(Mutex::new(Vec::<f32>::with_capacity((secs * rate as f64) as usize)));
+    let sink = got.clone();
+    let stream = mic
+        .build_input_stream(
+            &config.config(),
+            move |data: &[f32], _| {
+                if let Ok(mut g) = sink.lock() {
+                    g.extend(data.chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
+                }
+            },
+            |e| log::warn!("microphone error: {e}"),
+            None,
+        )
+        .map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
+    std::thread::sleep(std::time::Duration::from_secs_f64(secs));
+    drop(stream);
+    let samples = got.lock().map_err(|e| e.to_string())?.clone();
+    Ok((samples, rate))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +237,20 @@ mod machine_tests {
             Some(o) => println!("MEASURED: the second output sounds {:+.1} ms after the first", o * 1000.0),
             None => println!("MEASURED: no pair of clicks heard"),
         }
+    }
+}
+
+// Machine test: records the microphone for the calibration sound's length (start it in the app at
+// the same time) and prints the level every 100 ms, to see what the microphone lets through.
+#[cfg(test)]
+mod level_profile {
+    #[test]
+    #[ignore]
+    fn prints_the_microphone_level_over_time() {
+        let mic = std::env::var("MIU_TEST_MIC").unwrap_or_else(|_| "Microphone (USB Audio and HID)".into());
+        let (s, rate) = super::record(&mic, crate::audio::calibrate::duration_s() + 1.0).unwrap();
+        let hop = rate as usize / 10;
+        let line: Vec<String> = s.chunks(hop).map(|c| format!("{:.0}", 20.0 * ((c.iter().map(|x| x * x).sum::<f32>() / c.len() as f32).sqrt().max(1e-6)).log10())).collect();
+        println!("dBFS every 100 ms: {}", line.join(" "));
     }
 }

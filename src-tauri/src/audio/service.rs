@@ -334,6 +334,8 @@ pub struct OutputState {
     balance: f32,
     /// Battery level (percent) of outputs that report one, by device name.
     batteries: std::collections::HashMap<String, u8>,
+    /// Microphones that can listen for auto-calibration.
+    mics: Vec<String>,
 }
 
 /// The first output's device name: the chosen one, or whichever is the Windows default now.
@@ -360,8 +362,12 @@ pub fn output_state(db: State<'_, SharedDb>) -> Result<OutputState, String> {
     let devices = output_devices();
     let bluetooth = crate::audio::bluetooth::present_devices();
     let batteries = devices.iter().filter_map(|o| Some((o.name.clone(), crate::audio::bluetooth::battery_for(&o.name, &bluetooth)?))).collect();
+    // Only the two speakers that play: their own microphones would switch them into call mode.
+    let playing: Vec<String> = [Some(first_name(crate::settings::output_device(&d))), second.as_ref().map(|s| s.device.clone())].into_iter().flatten().collect();
+    let mics = crate::audio::bluetooth::usable_mics(&crate::audio::listen::microphones(), &playing);
     Ok(OutputState {
         batteries,
+        mics,
         devices,
         chosen: crate::settings::output_device(&d),
         exclusive: crate::settings::exclusive_output(&d),
@@ -448,6 +454,65 @@ pub fn set_dual_balance(balance: f32, db: State<'_, SharedDb>, player: State<'_,
 #[tauri::command]
 pub fn output_align(on: bool, player: State<'_, SharedPlayer>) -> Result<(), String> {
     player.act(|p| p.align(on))
+}
+
+/// What an auto-calibration measured, and what it set.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationReport {
+    /// How far the second output sounded after the first, and how much louder, before.
+    offset_ms: f64,
+    louder_db: f64,
+    /// The delays and balance now in force.
+    delays: [u32; 2],
+    balance: f32,
+}
+
+/// Auto-calibrate the two outputs with the microphone `mic` at the listening spot: play the
+/// calibration sound (the music waits), record it, then set and save delay and balance so both
+/// outputs arrive there together and evenly. Errors are i18n keys.
+#[tauri::command]
+pub async fn calibrate_outputs(mic: String, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<CalibrationReport, String> {
+    let (db, player) = (db.inner().clone(), player.inner().clone());
+    tauri::async_runtime::spawn_blocking(move || calibrate(&mic, &db, &player)).await.map_err(|e| e.to_string())?
+}
+
+fn calibrate(mic: &str, db: &SharedDb, player: &SharedPlayer) -> Result<CalibrationReport, String> {
+    use crate::audio::calibrate::{analyze, corrected, duration_s, Unheard};
+    let (second, first) = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        (second_config(&d).ok_or("output.calibrate.noSecond")?, first_name(crate::settings::output_device(&d)))
+    };
+    // Start listening first, then play the sound, then go back to the music.
+    let name = mic.to_string();
+    let recorder = std::thread::spawn(move || crate::audio::listen::record(&name, duration_s() + 1.5));
+    std::thread::sleep(Duration::from_millis(300));
+    player.act(Player::calibrate)?;
+    let recorded = recorder.join().map_err(|_| "microphone stopped".to_string())?;
+    player.act(|p| p.align(false))?;
+    let (samples, rate) = recorded.map_err(|e| {
+        log::warn!("calibration: {e}");
+        "output.calibrate.noMic".to_string()
+    })?;
+    let m = analyze(&samples, rate).map_err(|u| {
+        match u {
+            Unheard::Clicks => "output.calibrate.unheard",
+            Unheard::Bursts => "output.calibrate.noLevel",
+        }
+        .to_string()
+    })?;
+    let (delays, balance) = corrected(second.delays_ms, second.balance_db, m);
+    log::info!("calibration: second output {:+.1} ms, {:+.1} dB; now delays {delays:?}, balance {balance:+.1} dB", m.offset_s * 1000.0, m.louder_db);
+    {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        crate::settings::set_dual_delays(&d, &first, &second.device, delays).map_err(|e| e.to_string())?;
+        crate::settings::set_dual_balance(&d, &first, &second.device, balance).map_err(|e| e.to_string())?;
+    }
+    player.act(|p| {
+        p.set_delays(delays);
+        p.set_balance(balance);
+    })?;
+    Ok(CalibrationReport { offset_ms: (m.offset_s * 10_000.0).round() / 10.0, louder_db: (m.louder_db * 10.0).round() / 10.0, delays, balance })
 }
 
 // Machine test: needs a real output device (quiet test tone).

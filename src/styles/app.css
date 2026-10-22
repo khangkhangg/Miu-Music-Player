@@ -383,6 +383,8 @@ div.tile { cursor: default; }
 .out-second summary { cursor: pointer; font-size: 13px; }
 .out-row { margin-top: 8px; }
 .out-row select { max-width: 100%; }
+.out-calibrate { margin-top: 6px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+.out-calibrate select { max-width: 260px; }
 .out-offset { margin-top: 8px; }
 .out-offset-head { display: flex; justify-content: space-between; gap: 8px; }
 .out-offset-head output { font-variant-numeric: tabular-nums; font-weight: 600; }
