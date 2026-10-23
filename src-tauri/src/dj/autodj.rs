@@ -10,6 +10,8 @@ use super::deck::TEMPO_RANGE;
 
 /// Below this beat confidence a song is mixed without beat-matching (ballads, bolero, acoustic).
 pub const MIN_BEAT_CONFIDENCE: f32 = 0.2;
+/// A clear groove (most real pop and dance songs score 0.3–0.5).
+const CLEAR_BEAT: f32 = 0.3;
 /// Energy 7 and up counts as high energy (pop, hip hop, dance).
 const HIGH_ENERGY: u8 = 7;
 
@@ -100,7 +102,8 @@ pub fn vibe_of(songs: &[Analysis]) -> Option<Vibe> {
         return None;
     }
     let n = songs.len() as f32;
-    let strong = songs.iter().filter(|a| a.beat_confidence >= 0.5).count() as f32 / n;
+    // Real songs with a clear groove score 0.3 and up (synthetic beats score near 1).
+    let strong = songs.iter().filter(|a| a.beat_confidence >= CLEAR_BEAT).count() as f32 / n;
     let energy = median(songs.iter().map(|a| a.energy as f32).collect());
     let bpms: Vec<f32> = songs.iter().filter(|a| a.bpm > 0.0).map(|a| felt_bpm(a.bpm)).collect();
     let bpm = if bpms.is_empty() { 0.0 } else { median(bpms) };
@@ -117,7 +120,7 @@ pub fn vibe_of(songs: &[Analysis]) -> Option<Vibe> {
 }
 
 fn is_quiet(a: &Analysis) -> bool {
-    a.energy <= QUIET || a.beat_confidence < 0.4
+    a.energy <= QUIET || a.beat_confidence < MIN_BEAT_CONFIDENCE
 }
 
 /// The style for one mix under the Auto style: the playlist's kind of music, but a ballad on
@@ -607,6 +610,9 @@ mod tests {
         let double_time: Vec<Analysis> = (0..6).map(|i| song(176.0 + i as f32, "4A", 6, 0.8)).collect();
         assert_eq!(vibe_of(&double_time), Some(Vibe::HipHop), "176 BPM rap counts as 88");
         assert_eq!(vibe_of(&[]), None);
+        // Real songs: a clear groove scores 0.3–0.5, not near 1 like a synthetic beat.
+        let vpop: Vec<Analysis> = [100.0, 108.0, 110.0, 112.0, 115.0, 96.0].iter().map(|&b| song(b, "8B", 6, 0.35)).collect();
+        assert_eq!(vibe_of(&vpop), Some(Vibe::Pop), "real pop is not chill");
     }
 
     #[test]

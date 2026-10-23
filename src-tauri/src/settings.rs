@@ -934,9 +934,17 @@ mod dj_tests {
     #[test]
     fn the_dj_transition_style_is_remembered() {
         let db = Db::open_in_memory().unwrap();
-        assert_eq!(dj_style(&db), crate::dj::autodj::Style::Smooth);
+        assert_eq!(dj_style(&db), crate::dj::autodj::Style::Auto, "Auto by default: it reads the music");
         set_dj_style(&db, crate::dj::autodj::Style::Party).unwrap();
         assert_eq!(dj_style(&db), crate::dj::autodj::Style::Party);
+    }
+
+    #[test]
+    fn the_hype_level_is_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dj_hype(&db), crate::dj::hype::Hype::Party);
+        set_dj_hype(&db, crate::dj::hype::Hype::Festival).unwrap();
+        assert_eq!(dj_hype(&db), crate::dj::hype::Hype::Festival);
     }
 
     #[test]

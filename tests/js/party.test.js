@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
-import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr, nowAndNext } from '../../src/js/party.js';
+import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr, nowAndNext, beatLight, dropCountdown } from '../../src/js/party.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
 useDictionary('en', en);
@@ -67,4 +67,26 @@ test('the party screen shows the song on air and the one coming', () => {
   r = nowAndNext({ onAir: null, decks: [deck(null), deck(null)] }, byId);
   assert.deepEqual(r, { now: null, next: null, progress: 0, level: 0 });
   assert.deepEqual(nowAndNext(null, byId), { now: null, next: null, progress: 0, level: 0 });
+});
+
+test('the lights pulse on every beat, harder on the first beat of a bar', () => {
+  const show = { beatS: 0.5, beatPos: 8, dropInS: null };
+  const onBar = beatLight(show, 0);
+  assert.ok(onBar.pulse > 0.95 && onBar.bar, 'a bar starts right now');
+  const later = beatLight(show, 200); // 0.4 of the next beat
+  assert.ok(later.pulse < 0.4 && later.bar, 'fading, still the first beat of the bar');
+  const nextBeat = beatLight(show, 500);
+  assert.ok(nextBeat.pulse > 0.95 && !nextBeat.bar, 'beat 2 of the bar');
+  assert.equal(beatLight(null, 0), null, 'no beat grid: no lights');
+});
+
+test('the countdown shows the bars left before the drop, then the drop', () => {
+  const show = { beatS: 0.5, beatPos: 0, dropInS: 7.5 }; // bars of 2 s
+  assert.deepEqual(dropCountdown(show, 0), { bars: 4 });
+  assert.deepEqual(dropCountdown(show, 2000), { bars: 3 });
+  assert.deepEqual(dropCountdown(show, 7000), { bars: 1 });
+  assert.deepEqual(dropCountdown(show, 7600), { drop: true }, 'just landed');
+  assert.equal(dropCountdown(show, 9000), null, 'over');
+  assert.equal(dropCountdown({ beatS: 0.5, beatPos: 0, dropInS: 30 }, 0), null, 'too far away to count');
+  assert.equal(dropCountdown({ beatS: 0.5, beatPos: 0, dropInS: null }, 0), null);
 });

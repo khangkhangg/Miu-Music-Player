@@ -746,5 +746,7 @@
   "dj.hypeHint": "DJ tự động làm gì trong bài: dồn lên, ngắt trước drop, vang cuối câu, cắt nhịp",
   "dj.hype.chill": "Độ quẩy: nhẹ",
   "dj.hype.party": "Độ quẩy: tiệc tùng",
-  "dj.hype.festival": "Độ quẩy: lễ hội"
+  "dj.hype.festival": "Độ quẩy: lễ hội",
+  "party.dropIn": "Sắp drop",
+  "party.dropNow": "DROP!"
 }

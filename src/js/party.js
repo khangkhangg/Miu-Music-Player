@@ -76,3 +76,21 @@ export function nowAndNext(state, songById) {
     level: d.level ?? 0,
   };
 }
+
+/** The light show `sinceMs` after the engine reported `show`: a pulse (1 on the beat, fading) and whether this beat starts a bar. */
+export function beatLight(show, sinceMs) {
+  if (!show?.beatS) return null;
+  const beat = show.beatPos + sinceMs / 1000 / show.beatS;
+  const phase = beat - Math.floor(beat + 1e-9);
+  return { pulse: Math.exp(-phase * 4), bar: ((Math.floor(beat + 1e-9) % 4) + 4) % 4 === 0 };
+}
+
+/** The countdown into a built-up drop: bars left (4 down to 1), then "drop" for a beat after it lands. */
+export function dropCountdown(show, sinceMs) {
+  if (!show?.beatS || show.dropInS == null) return null;
+  const left = show.dropInS - sinceMs / 1000;
+  const bar = 4 * show.beatS;
+  if (left > 0 && left <= 4 * bar) return { bars: Math.ceil(left / bar - 1e-9) };
+  if (left <= 0 && left > -2 * show.beatS) return { drop: true };
+  return null;
+}

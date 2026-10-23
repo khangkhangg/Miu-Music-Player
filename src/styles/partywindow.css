@@ -49,3 +49,18 @@ body.idle .party-full { opacity: 0; }
   .party-art { width: min(60vw, 40vh); justify-self: center; }
   .party-guests { width: min(60vw, 260px); justify-self: center; }
 }
+
+/* Light show on the beat (DJ Hype) and the countdown into a drop */
+.party-lights { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 55%, var(--light, rgba(242, 193, 46, 0.55)), transparent 65%); mix-blend-mode: screen; z-index: 0; }
+.party-count { position: absolute; inset: 0; z-index: 6; display: grid; place-content: center; text-align: center; pointer-events: none; background: rgba(10, 10, 14, 0.78); }
+.party-count small { font-size: clamp(16px, 2.4vw, 30px); text-transform: uppercase; letter-spacing: 0.2em; color: var(--party-muted); }
+.party-count b { font-size: clamp(120px, 26vw, 360px); line-height: 1; font-weight: 900; color: #fff; text-shadow: 0 0 60px rgba(242, 193, 46, 0.7); animation: count-pop 0.35s ease-out; }
+.party-count.drop b { color: var(--party-accent); }
+.party-count.drop small { display: none; }
+.party-count.drop { background: rgba(242, 193, 46, 0.22); }
+@keyframes count-pop { from { transform: scale(1.5); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+.party.video .party-lights { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .party-count b { animation: none; }
+  .party-count.drop { background: none; }
+}

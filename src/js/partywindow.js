@@ -3,7 +3,7 @@
 // and queue, and YouTube videos in YouTube's own player (the end of a video hands back to Auto DJ).
 
 import { t, startInLanguage, translatePage } from './i18n.js';
-import { videoUrl, videoEnded, listenMessage, partyQr, nowAndNext } from './party.js';
+import { videoUrl, videoEnded, listenMessage, partyQr, nowAndNext, beatLight, dropCountdown } from './party.js';
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -105,11 +105,52 @@ listen('party-video', (e) => showVideo(e.payload.videoId, e.payload.title));
 
 // ---- Following the DJ ----
 
+let lastState = null;
+let stateAt = 0;
+
 async function poll() {
   const state = await invoke('dj_state').catch(() => null);
+  lastState = state;
+  stateAt = performance.now();
   knowAll(state);
   renderNow(state);
 }
+
+// ---- Light show and drop countdown, every frame from the last beat the engine reported ----
+
+const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COLOURS = ['rgba(242, 193, 46, 0.55)', 'rgba(255, 122, 69, 0.5)', 'rgba(226, 51, 122, 0.5)', 'rgba(57, 198, 192, 0.5)'];
+let shownCount = '';
+
+function frame() {
+  const show = lastState?.show ?? null;
+  const since = performance.now() - stateAt;
+  const light = beatLight(show, since);
+  const lights = $('party-lights');
+  if (light && lastState?.decks?.some((d) => d.playing)) {
+    const bar = Math.floor((show.beatPos + since / 1000 / show.beatS) / 4);
+    lights.style.setProperty('--light', COLOURS[((bar % 4) + 4) % 4]);
+    lights.style.opacity = String((calm ? 0.15 : light.bar ? 0.9 : 0.55) * light.pulse);
+  } else {
+    lights.style.opacity = '0';
+  }
+  const count = dropCountdown(show, since);
+  const key = count ? (count.drop ? 'drop' : String(count.bars)) : '';
+  if (key !== shownCount) {
+    shownCount = key;
+    const box = $('party-count');
+    box.hidden = !count || videoId != null;
+    box.classList.toggle('drop', !!count?.drop);
+    $('party-count-n').textContent = count?.drop ? t('party.dropNow') : key;
+    // Restart the pop on each new number.
+    const b = $('party-count-n');
+    b.style.animation = 'none';
+    void b.offsetWidth;
+    b.style.animation = '';
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
 
 async function pollGuests() {
   const [info, view, video] = await Promise.all([

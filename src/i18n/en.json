@@ -746,5 +746,7 @@
   "dj.hypeHint": "What Auto DJ does inside songs: build-ups, fake-out drops, echo throws, beat gates",
   "dj.hype.chill": "Hype: chill",
   "dj.hype.party": "Hype: party",
-  "dj.hype.festival": "Hype: festival"
+  "dj.hype.festival": "Hype: festival",
+  "party.dropIn": "Drop in",
+  "party.dropNow": "DROP!"
 }

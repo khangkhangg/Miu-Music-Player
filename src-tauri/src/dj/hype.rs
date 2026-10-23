@@ -72,7 +72,7 @@ fn echo_spacing(h: Hype) -> f64 {
 /// The moves for a song at a Hype level. Nothing without a steady beat, and nothing in the last
 /// 8 bars before the mix out (the transition has the stage then).
 pub fn plan(a: &Analysis, hype: Hype) -> Vec<Move> {
-    if a.bpm <= 0.0 || a.beat_confidence < 0.5 {
+    if a.bpm <= 0.0 || a.beat_confidence < super::autodj::MIN_BEAT_CONFIDENCE {
         return Vec::new();
     }
     let beat = 60.0 / a.bpm as f64;
@@ -335,6 +335,9 @@ mod tests {
         let mut a = song();
         a.bpm = 0.0;
         assert!(plan(&a, Hype::Festival).is_empty());
+        let mut a = song();
+        a.beat_confidence = 0.3; // a real song with a clear groove
+        assert!(!plan(&a, Hype::Festival).is_empty());
         let mut a = song();
         a.mix_out_s = 160.0; // the next mix starts soon after the second drop
         let m = plan(&a, Hype::Festival);

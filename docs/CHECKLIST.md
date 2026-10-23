@@ -386,6 +386,21 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   zone, hot cues and loop, detail levels at a time, deck speed. Screen: the whole song coloured by sound (bass blue,
   mids amber, highs white) with the section strip, phrase lines, hot cues, loop, Auto DJ's mix zone and time left;
   a zoomed view where both decks scroll past one centre line on their beat grids. Checked in the app 2026-10-23.
+- [x] **PL.1 Playlists** — *Test first:* create (needs a name), add at the end once each, list by name with counts,
+  reorder (same songs only), remove, rename, delete, songs deleted from the library leave their playlists; the view
+  keeps the playlist order and skips missing songs, moving the selection up/down together, drag-and-drop before a song,
+  dragging a selection, the playlist length. Screen: sidebar list with counts and play, playlist view with its tools,
+  Add to playlist menu (with New playlist…), drag onto a playlist or within one, Alt+Up/Down. Checked in the app 2026-10-24.
+- [x] **D.10 DJ from a playlist, Auto style** — *Test first:* kinds of music (dance, hip-hop incl. double time, chill,
+  pop, real-world beat clarity), the Auto style per pair (ballads always gentle), smart order (warms up, peaks past the
+  middle, does not end on the peak; neighbours that mix well), the playlist after hand-queued songs and starting over.
+  Screen: Play from, Smart order, Auto in the style menu with what it heard. Checked in the app 2026-10-24 (a V-pop
+  playlist reads as pop).
+- [x] **D.11 Hype** — *Test first:* the planner at each level (builds, rolls, fake-out, impact, gates, echo throws,
+  nothing without a beat or near the mix out), the channel at each moment, one-shots once, the next drop; the mixer's
+  rise, roll, gate and mute; the performer silences the beat before the drop, lands it, and lets go when Auto DJ stops.
+  Screen: Hype menu; party screen lights on the beat and the bar countdown into the drop. Checked in the app 2026-10-24
+  (4, 3, 2, 1, DROP! on a real song). **Not yet heard by a person at full volume.**
 - [ ] **D.8 Party mode** — *Test first:* the queue (most votes first, ties in order, one vote each, per-guest limit,
   approval, the DJ removes and closes, just-played refused, Auto DJ loads the top early); links (YouTube, Spotify,
   Apple Music) and library matching; the guest page API on the Wi-Fi (adds, votes, search, refusals say why, long

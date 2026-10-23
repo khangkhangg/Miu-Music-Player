@@ -104,6 +104,27 @@ party pads (short built-in sounds), keyboard map for DJ actions.
 - **Stems** (`dj::stems`): centre-channel vocal/instrumental split by frequency (no model to
   download, about 0.2 s a song); rougher than a trained separator, which could replace it later.
 
+## Phase 5 — playlists, Auto style and Hype (agreed 2026-10-24)
+
+- **Playlists** (`library/playlists.rs`, `src/js/playlists.js`): the user's own lists in their own
+  order. In DJ mode, **Play from** picks a playlist; Auto DJ plays songs queued by hand first, then the
+  playlist (in its order, or **Smart order**: warm up, peak about two-thirds in, come down a little,
+  each next song the closest in energy that mixes well), and starts the playlist over when done.
+- **Auto style** (the default): the playlist's kind of music (`autodj::vibe_of`: dance, hip-hop, pop,
+  chill, from tempo, groove, energy and drops) picks each mix's feel; a ballad on either side always
+  gets a gentle change. Real songs score 0.2–0.5 for beat clarity (synthetic beats near 1), so the
+  thresholds are 0.2 (has a beat) and 0.3 (clear groove).
+- **Hype** (`hype.rs`): moves inside the song on air while Auto DJ runs and no transition or video is
+  under way. Chill: an echo throw at the end of a sung line about once a minute. Party: the big drop
+  gets a 4-bar build (filter opens, riser), a half-beat roll in the last bar, a beat of silence and an
+  impact. Festival: every drop gets an 8-bar build with rolls getting shorter, the fake-out and the
+  impact; breakdowns are gated on the eighth notes; more echo throws. Nothing in the last 8 bars before
+  the mix out. The mixer does the rise, the roll (a slice caught and repeated while the song runs on
+  underneath), the gate and the mute per channel (`mixer::HypeFx`).
+- **Party screen**: lights pulse on every beat (harder on the bar, colour by bar) and a countdown shows
+  the bars left before a built-up drop, then DROP!. With Windows set to reduce motion the lights stay
+  subtle and nothing flashes.
+
 ## Testing
 
 Test-first as everywhere in Miu: analysis on synthetic clicks/tones with known tempo and key, the
