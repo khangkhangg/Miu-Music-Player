@@ -35,6 +35,10 @@ pub struct Structure {
     pub vocals: Vec<[f64; 2]>,
     /// Where the music really stops (trailing silence left out).
     pub end_s: f64,
+    /// The chorus: the part that comes back most (sung, at full body), every time it plays,
+    /// [start, end] seconds (version 3 on).
+    #[serde(default)]
+    pub choruses: Vec<[f64; 2]>,
 }
 
 /// Bars per phrase.
@@ -108,6 +112,82 @@ fn measure(x: &[f32], r: u32, first_s: f64, len_s: f64, end_s: f64) -> Bars {
         }
     }
     b
+}
+
+/// Two phrases this alike (mean cosine of their bars' chroma) are the same part played again.
+const SAME_PART: f32 = 0.88;
+
+/// How much of each pitch class sounds in each bar (unit length): the harmony, for finding parts
+/// that come back.
+fn bar_chroma(x: &[f32], r: u32, starts: &[f64], len_s: f64) -> Vec<[f32; 12]> {
+    const N: usize = 2048;
+    let mut planner = rustfft::FftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(N);
+    let window: Vec<f32> = (0..N).map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / N as f32).cos()).collect();
+    let pitch: Vec<Option<usize>> = (0..N / 2)
+        .map(|k| {
+            let f = k as f32 * r as f32 / N as f32;
+            (100.0..2000.0).contains(&f).then(|| ((69.0 + 12.0 * (f / 440.0).log2()).round() as i32).rem_euclid(12) as usize)
+        })
+        .collect();
+    let mut buf = vec![rustfft::num_complex::Complex::new(0.0f32, 0.0); N];
+    starts
+        .iter()
+        .map(|&t| {
+            let (a, b) = (((t * r as f64) as usize).min(x.len()), (((t + len_s) * r as f64) as usize).min(x.len()));
+            let mut c = [0.0f32; 12];
+            let mut i = a;
+            while i + N <= b {
+                for (k, v) in buf.iter_mut().enumerate() {
+                    *v = rustfft::num_complex::Complex::new(x[i + k] * window[k], 0.0);
+                }
+                fft.process(&mut buf);
+                for (k, v) in buf.iter().enumerate().take(N / 2) {
+                    if let Some(p) = pitch[k] {
+                        c[p] += v.norm();
+                    }
+                }
+                i += N / 2;
+            }
+            let norm = c.iter().map(|v| v * v).sum::<f32>().sqrt();
+            if norm > 0.0 {
+                c.iter_mut().for_each(|v| *v /= norm);
+            }
+            c
+        })
+        .collect()
+}
+
+/// The chorus: of the 8-bar phrases (from `first`), the one that comes back most often, louder
+/// and sung breaking ties; every time it plays, consecutive ones joined.
+fn choruses(b: &Bars, chroma: &[[f32; 12]], first: usize, vocal: &[bool], end_s: f64) -> Vec<[f64; 2]> {
+    let n = chroma.len();
+    let starts: Vec<usize> = (first..n).step_by(PHRASE_BARS).filter(|&p| p + PHRASE_BARS <= n).collect();
+    let alike = |p: usize, q: usize| (0..PHRASE_BARS).map(|j| chroma[p + j].iter().zip(&chroma[q + j]).map(|(a, b)| a * b).sum::<f32>()).sum::<f32>() / PHRASE_BARS as f32;
+    let mean = |p: usize, v: &dyn Fn(usize) -> f32| (p..p + PHRASE_BARS).map(v).sum::<f32>() / PHRASE_BARS as f32;
+    let mut best: Option<(f32, Vec<usize>)> = None;
+    for &p in &starts {
+        let same: Vec<usize> = starts.iter().copied().filter(|&q| q != p && alike(p, q) >= SAME_PART).collect();
+        if same.is_empty() || mean(p, &|j| b.loud[j]) < FULL {
+            continue;
+        }
+        let score = same.len() as f32 + mean(p, &|j| b.loud[j]) + 0.5 * mean(p, &|j| if vocal[j] { 1.0 } else { 0.0 });
+        if best.as_ref().is_none_or(|(s, _)| score > *s) {
+            let mut all = same;
+            all.push(p);
+            all.sort_unstable();
+            best = Some((score, all));
+        }
+    }
+    let mut out: Vec<[f64; 2]> = Vec::new();
+    for p in best.map(|(_, v)| v).unwrap_or_default() {
+        let (a, z) = (b.start_s[p], (b.start_s[p + PHRASE_BARS - 1] + b.len_s).min(end_s));
+        match out.last_mut() {
+            Some(last) if (last[1] - a).abs() < 1e-6 => last[1] = z,
+            _ => out.push([a, z]),
+        }
+    }
+    out
 }
 
 /// Where the music really stops: the end of the last quarter second above -26 dB of its usual level.
@@ -218,7 +298,13 @@ pub fn structure(x: &[f32], r: u32, beat: Option<(f32, f64)>) -> Structure {
         }
     }
 
-    Structure { phrase_start_s, sections, drop_s, vocals, end_s }
+    // The chorus, on the phrase grid (or from the start without a beat).
+    let first = phrase_start_s.and_then(|p| b.start_s.iter().position(|&t| (t - p).abs() < 1e-6)).unwrap_or(0) % PHRASE_BARS;
+    let sung: Vec<bool> = (0..n).map(|j| vocals.iter().any(|v| b.start_s[j] >= v[0] - 1e-6 && b.start_s[j] < v[1])).collect();
+    let chroma = bar_chroma(x, r, &b.start_s, b.len_s);
+    let choruses = choruses(&b, &chroma, first, &sung, end_s);
+
+    Structure { phrase_start_s, sections, drop_s, vocals, end_s, choruses }
 }
 
 #[cfg(test)]
@@ -320,6 +406,53 @@ mod tests {
         let wrong: f64 = s.vocals.iter().map(|v| v[1] - v[0]).sum::<f64>() - sung;
         assert!(sung >= 10.0, "found {sung} s of the 16 s sung: {:?}", s.vocals);
         assert!(wrong <= 6.0, "{wrong} s marked sung that is not: {:?}", s.vocals);
+    }
+
+    /// A made-up 120 BPM pop song in 16 s (8-bar) parts: verse, chorus, verse, chorus, chorus.
+    /// Verses on A minor with a soft voice; choruses on F major, louder, with a fuller voice.
+    fn pop() -> Vec<f32> {
+        let n = (80.0 * R as f32) as usize;
+        (0..n)
+            .map(|i| {
+                let t = i as f32 / R as f32;
+                let beat_t = t % 0.5;
+                let kick = (2.0 * PI * 55.0 * t).sin() * (-beat_t * 18.0).exp();
+                let chorus = (16.0..32.0).contains(&t) || t >= 48.0;
+                let (root, chord, voice_f, level): (f32, [f32; 3], f32, f32) =
+                    if chorus { (87.3, [349.2, 440.0, 523.3], 440.0, 1.3) } else { (110.0, [440.0, 523.3, 659.3], 330.0, 0.8) };
+                let bass = (2.0 * PI * root * t).sin() * 0.3;
+                let pad = chord.iter().map(|f| (2.0 * PI * f * t).sin()).sum::<f32>() * 0.08;
+                let voice = (1..=4).map(|k| (2.0 * PI * voice_f * k as f32 * t).sin() / k as f32).sum::<f32>() * 0.15 * if beat_t < 0.4 { 1.0 } else { 0.3 };
+                level * (kick + bass + pad + voice)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn finds_the_chorus_the_part_that_comes_back() {
+        let s = structure(&pop(), R, Some((120.0, 0.0)));
+        assert!(!s.choruses.is_empty(), "no chorus found: {:?}", s.choruses);
+        let chorus_parts = [[16.0, 32.0], [48.0, 80.0]];
+        let overlap = |a: [f64; 2], b: [f64; 2]| (a[1].min(b[1]) - a[0].max(b[0])).max(0.0);
+        let right: f64 = s.choruses.iter().map(|c| chorus_parts.iter().map(|p| overlap(*c, *p)).sum::<f64>()).sum();
+        let total: f64 = s.choruses.iter().map(|c| c[1] - c[0]).sum();
+        assert!(right >= 40.0, "found {right} s of the 48 s of chorus: {:?}", s.choruses);
+        assert!(total - right <= 4.0, "{} s of verse taken for chorus: {:?}", total - right, s.choruses);
+    }
+
+    #[test]
+    fn a_song_that_never_repeats_has_no_chorus() {
+        // Every 16 s a new chord: nothing comes back.
+        let x: Vec<f32> = (0..(64.0 * R as f32) as usize)
+            .map(|i| {
+                let t = i as f32 / R as f32;
+                let f = [220.0, 293.7, 370.0, 415.3][(t / 16.0) as usize % 4];
+                let kick = (2.0 * PI * 55.0 * t).sin() * (-(t % 0.5) * 18.0).exp();
+                kick + [f, f * 1.26, f * 1.5].iter().map(|g| (2.0 * PI * g * t).sin()).sum::<f32>() * 0.1
+            })
+            .collect();
+        let s = structure(&x, R, Some((120.0, 0.0)));
+        assert!(s.choruses.is_empty(), "{:?}", s.choruses);
     }
 
     #[test]

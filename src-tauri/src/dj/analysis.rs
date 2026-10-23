@@ -4,8 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Analyses older than this are done again in the background (2: song structure).
-pub const ANALYSIS_VERSION: u8 = 2;
+/// Analyses older than this are done again in the background (2: song structure, 3: chorus).
+pub const ANALYSIS_VERSION: u8 = 3;
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

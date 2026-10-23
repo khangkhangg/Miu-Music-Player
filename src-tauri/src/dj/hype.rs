@@ -292,6 +292,7 @@ mod tests {
                 drop_s: Some(60.0),
                 vocals: vec![[30.0, 50.0], [90.0, 110.0]],
                 end_s: 238.0,
+                choruses: vec![[60.0, 76.0], [150.0, 166.0]],
             },
             ..Default::default()
         }
