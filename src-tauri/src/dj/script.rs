@@ -5,6 +5,7 @@
 
 use super::actions::{Band, Effect};
 use super::autodj::Transition;
+use super::deck::StemMode;
 use super::pads::{IMPACT, RISER};
 
 /// The song going out or the one coming in.
@@ -44,6 +45,8 @@ pub enum Move {
     Sync,
     KeyLock { side: Side, on: bool },
     KeyShift { side: Side, semitones: i8 },
+    /// Play the whole song, its vocals or its instrumental.
+    Stem { side: Side, mode: StemMode },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,6 +73,8 @@ pub struct Script {
     pub entry: Entry,
     /// Match the new song's tempo and bars to the old one's before it plays.
     pub sync: bool,
+    /// Both songs must be split into vocals and instrumental first.
+    pub needs_stems: bool,
 }
 
 /// The value a ramp gives `target` at progress `p`: the latest ramp that has started wins.
@@ -237,6 +242,23 @@ pub fn script(t: Transition, party: bool) -> Script {
             }
             (s, Entry::MixIn, false)
         }
+        Transition::VocalOut { .. } => {
+            let s = vec![
+                at(0.0, Move::Stem { side: Side::In, mode: StemMode::Instrumental }),
+                at(0.0, Move::Play),
+                x(0.0, 0.25, -1.0, 0.0),
+                ramp(0.0, 0.0, Target::Eq(Side::In, Band::Low), -1.0, -1.0),
+                // The old beat drops out, its voice stays over the new instrumental.
+                at(0.25, Move::Stem { side: Side::Out, mode: StemMode::Vocals }),
+                ramp(0.25, 0.25, Target::Eq(Side::In, Band::Low), 0.0, 0.0),
+                x(0.25, 1.0, 0.0, 1.0),
+                ramp(0.65, 0.9, Target::Volume(Side::Out), 1.0, 0.0),
+                // Then the new song's own vocals come back.
+                at(0.75, Move::Stem { side: Side::In, mode: StemMode::Full }),
+                at(1.0, Move::Stop),
+            ];
+            (s, Entry::MixIn, true)
+        }
         Transition::TempoRamp { .. } => {
             let mut s = vec![
                 at(0.0, Move::KeyLock { side: Side::Out, on: true }),
@@ -283,7 +305,7 @@ pub fn script(t: Transition, party: bool) -> Script {
         }
     };
     steps.sort_by(|a, b| a.at.total_cmp(&b.at));
-    Script { steps, entry, sync }
+    Script { steps, entry, sync, needs_stems: matches!(t, Transition::VocalOut { .. }) }
 }
 
 #[cfg(test)]
@@ -292,8 +314,10 @@ mod tests {
     use crate::dj::actions::{Band, Effect};
     use crate::dj::autodj::Transition;
     use crate::dj::pads::{IMPACT, RISER};
+    use crate::dj::deck::StemMode;
 
-    const ALL: [Transition; 14] = [
+    const ALL: [Transition; 15] = [
+        Transition::VocalOut { bars: 16 },
         Transition::TempoRamp { bars: 32 },
         Transition::KeyShiftBlend { bars: 16, semitones: -2 },
         Transition::BeatBlend { bars: 16 },
@@ -417,6 +441,18 @@ mod tests {
         let s = script(Transition::KeyShiftBlend { bars: 16, semitones: -2 }, false);
         let first = moves_by(&s, 0.0);
         assert_eq!(&first[..3], &[Move::KeyLock { side: Side::In, on: true }, Move::KeyShift { side: Side::In, semitones: -2 }, Move::Play]);
+    }
+
+    #[test]
+    fn the_vocal_out_puts_the_old_voice_over_the_new_instrumental() {
+        let s = script(Transition::VocalOut { bars: 16 }, false);
+        assert!(s.needs_stems);
+        let start = moves_by(&s, 0.0);
+        assert_eq!(&start[..2], &[Move::Stem { side: Side::In, mode: StemMode::Instrumental }, Move::Play]);
+        assert!(moves_by(&s, 0.5).contains(&Move::Stem { side: Side::Out, mode: StemMode::Vocals }), "the old beat drops out, its voice stays");
+        assert!(moves_by(&s, 0.8).contains(&Move::Stem { side: Side::In, mode: StemMode::Full }), "then the new song's own vocals");
+        assert_eq!(value_at(&s, Target::Volume(Side::Out), 1.0), Some(0.0));
+        assert!(!script(Transition::BeatBlend { bars: 16 }, false).needs_stems);
     }
 
     #[test]

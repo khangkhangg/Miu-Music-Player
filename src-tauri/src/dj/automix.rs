@@ -163,6 +163,15 @@ impl AutoMix {
         self.next
     }
 
+    /// Decks whose songs must be split into vocals and instrumental for the coming transition.
+    pub fn stems_wanted(&self, m: &Mixer) -> Vec<Side> {
+        let (Some(next), Some(live), None) = (self.next, self.live, self.mixing.as_ref()) else { return Vec::new() };
+        if !script::script(next.transition, false).needs_stems {
+            return Vec::new();
+        }
+        [live, other(live)].into_iter().filter(|s| m.deck(*s).track().is_some() && !m.deck(*s).has_stems()).collect()
+    }
+
     pub fn is_mixing(&self) -> bool {
         self.mixing.is_some()
     }
@@ -197,7 +206,13 @@ impl AutoMix {
                 return None;
             }
             self.chosen = None;
-            let script = script::script(transition, self.style == autodj::Style::Party);
+            let mut transition = transition;
+            let mut script = script::script(transition, self.style == autodj::Style::Party);
+            if script.needs_stems && !(m.deck(live).has_stems() && m.deck(incoming).has_stems()) {
+                // Not split in time: a filter blend keeps one voice at a time too.
+                transition = Transition::FilterBlend { bars: 8 };
+                script = script::script(transition, self.style == autodj::Style::Party);
+            }
             self.mixes += 1;
             let at = start_point(&to, script.entry);
             m.deck_mut(incoming).seek_s(at);
@@ -262,6 +277,7 @@ impl AutoMix {
                 Move::Pad(slot) => {
                     m.apply(&Action::Pad { slot: slot as u8 });
                 }
+                Move::Stem { side, mode } => m.deck_mut(deck(side)).set_stem_mode(mode),
                 Move::Sync => {
                     m.apply(&Action::Sync { deck: incoming });
                 }
@@ -370,6 +386,32 @@ mod tests {
         let events = run(&mut m, &mut auto, 20.0 * bar);
         assert_eq!(events, vec![Event::OnAir { deck: Side::B, song_id: 2 }]);
         assert!((m.deck(Side::B).bpm().unwrap() - 108.0).abs() < 0.5, "the new song at its own tempo: {:?}", m.deck(Side::B).bpm());
+    }
+
+    #[test]
+    fn the_vocal_out_asks_for_stems_and_uses_them() {
+        use crate::dj::deck::StemMode;
+        let (mut m, mut auto) = ready(song(1, 90.0, 80.0, None), song(2, 90.0, 80.0, None), Transition::VocalOut { bars: 16 });
+        run(&mut m, &mut auto, 0.05);
+        assert_eq!(auto.stems_wanted(&m), vec![Side::A, Side::B], "both songs need splitting before it starts");
+        for side in [Side::A, Side::B] {
+            let n = m.deck(side).track().unwrap().pcm.len();
+            m.deck_mut(side).set_stems(Arc::new(crate::dj::stems::Stems { vocals: vec![0; n], instrumental: vec![0; n] }));
+        }
+        assert!(auto.stems_wanted(&m).is_empty());
+        let starts = auto.next().unwrap().starts_in_s;
+        run(&mut m, &mut auto, starts + 16.0);
+        assert_eq!(m.deck(Side::A).stem_mode(), StemMode::Vocals, "the old voice");
+        assert_eq!(m.deck(Side::B).stem_mode(), StemMode::Instrumental, "over the new instrumental");
+    }
+
+    #[test]
+    fn without_stems_in_time_the_vocal_out_becomes_a_filter_blend() {
+        use crate::dj::deck::StemMode;
+        let (mut m, mut auto) = ready(song(1, 90.0, 80.0, None), song(2, 90.0, 80.0, None), Transition::VocalOut { bars: 16 });
+        let events = run(&mut m, &mut auto, 89.0);
+        assert!(events.contains(&Event::OnAir { deck: Side::B, song_id: 2 }), "the mix still happens");
+        assert_eq!(m.deck(Side::B).stem_mode(), StemMode::Full);
     }
 
     #[test]

@@ -4,7 +4,17 @@
 use std::sync::Arc;
 
 use super::analysis::Analysis;
+use super::stems::Stems;
 use super::stretch::Stretcher;
+
+/// Which part of the song a deck plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StemMode {
+    #[default]
+    Full,
+    Vocals,
+    Instrumental,
+}
 
 /// How far the tempo control reaches either way.
 pub const TEMPO_RANGE: f64 = 0.08;
@@ -87,6 +97,9 @@ pub struct Deck {
     stretcher: Option<(u32, Stretcher)>,
     /// Where the stretcher left the play position (a different value means the deck jumped).
     stretch_at: f64,
+    /// The song split into vocals and instrumental (for the vocal-out blend), and which part plays.
+    stems: Option<Arc<Stems>>,
+    stem_mode: StemMode,
 }
 
 pub const HOT_CUES: usize = 4;
@@ -167,6 +180,24 @@ impl Deck {
     /// Speed against the song's own beyond the tempo control (Auto DJ's tempo ramps), 0.75..1.33.
     pub fn set_speed(&mut self, ratio: f64) {
         self.speed_override = Some(ratio.clamp(0.75, 1.33));
+    }
+
+    /// The song's vocals and instrumental, once split.
+    pub fn set_stems(&mut self, stems: Arc<Stems>) {
+        self.stems = Some(stems);
+    }
+
+    pub fn has_stems(&self) -> bool {
+        self.stems.is_some()
+    }
+
+    /// Play the whole song, its vocals or its instrumental (the whole song until it is split).
+    pub fn set_stem_mode(&mut self, mode: StemMode) {
+        self.stem_mode = mode;
+    }
+
+    pub fn stem_mode(&self) -> StemMode {
+        self.stem_mode
     }
 
     pub fn set_key_lock(&mut self, on: bool) {
@@ -363,7 +394,12 @@ impl Deck {
         }
         let frames = track.frames();
         let base = track.rate as f64 / out_rate as f64 * self.speed() * (1.0 + self.bend * 0.04);
-        let pcm = &track.pcm;
+        let stems = self.stems.clone();
+        let pcm: &[i16] = match (self.stem_mode, stems.as_deref()) {
+            (StemMode::Vocals, Some(s)) => &s.vocals,
+            (StemMode::Instrumental, Some(s)) => &s.instrumental,
+            _ => &track.pcm,
+        };
         let sample = |i: isize, ch: usize| -> f32 {
             let i = i.clamp(0, frames as isize - 1) as usize;
             pcm[i * 2 + ch] as f32 / 32768.0
@@ -422,7 +458,12 @@ impl Deck {
     /// Key lock / key shift: the song through the time-stretcher (tempo and pitch apart).
     fn render_stretched(&mut self, out: &mut [f32], out_rate: u32, track: &Arc<Track>) {
         let frames = track.frames();
-        let pcm = &track.pcm;
+        let stems = self.stems.clone();
+        let pcm: &[i16] = match (self.stem_mode, stems.as_deref()) {
+            (StemMode::Vocals, Some(s)) => &s.vocals,
+            (StemMode::Instrumental, Some(s)) => &s.instrumental,
+            _ => &track.pcm,
+        };
         let sample = |i: isize, ch: usize| -> f32 { pcm[i.clamp(0, frames as isize - 1) as usize * 2 + ch] as f32 / 32768.0 };
         if !matches!(self.stretcher, Some((r, _)) if r == out_rate) {
             self.stretcher = Some((out_rate, Stretcher::new(out_rate)));
@@ -684,6 +725,27 @@ mod tests {
         assert!((d.position_s() - 5.6).abs() < 0.05, "a jump with key lock: {}", d.position_s());
         d.set_tempo(0.0);
         assert!((d.speed() - 1.0).abs() < 1e-9, "touching the tempo control hands it back");
+    }
+
+    #[test]
+    fn a_deck_can_play_just_the_vocals_or_the_instrumental() {
+        let t = track(OUT, 2.0, None);
+        let stems = Arc::new(crate::dj::stems::Stems { vocals: vec![1000; t.pcm.len()], instrumental: vec![-2000; t.pcm.len()] });
+        let mut d = Deck::default();
+        d.load(t);
+        assert!(!d.has_stems());
+        d.set_stem_mode(StemMode::Vocals);
+        d.play();
+        let out = render_secs(&mut d, 0.01);
+        assert!(out.iter().any(|&s| (s - 1000.0 / 32768.0).abs() > 1e-3), "no stems yet: the whole song");
+        d.set_stems(stems);
+        let out = render_secs(&mut d, 0.01);
+        assert!(out.iter().all(|&s| (s - 1000.0 / 32768.0).abs() < 1e-6), "vocals only");
+        d.set_stem_mode(StemMode::Instrumental);
+        let out = render_secs(&mut d, 0.01);
+        assert!(out.iter().all(|&s| (s + 2000.0 / 32768.0).abs() < 1e-6), "instrumental only");
+        d.load(track(OUT, 2.0, None));
+        assert!(!d.has_stems() && d.stem_mode() == StemMode::Full, "a new song starts whole");
     }
 
     #[test]

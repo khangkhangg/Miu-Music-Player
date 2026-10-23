@@ -291,6 +291,9 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
     let _ = ready.send(Ok(()));
     let mut mixer = Mixer::new(out.rate);
     let mut auto = AutoMix::default();
+    // Vocal/instrumental splits Auto DJ asked for, made on worker threads.
+    let (stem_tx, stem_rx) = mpsc::channel::<(Side, i64, Arc<super::stems::Stems>)>();
+    let mut stems_asked: std::collections::HashSet<(usize, i64)> = std::collections::HashSet::new();
     let target = (out.rate as f64 * TARGET_S) as usize;
     let (mut master_buf, mut phones_buf) = (vec![0.0; BLOCK * 2], vec![0.0; BLOCK * 2]);
     let mut last_status = Instant::now() - STATUS_EVERY;
@@ -347,6 +350,21 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
         }
         if last_status.elapsed() >= STATUS_EVERY {
             last_status = Instant::now();
+            for side in auto.stems_wanted(&mixer) {
+                let Some(t) = mixer.deck(side).track().cloned() else { continue };
+                if stems_asked.insert((side as usize, t.song_id)) {
+                    let tx = stem_tx.clone();
+                    std::thread::spawn(move || {
+                        let s = super::stems::split(&t.pcm, t.rate);
+                        let _ = tx.send((side, t.song_id, Arc::new(s)));
+                    });
+                }
+            }
+            while let Ok((side, song_id, s)) = stem_rx.try_recv() {
+                if mixer.deck(side).track().map(|t| t.song_id) == Some(song_id) {
+                    mixer.deck_mut(side).set_stems(s);
+                }
+            }
             if let Ok(mut s) = status.lock() {
                 let levels = mixer.levels();
                 for (i, side) in [Side::A, Side::B].into_iter().enumerate() {

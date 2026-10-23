@@ -119,6 +119,8 @@ pub enum Transition {
     Brake,
     /// A ballad ends almost by itself, a moment of quiet, the next one starts softly.
     BalladGap,
+    /// The old song's voice over the new song's instrumental, then the new vocals come back.
+    VocalOut { bars: u8 },
     /// Big tempo gap: the old song glides to the new tempo with key lock, then a beat blend.
     TempoRamp { bars: u8 },
     /// Clashing keys: the new song is shifted a semitone or two to fit, then a beat blend.
@@ -205,7 +207,7 @@ pub fn plan(from: &Analysis, to: &Analysis, style: Style, seed: u64) -> Transiti
         // One voice at a time: a short filter blend when both sing around the mix.
         let clash = sings_between(from, from.mix_out_s - VOCAL_WINDOW_S, from.mix_out_s) && sings_between(to, to.mix_in_s, to.mix_in_s + VOCAL_WINDOW_S);
         if clash {
-            return FilterBlend { bars: 8 };
+            return if party { VocalOut { bars: 16 } } else { FilterBlend { bars: 8 } };
         }
         return match style {
             Style::Chill => FilterBlend { bars: 16 },
@@ -240,7 +242,7 @@ impl Transition {
     pub fn duration_s(self, from: &Analysis) -> f64 {
         match self {
             Transition::BeatBlend { bars } => bar_s(from).map_or(16.0, |b| b * bars as f64),
-            Transition::FilterBlend { bars } | Transition::BreakdownBlend { bars } | Transition::LoopOut { bars } | Transition::DropSwap { bars } | Transition::TempoRamp { bars } | Transition::KeyShiftBlend { bars, .. } => {
+            Transition::FilterBlend { bars } | Transition::BreakdownBlend { bars } | Transition::LoopOut { bars } | Transition::DropSwap { bars } | Transition::TempoRamp { bars } | Transition::KeyShiftBlend { bars, .. } | Transition::VocalOut { bars } => {
                 bar_s(from).map_or(16.0, |b| b * bars as f64)
             }
             Transition::EchoOut => bar_s(from).map_or(8.0, |b| b * 4.0),
@@ -411,6 +413,7 @@ mod tests {
         let mut next = song(124.0, "8A", 6, 0.8);
         next.structure.vocals = vec![[10.0, 30.0]];
         assert_eq!(plan(&singer, &next, Smooth, 0), Transition::FilterBlend { bars: 8 });
+        assert_eq!(plan(&singer, &next, Party, 0), Transition::VocalOut { bars: 16 }, "a mashup moment at a party");
     }
 
     #[test]

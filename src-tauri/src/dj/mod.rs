@@ -13,6 +13,7 @@ pub mod mixer;
 pub mod pads;
 pub mod script;
 pub mod service;
+pub mod stems;
 pub mod store;
 pub mod stretch;
 pub mod structure;
