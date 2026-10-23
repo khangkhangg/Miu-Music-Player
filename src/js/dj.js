@@ -101,7 +101,11 @@ export function songMeta(a) {
   return [`${Math.round(a.bpm)} BPM`, a.key, t('dj.energy', { n: a.energy })].filter(Boolean).join(' · '); // i18n-ignore
 }
 
-const TRANSITIONS = { beatBlend: 'dj.tr.beatBlend', echoOut: 'dj.tr.echoOut', crossfade: 'dj.tr.crossfade', cut: 'dj.tr.cut' };
+const TRANSITIONS = {
+  beatBlend: 'dj.tr.beatBlend', filterBlend: 'dj.tr.filterBlend', breakdownBlend: 'dj.tr.breakdownBlend', loopOut: 'dj.tr.loopOut',
+  dropSwap: 'dj.tr.dropSwap', echoOut: 'dj.tr.echoOut', reverbWash: 'dj.tr.reverbWash', spinBack: 'dj.tr.spinBack',
+  brake: 'dj.tr.brake', crossfade: 'dj.tr.crossfade', balladGap: 'dj.tr.balladGap', cut: 'dj.tr.cut',
+};
 
 /** "Beat blend (16 bars) in 0:42". */
 export function nextText(next) {

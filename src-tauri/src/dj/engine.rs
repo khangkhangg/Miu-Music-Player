@@ -92,12 +92,14 @@ pub struct EngineStatus {
     pub on_air: Option<Side>,
     pub next: Option<Next>,
     pub mixing: bool,
+    pub style: super::autodj::Style,
 }
 
 enum Cmd {
     Action(Action),
     Loaded(Side, Arc<Track>),
     Phones(Option<String>),
+    Style(super::autodj::Style),
     Stop,
 }
 
@@ -246,6 +248,11 @@ impl DjEngine {
         self.overviews.lock().ok()?[side as usize].clone()
     }
 
+    /// How Auto DJ mixes from now on.
+    pub fn set_style(&self, style: super::autodj::Style) {
+        let _ = self.tx.send(Cmd::Style(style));
+    }
+
     /// Switch the headphones to another device (`None`: no headphone cue) while playing.
     pub fn set_phones(&self, name: Option<String>) {
         let _ = self.tx.send(Cmd::Phones(name));
@@ -295,6 +302,12 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 mixer.deck_mut(side).load(t);
                 if let Ok(mut s) = status.lock() {
                     s.decks[side as usize].loading = false;
+                }
+            }
+            Ok(Cmd::Style(style)) => {
+                auto.set_style(style);
+                if let Ok(mut s) = status.lock() {
+                    s.style = style;
                 }
             }
             Ok(Cmd::Phones(name)) => {

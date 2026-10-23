@@ -167,6 +167,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
   const sendAuto = () => invoke('dj_set_auto', { curve: $('dj-curve').value, queue }).catch(() => {});
   $('dj-auto').addEventListener('change', (e) => act({ type: 'autoDj', on: e.target.checked }));
   $('dj-curve').addEventListener('change', sendAuto);
+  $('dj-style').addEventListener('change', (e) => invoke('dj_set_style', { style: e.target.value }).catch(showProblem));
   $('dj-phones').addEventListener('change', (e) => invoke('dj_set_phones', { name: e.target.value || null }).catch(showProblem));
   $('dj-search').addEventListener('input', () => renderList(true));
   $('dj-fits').addEventListener('change', () => renderList(true));
@@ -478,6 +479,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     SIDES.forEach((side, i) => renderDeck(side, i));
     if (dragging !== xfader) xfader.value = String(s.crossfader);
     $('dj-auto').checked = s.autoDj;
+    if (document.activeElement !== $('dj-style') && s.style) $('dj-style').value = s.style;
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
     renderParty();

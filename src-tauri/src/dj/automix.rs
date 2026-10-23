@@ -39,8 +39,9 @@ struct Mixing {
 #[derive(Default)]
 pub struct AutoMix {
     on: bool,
-    /// Party style: risers, impacts and more drama in the transitions.
-    party: bool,
+    style: autodj::Style,
+    /// Mixes done this session (varies the party tricks).
+    mixes: u64,
     live: Option<Side>,
     mixing: Option<Mixing>,
     next: Option<Next>,
@@ -141,8 +142,8 @@ impl AutoMix {
         self.on
     }
 
-    pub fn set_party(&mut self, party: bool) {
-        self.party = party;
+    pub fn set_style(&mut self, style: autodj::Style) {
+        self.style = style;
     }
 
     /// Use this transition for the next mix instead of the planned one (`None`: back to planning).
@@ -184,7 +185,7 @@ impl AutoMix {
             if !waiting {
                 return None;
             }
-            let transition = self.chosen.unwrap_or_else(|| autodj::plan(&from, &to));
+            let transition = self.chosen.unwrap_or_else(|| autodj::plan(&from, &to, self.style, self.mixes));
             let start = autodj::start_at(&from, transition);
             let pos = m.deck(live).position_s();
             let speed = m.deck(live).speed();
@@ -193,7 +194,8 @@ impl AutoMix {
                 return None;
             }
             self.chosen = None;
-            let script = script::script(transition, self.party);
+            let script = script::script(transition, self.style == autodj::Style::Party);
+            self.mixes += 1;
             let at = start_point(&to, script.entry);
             m.deck_mut(incoming).seek_s(at);
             if script.sync {
@@ -500,7 +502,7 @@ mod machine_tests {
         let now = candidates.iter().find(|c| c.song_id == first as i64).unwrap();
         let next = pick(&now.analysis, &candidates, &[now.song_id].into_iter().collect::<HashSet<_>>(), &[], EnergyCurve::Keep, 1).unwrap();
         let next_c = candidates.iter().find(|c| c.song_id == next).unwrap();
-        let t = crate::dj::autodj::plan(&now.analysis, &next_c.analysis);
+        let t = crate::dj::autodj::plan(&now.analysis, &next_c.analysis, crate::dj::autodj::Style::Smooth, 0);
         let show = |c: &Candidate| format!("{} ({:.1} BPM conf {:.2}, key {}, energy {}, mix {:.0}-{:.0} s)", files[c.song_id as usize].file_name().unwrap().to_string_lossy(), c.analysis.bpm, c.analysis.beat_confidence, c.analysis.key.as_deref().unwrap_or("-"), c.analysis.energy, c.analysis.mix_in_s, c.analysis.mix_out_s);
         println!("from {}\n  to {}\n  by {t:?}, starting at {:.1} s", show(now), show(next_c), crate::dj::autodj::start_at(&now.analysis, t));
         let load = |c: &Candidate| -> Arc<Track> { Arc::new(decode_track(&files[c.song_id as usize], c.song_id, Some(c.analysis.clone())).unwrap()) };

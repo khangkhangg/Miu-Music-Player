@@ -642,5 +642,17 @@
   "dj.ctl.learnHint": "Nhấp một nút ở đây, rồi vặn hoặc bấm nút tương ứng trên bộ điều khiển.",
   "dj.ctl.waiting": "Giờ hãy vặn hoặc bấm nút đó trên bộ điều khiển…",
   "dj.ctl.learntOk": "Đã dạy. Nhấp nút tiếp theo, hoặc tắt MIDI learn.",
-  "dj.ctl.cannotLearn": "Nút này không gán được: hãy chọn nút khác."
+  "dj.ctl.cannotLearn": "Nút này không gán được: hãy chọn nút khác.",
+  "dj.tr.filterBlend": "Hòa qua bộ lọc",
+  "dj.tr.breakdownBlend": "Hòa trong đoạn lắng",
+  "dj.tr.loopOut": "Lặp đoạn cuối",
+  "dj.tr.dropSwap": "Chuyển vào đoạn drop",
+  "dj.tr.reverbWash": "Tan vào tiếng vang",
+  "dj.tr.spinBack": "Quay ngược đĩa",
+  "dj.tr.brake": "Phanh đĩa",
+  "dj.tr.balladGap": "Nhỏ dần và nghỉ",
+  "dj.style": "Phong cách",
+  "dj.style.smooth": "Mượt mà",
+  "dj.style.party": "Tiệc tùng",
+  "dj.style.chill": "Thư giãn"
 }

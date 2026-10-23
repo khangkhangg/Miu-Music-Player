@@ -174,3 +174,16 @@ test('a controller browse knob moves the list selection, within the list', () =>
   assert.equal(moveSelection(1, -3, 10), 0);
   assert.equal(moveSelection(0, 1, 0), -1, 'empty list');
 });
+
+test('every transition Auto DJ can play has a name', () => {
+  const kinds = [
+    { type: 'beatBlend', bars: 16 }, { type: 'filterBlend', bars: 8 }, { type: 'breakdownBlend', bars: 8 },
+    { type: 'loopOut', bars: 8 }, { type: 'dropSwap', bars: 8 }, { type: 'echoOut' }, { type: 'reverbWash' },
+    { type: 'spinBack' }, { type: 'brake' }, { type: 'crossfade', secs: 8 }, { type: 'balladGap' }, { type: 'cut' },
+  ];
+  for (const transition of kinds) {
+    const text = nextText({ transition, startsInS: 10 });
+    assert.ok(text && !text.includes('dj.tr') && !text.startsWith('undefined'), `${transition.type}: ${text}`);
+  }
+  assert.equal(nextText({ transition: { type: 'dropSwap', bars: 8 }, startsInS: 10 }), 'Drop swap in 0:10');
+});

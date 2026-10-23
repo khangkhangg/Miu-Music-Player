@@ -130,6 +130,17 @@ pub fn set_dj_phones(db: &Db, name: Option<&str>) -> Result<()> {
     db.set_setting_json(DJ_PHONES, &name)
 }
 
+const DJ_STYLE: &str = "dj_style";
+
+/// How Auto DJ mixes (D.7): smooth, party or chill.
+pub fn dj_style(db: &Db) -> crate::dj::autodj::Style {
+    db.setting_json(DJ_STYLE).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_dj_style(db: &Db, style: crate::dj::autodj::Style) -> Result<()> {
+    db.set_setting_json(DJ_STYLE, &style)
+}
+
 const DJ_LEARNT: &str = "dj_midi_learnt";
 
 type Learnt = std::collections::BTreeMap<String, Vec<crate::dj::midi::Entry>>;
@@ -880,6 +891,14 @@ mod dj_tests {
         assert_eq!(dj_phones(&db).as_deref(), Some("Headphones (USB Audio)"));
         set_dj_phones(&db, None).unwrap();
         assert_eq!(dj_phones(&db), None);
+    }
+
+    #[test]
+    fn the_dj_transition_style_is_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dj_style(&db), crate::dj::autodj::Style::Smooth);
+        set_dj_style(&db, crate::dj::autodj::Style::Party).unwrap();
+        assert_eq!(dj_style(&db), crate::dj::autodj::Style::Party);
     }
 
     #[test]

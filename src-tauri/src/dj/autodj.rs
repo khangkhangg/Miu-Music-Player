@@ -128,17 +128,78 @@ pub enum Transition {
 }
 
 /// How to mix from one song into the next.
-pub fn plan(from: &Analysis, to: &Analysis) -> Transition {
+/// How Auto DJ mixes: long smooth blends, party drama (drops, risers, tricks) or chilled filters,
+/// washes and fades.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Style {
+    #[default]
+    Smooth,
+    Party,
+    Chill,
+}
+
+/// Energy up to this counts as a quiet song (ballad, acoustic).
+const QUIET: u8 = 4;
+/// How far from the mix points vocals are checked for overlap (seconds).
+const VOCAL_WINDOW_S: f64 = 40.0;
+
+fn sings_between(a: &Analysis, from_s: f64, to_s: f64) -> bool {
+    a.structure.vocals.iter().any(|v| v[0] < to_s && v[1] > from_s)
+}
+
+/// How to mix from one song into the next, by tempo, key, energy and the songs' structure, in
+/// the chosen style. `seed` varies the party tricks.
+pub fn plan(from: &Analysis, to: &Analysis, style: Style, seed: u64) -> Transition {
+    use Transition::*;
+    let party = style == Style::Party;
+    // No clear beat (ballads, bolero, acoustic): no beat-matching.
     if from.beat_confidence < MIN_BEAT_CONFIDENCE || to.beat_confidence < MIN_BEAT_CONFIDENCE {
-        return Transition::Crossfade { secs: 8.0 };
+        return if from.energy <= QUIET && to.energy <= QUIET + 1 {
+            if party { Crossfade { secs: 6.0 } } else { BalladGap }
+        } else if style == Style::Chill {
+            ReverbWash
+        } else {
+            Crossfade { secs: 8.0 }
+        };
     }
-    if tempo_change(from.bpm, to.bpm).is_some() && keys_fit(from, to) != Some(false) {
-        return Transition::BeatBlend { bars: 16 };
+    let tempo_ok = tempo_change(from.bpm, to.bpm).is_some();
+    let key_ok = keys_fit(from, to) != Some(false);
+    if tempo_ok && key_ok {
+        if party && to.structure.drop_s.is_some() && from.energy >= 6 {
+            return DropSwap { bars: 8 };
+        }
+        if style != Style::Party && last_breakdown(from).is_some() {
+            return BreakdownBlend { bars: 8 };
+        }
+        let has_outro = from.structure.sections.iter().any(|s| s.kind == super::structure::SectionKind::Outro);
+        if !has_outro && real_end(from) - from.mix_out_s < 4.0 {
+            return LoopOut { bars: 8 };
+        }
+        // One voice at a time: a short filter blend when both sing around the mix.
+        let clash = sings_between(from, from.mix_out_s - VOCAL_WINDOW_S, from.mix_out_s) && sings_between(to, to.mix_in_s, to.mix_in_s + VOCAL_WINDOW_S);
+        if clash {
+            return FilterBlend { bars: 8 };
+        }
+        return match style {
+            Style::Chill => FilterBlend { bars: 16 },
+            Style::Party => BeatBlend { bars: 8 },
+            Style::Smooth => BeatBlend { bars: 16 },
+        };
     }
+    if tempo_ok {
+        // In tempo but the keys clash: get the old song out of the way first.
+        return if style == Style::Chill { ReverbWash } else { EchoOut };
+    }
+    // Far apart in tempo.
     if from.energy >= HIGH_ENERGY && to.energy >= HIGH_ENERGY {
-        return Transition::Cut;
+        return if party { if seed % 2 == 0 { SpinBack } else { Brake } } else { Cut };
     }
-    Transition::EchoOut
+    match style {
+        Style::Party => Brake,
+        Style::Chill => ReverbWash,
+        Style::Smooth => EchoOut,
+    }
 }
 
 fn bar_s(a: &Analysis) -> Option<f64> {
@@ -285,13 +346,59 @@ mod tests {
 
     #[test]
     fn the_transition_suits_the_pair() {
+        use Style::*;
         let house = song(124.0, "8A", 6, 0.8);
-        assert_eq!(plan(&house, &song(126.0, "9A", 6, 0.8)), Transition::BeatBlend { bars: 16 });
-        assert_eq!(plan(&house, &song(63.0, "8A", 6, 0.8)), Transition::BeatBlend { bars: 16 }, "half time counts");
-        assert_eq!(plan(&house, &song(90.0, "8A", 6, 0.8)), Transition::EchoOut, "big tempo jump");
-        assert_eq!(plan(&house, &song(124.0, "2B", 6, 0.8)), Transition::EchoOut, "key clash");
-        assert_eq!(plan(&house, &song(124.0, "8A", 6, 0.1)), Transition::Crossfade { secs: 8.0 }, "a ballad");
-        assert_eq!(plan(&song(95.0, "4A", 8, 0.7), &song(128.0, "11B", 8, 0.7)), Transition::Cut, "high energy, far apart");
+        let p = |a: &Analysis, b: &Analysis, s| plan(a, b, s, 0);
+        assert_eq!(p(&house, &song(126.0, "9A", 6, 0.8), Smooth), Transition::BeatBlend { bars: 16 });
+        assert_eq!(p(&house, &song(63.0, "8A", 6, 0.8), Smooth), Transition::BeatBlend { bars: 16 }, "half time counts");
+        assert_eq!(p(&house, &song(126.0, "9A", 6, 0.8), Party), Transition::BeatBlend { bars: 8 }, "shorter at a party");
+        assert_eq!(p(&house, &song(126.0, "9A", 6, 0.8), Chill), Transition::FilterBlend { bars: 16 });
+        assert_eq!(p(&house, &song(90.0, "8A", 6, 0.8), Smooth), Transition::EchoOut, "big tempo jump");
+        assert_eq!(p(&house, &song(124.0, "2B", 6, 0.8), Smooth), Transition::EchoOut, "key clash");
+        assert_eq!(p(&house, &song(124.0, "2B", 6, 0.8), Chill), Transition::ReverbWash, "key clash, chilled");
+        assert_eq!(p(&house, &song(124.0, "8A", 6, 0.1), Smooth), Transition::Crossfade { secs: 8.0 }, "no clear beat");
+        let far_a = song(95.0, "4A", 8, 0.7);
+        let far_b = song(128.0, "11B", 8, 0.7);
+        assert_eq!(p(&far_a, &far_b, Smooth), Transition::Cut, "high energy, far apart");
+        assert!(matches!(p(&far_a, &far_b, Party), Transition::SpinBack | Transition::Brake), "a party trick");
+        assert_ne!(plan(&far_a, &far_b, Party, 0), plan(&far_a, &far_b, Party, 1), "spin-back and brake take turns");
+        assert_eq!(p(&song(90.0, "4A", 4, 0.8), &song(128.0, "11B", 5, 0.8), Party), Transition::Brake);
+    }
+
+    #[test]
+    fn ballads_get_a_gap_and_vocals_are_not_stacked() {
+        use Style::*;
+        let ballad = song(70.0, "5A", 3, 0.1);
+        assert_eq!(plan(&ballad, &song(66.0, "6A", 4, 0.12), Smooth, 0), Transition::BalladGap);
+        assert_eq!(plan(&ballad, &song(66.0, "6A", 4, 0.12), Party, 0), Transition::Crossfade { secs: 6.0 });
+        // The old song sings to its end and the new one starts singing: one voice at a time.
+        let mut singer = song(124.0, "8A", 6, 0.8);
+        singer.structure.vocals = vec![[180.0, 200.0]];
+        let mut next = song(124.0, "8A", 6, 0.8);
+        next.structure.vocals = vec![[10.0, 30.0]];
+        assert_eq!(plan(&singer, &next, Smooth, 0), Transition::FilterBlend { bars: 8 });
+    }
+
+    #[test]
+    fn song_structure_picks_drop_swaps_breakdown_blends_and_loop_outs() {
+        use crate::dj::structure::{Section, SectionKind};
+        use Style::*;
+        let mut from = song(124.0, "8A", 7, 0.8);
+        let mut to = song(124.0, "8A", 8, 0.8);
+        to.structure.drop_s = Some(60.0);
+        assert_eq!(plan(&from, &to, Party, 0), Transition::DropSwap { bars: 8 }, "into the drop at a party");
+        from.structure.sections = vec![
+            Section { kind: SectionKind::Main, start_s: 0.0, end_s: 150.0 },
+            Section { kind: SectionKind::Breakdown, start_s: 150.0, end_s: 170.0 },
+            Section { kind: SectionKind::Main, start_s: 170.0, end_s: 200.0 },
+            Section { kind: SectionKind::Outro, start_s: 200.0, end_s: 210.0 },
+        ];
+        assert_eq!(plan(&from, &to, Smooth, 0), Transition::BreakdownBlend { bars: 8 });
+        // No outro: the song stops at full body; loop its end to make room.
+        let mut abrupt = song(124.0, "8A", 6, 0.8);
+        abrupt.mix_out_s = 209.0;
+        abrupt.structure.end_s = 210.0;
+        assert_eq!(plan(&abrupt, &song(124.0, "8A", 6, 0.8), Smooth, 0), Transition::LoopOut { bars: 8 });
     }
 
     #[test]

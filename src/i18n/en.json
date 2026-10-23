@@ -642,5 +642,17 @@
   "dj.ctl.learnHint": "Click a control here, then move the matching control on your controller.",
   "dj.ctl.waiting": "Now move it on your controller…",
   "dj.ctl.learntOk": "Learnt. Click the next control, or turn MIDI learn off.",
-  "dj.ctl.cannotLearn": "That one has no controller button: pick another."
+  "dj.ctl.cannotLearn": "That one has no controller button: pick another.",
+  "dj.tr.filterBlend": "Filter blend",
+  "dj.tr.breakdownBlend": "Breakdown blend",
+  "dj.tr.loopOut": "Loop out",
+  "dj.tr.dropSwap": "Drop swap",
+  "dj.tr.reverbWash": "Reverb wash",
+  "dj.tr.spinBack": "Spin-back",
+  "dj.tr.brake": "Brake",
+  "dj.tr.balladGap": "Fade and pause",
+  "dj.style": "Style",
+  "dj.style.smooth": "Smooth",
+  "dj.style.party": "Party",
+  "dj.style.chill": "Chill"
 }
