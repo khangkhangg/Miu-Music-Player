@@ -69,6 +69,8 @@ button, input, select { font: inherit; }
 .folder-item:hover { background: var(--surface-muted); }
 .folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-count { font-size: 11px; }
+.folder-item.offline .folder-name { opacity: .6; }
+.folder-offline { flex-basis: 100%; font-size: 11px; }
 .folder-remove, .folder-encoding-btn { visibility: hidden; }
 .folder-item:hover .folder-remove, .folder-remove:focus-visible,
 .folder-item:hover .folder-encoding-btn, .folder-encoding-btn:focus-visible, .folder-encoding-btn.on { visibility: visible; }

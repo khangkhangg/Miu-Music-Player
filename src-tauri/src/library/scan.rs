@@ -167,8 +167,23 @@ pub fn refresh_song(db: &Db, id: i64, path: &Path) -> rusqlite::Result<()> {
     tx.commit()
 }
 
+/// The watched folder itself can be listed (its drive is plugged in, the share is up).
+pub fn is_reachable(root: &Path) -> bool {
+    std::fs::read_dir(root).is_ok()
+}
+
+/// Like `scan_folder`, but `None` when the folder itself cannot be read: an unplugged drive
+/// looks empty, and reconciling against "empty" would remove every song with its rating.
+pub fn scan_root(root: &Path) -> Option<Vec<FileEntry>> {
+    is_reachable(root).then(|| scan_folder(root))
+}
+
+/// Scan and reconcile one folder; a folder that is not connected is left as it is.
 pub fn rescan_folder(db: &Db, folder_id: i64, root: &str, now_unix: u64) -> rusqlite::Result<ScanDiff> {
-    reconcile(db, folder_id, &scan_folder(Path::new(root)), now_unix)
+    match scan_root(Path::new(root)) {
+        Some(found) => reconcile(db, folder_id, &found, now_unix),
+        None => Ok(ScanDiff::default()),
+    }
 }
 
 #[cfg(test)]
@@ -281,6 +296,33 @@ mod rescan_tests {
         let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
         assert_eq!(rescan_folder(&db, f.id, &f.path, 10).unwrap().added, 1);
         assert_eq!(rescan_folder(&db, f.id, &f.path, 20).unwrap(), ScanDiff::default());
+    }
+
+    #[test]
+    fn a_folder_that_is_not_connected_removes_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a.mp3"), [0xFF, 0xFB, 0x90, 0x00]).unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 10).unwrap();
+        db.conn().execute("UPDATE songs SET rating = 1", []).unwrap();
+        let gone = d.path().join("unplugged drive");
+        assert!(scan_root(&gone).is_none(), "a missing root is not an empty folder");
+        assert_eq!(rescan_folder(&db, f.id, &gone.to_string_lossy(), 20).unwrap(), ScanDiff::default());
+        let (n, rating): (i64, i64) = db.conn().query_row("SELECT count(*), max(rating) FROM songs", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((n, rating), (1, 1), "songs and their ratings stay");
+    }
+
+    #[test]
+    fn a_connected_folder_still_loses_songs_whose_files_were_deleted() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a.mp3"), [0xFF, 0xFB, 0x90, 0x00]).unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let f = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        rescan_folder(&db, f.id, &f.path, 10).unwrap();
+        std::fs::remove_file(d.path().join("a.mp3")).unwrap();
+        assert_eq!(scan_root(d.path()), Some(vec![]));
+        assert_eq!(rescan_folder(&db, f.id, &f.path, 20).unwrap().removed, 1);
     }
 }
 

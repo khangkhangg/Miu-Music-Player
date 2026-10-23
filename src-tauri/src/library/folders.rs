@@ -1,9 +1,12 @@
 //! Watched folders (F3.1). Folders may not repeat or nest, so every song belongs to exactly one.
 //! Removing a folder removes its songs from Miu's library only — never from disk.
 
+use std::path::Path;
+
 use serde::Serialize;
 
 use crate::library::db::Db;
+use crate::library::scan::is_reachable;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +16,8 @@ pub struct WatchedFolder {
     pub song_count: i64,
     /// Legacy tag encoding forced for this folder (F8.1); `None` = detect per song.
     pub tag_encoding: Option<String>,
+    /// The folder can be read now; `false` when its drive is unplugged. Its songs are kept.
+    pub online: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -70,7 +75,8 @@ pub fn add_folder(db: &Db, path: &str, now_unix: u64) -> Result<WatchedFolder, F
     db.conn()
         .execute("INSERT INTO watched_folders (path, added_at) VALUES (?1, ?2)", rusqlite::params![path, now_unix as i64])
         .map_err(db_err)?;
-    Ok(WatchedFolder { id: db.conn().last_insert_rowid(), path, song_count: 0, tag_encoding: None })
+    let online = is_reachable(Path::new(&path));
+    Ok(WatchedFolder { id: db.conn().last_insert_rowid(), path, song_count: 0, tag_encoding: None, online })
 }
 
 /// Force a legacy tag encoding for a folder (`None` = detect). Its songs' tags are read again
@@ -96,9 +102,11 @@ pub fn list_folders(db: &Db) -> Result<Vec<WatchedFolder>, FolderError> {
         )
         .map_err(db_err)?;
     let rows = stmt
-        .query_map([], |r| Ok(WatchedFolder { id: r.get(0)?, path: r.get(1)?, song_count: r.get(2)?, tag_encoding: r.get(3)? }))
+        .query_map([], |r| Ok(WatchedFolder { id: r.get(0)?, path: r.get(1)?, song_count: r.get(2)?, tag_encoding: r.get(3)?, online: false }))
         .map_err(db_err)?;
-    rows.collect::<Result<_, _>>().map_err(db_err)
+    let mut all: Vec<WatchedFolder> = rows.collect::<Result<_, _>>().map_err(db_err)?;
+    all.iter_mut().for_each(|f| f.online = is_reachable(Path::new(&f.path)));
+    Ok(all)
 }
 
 pub fn remove_folder(db: &Db, id: i64) -> Result<(), FolderError> {
@@ -136,7 +144,7 @@ mod tests {
         let db = db();
         let f = add_folder(&db, r"D:\Music", 100).unwrap();
         let all = list_folders(&db).unwrap();
-        assert_eq!(all, vec![WatchedFolder { id: f.id, path: r"D:\Music".into(), song_count: 0, tag_encoding: None }]);
+        assert_eq!(all, vec![WatchedFolder { id: f.id, path: r"D:\Music".into(), song_count: 0, tag_encoding: None, online: all[0].online }]);
     }
 
     #[test]
@@ -182,6 +190,17 @@ mod tests {
         add_song(&db, b.id, r"E:\Nhạc Trịnh\Diễm xưa.mp3");
         let counts: Vec<(String, i64)> = list_folders(&db).unwrap().into_iter().map(|f| (f.path, f.song_count)).collect();
         assert_eq!(counts, vec![(r"D:\Music".into(), 2), (r"E:\Nhạc Trịnh".into(), 1)]);
+    }
+
+    #[test]
+    fn folders_say_whether_they_are_connected() {
+        let db = db();
+        let d = tempfile::tempdir().unwrap();
+        let here = add_folder(&db, &d.path().to_string_lossy(), 1).unwrap();
+        let gone = add_folder(&db, &d.path().with_file_name("miu unplugged drive").to_string_lossy(), 2).unwrap();
+        assert!(here.online && !gone.online);
+        let online: Vec<(i64, bool)> = list_folders(&db).unwrap().into_iter().map(|f| (f.id, f.online)).collect();
+        assert!(online.contains(&(here.id, true)) && online.contains(&(gone.id, false)));
     }
 
     #[test]

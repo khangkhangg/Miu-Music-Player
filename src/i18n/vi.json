@@ -15,6 +15,8 @@
   "folders.addFailed": "Không thêm được thư mục này: {message}",
   "folders.encoding": "Bảng mã thẻ cho {name}",
   "folders.encodingTitle": "Bảng mã thẻ (cho tệp cũ bị lỗi font tên bài)",
+  "folders.offline": "Chưa kết nối",
+  "folders.offlineTitle": "{path} chưa được kết nối. Bài hát, lượt thích và danh sách phát vẫn được giữ và sẽ trở lại khi cắm lại ổ đĩa.",
   "encoding.auto": "Tự động nhận diện",
   "encoding.windows-1258": "Tiếng Việt (Windows-1258)",
   "encoding.gbk": "Tiếng Trung giản thể (GBK)",
