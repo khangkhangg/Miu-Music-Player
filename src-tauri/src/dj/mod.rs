@@ -9,6 +9,7 @@ pub mod deck;
 pub mod dsp;
 pub mod engine;
 pub mod midi;
+pub mod hype;
 pub mod mixer;
 pub mod pads;
 pub mod script;

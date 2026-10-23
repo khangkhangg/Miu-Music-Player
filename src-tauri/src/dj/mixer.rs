@@ -18,6 +18,31 @@ const SWEEP_BEATS: f32 = 8.0;
 /// Echo repeats every three quarters of a beat.
 const ECHO_BEATS: f32 = 0.75;
 
+/// What Hype asks of a channel while Auto DJ performs a song (see `hype.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct HypeFx {
+    /// Build-up: the high-pass opens this far (0..1).
+    pub rise: f32,
+    /// Roll: the last `beats` repeat while the song runs on underneath.
+    pub roll: Option<f64>,
+    /// Beat gate: open on the first half of each eighth note.
+    pub gate: bool,
+    /// Fake-out: silent.
+    pub mute: bool,
+}
+
+/// A roll in progress: the slice caught first, then repeated.
+struct Stutter {
+    beats: f64,
+    /// Slice length in samples (stereo), known at the first block.
+    len: usize,
+    cap: Vec<f32>,
+    pos: usize,
+}
+
+/// Gain of a closed beat gate.
+const GATE_CLOSED: f32 = 0.08;
+
 /// One deck's channel strip and its control positions.
 struct Channel {
     eq: ThreeBand,
@@ -35,11 +60,16 @@ struct Channel {
     /// Gains reached at the end of the last block (trim, fader, crossfader): changes ramp from here.
     last: (f32, f32, f32),
     level: f32,
+    fx: HypeFx,
+    stutter: Option<Stutter>,
+    /// Gate/mute gain reached at the end of the last block, and the gate's own clock (s).
+    fx_gain: f32,
+    gate_clock: f32,
 }
 
 impl Channel {
     fn new(rate: u32) -> Self {
-        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), reverb: Reverb::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0 }
+        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), reverb: Reverb::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0, fx: HypeFx::default(), stutter: None, fx_gain: 1.0, gate_clock: 0.0 }
     }
 }
 
@@ -142,6 +172,18 @@ impl Mixer {
 
     /// Applies a mixer or deck action. False for actions handled elsewhere (loading songs, Auto DJ,
     /// hot cues, loops, effects, pads).
+    /// Hype's effects for a channel; the same values again change nothing (a roll keeps going).
+    pub fn set_fx(&mut self, side: Side, fx: HypeFx) {
+        let ch = &mut self.channels[index(side)];
+        if fx.roll != ch.fx.roll {
+            ch.stutter = fx.roll.map(|beats| Stutter { beats, len: 0, cap: Vec::new(), pos: 0 });
+        }
+        if fx.rise == 0.0 && ch.fx.rise > 0.0 && ch.sweep.is_none() {
+            ch.filter.set(ch.filter_value);
+        }
+        ch.fx = fx;
+    }
+
     pub fn apply(&mut self, action: &Action) -> bool {
         match *action {
             Action::PlayPause { deck } => self.deck_mut(deck).play_pause(),
@@ -240,7 +282,21 @@ impl Mixer {
             self.decks[i].render(buf, self.rate);
             // Beat-timed effects follow the tempo heard now (or a steady 120 BPM without a beat grid).
             let beat_s = self.decks[i].bpm().map_or(0.5, |b| 60.0 / b) as f32;
+            let phase = self.decks[i].bar_phase();
             let ch = &mut self.channels[i];
+            if let Some(st) = ch.stutter.as_mut() {
+                if st.len == 0 {
+                    st.len = ((st.beats as f32 * beat_s * self.rate as f32) as usize).max(64) * 2;
+                }
+                for x in buf.iter_mut() {
+                    if st.cap.len() < st.len {
+                        st.cap.push(*x);
+                    } else {
+                        *x = st.cap[st.pos];
+                        st.pos = (st.pos + 1) % st.len;
+                    }
+                }
+            }
             let trim = dsp::gain(ch.gain);
             ramp(buf, ch.last.0, trim);
             ch.eq.process(buf);
@@ -248,6 +304,8 @@ impl Mixer {
                 *p = (*p + block_s / (SWEEP_BEATS * beat_s)).min(1.0);
                 let from = ch.filter_value.max(0.0);
                 ch.filter.set(from + (SWEEP_TO - from) * *p);
+            } else if ch.fx.rise > 0.0 {
+                ch.filter.set(ch.filter_value.max(0.0).max(ch.fx.rise * SWEEP_TO));
             }
             ch.filter.process(buf);
             if ch.cue {
@@ -256,6 +314,14 @@ impl Mixer {
                     *c += s;
                 }
             }
+            // Gate on the eighth notes (the beat grid, or its own clock without one) and the fake-out.
+            ch.gate_clock += block_s;
+            let eighth = phase.map_or(ch.gate_clock / beat_s * 2.0, |p| (p * 2.0) as f32).fract();
+            let want = if ch.fx.mute { 0.0 } else if ch.fx.gate && eighth >= 0.5 { GATE_CLOSED } else { 1.0 };
+            if want != 1.0 || ch.fx_gain != 1.0 {
+                ramp(buf, ch.fx_gain, want);
+            }
+            ch.fx_gain = want;
             let fader = dsp::fader(ch.volume);
             ramp(buf, ch.last.1, fader);
             let peak = buf.iter().fold(0.0f32, |p, s| p.max(s.abs()));
@@ -336,6 +402,74 @@ mod tests {
 
     fn peak(x: &[f32]) -> f32 {
         x.iter().fold(0.0, |p, s| p.max(s.abs()))
+    }
+
+    /// A deck whose loudness climbs steadily: repeats of an earlier moment stand out.
+    fn swell() -> Arc<Track> {
+        let n = RATE as usize * 4;
+        let pcm = (0..n)
+            .flat_map(|i| {
+                let v = ((2.0 * std::f32::consts::PI * 440.0 * i as f32 / RATE as f32).sin() * (0.1 + 0.8 * i as f32 / n as f32) * 32767.0) as i16;
+                [v, v]
+            })
+            .collect();
+        Arc::new(Track { song_id: 1, rate: RATE, pcm, analysis: None })
+    }
+
+    fn solo(t: Arc<Track>) -> Mixer {
+        let mut m = Mixer::new(RATE);
+        m.deck_mut(D::A).load(t);
+        m.apply(&Action::PlayPause { deck: D::A });
+        m.apply(&Action::Crossfader { value: -1.0 });
+        m
+    }
+
+    #[test]
+    fn hype_mute_silences_the_deck_and_lets_go_cleanly() {
+        let mut m = solo(tone(440.0, 0.5));
+        m.set_fx(D::A, HypeFx { mute: true, ..Default::default() });
+        let (master, _) = run(&mut m, 0.05);
+        assert!(peak(&master) < 0.01, "silent: {}", peak(&master));
+        m.set_fx(D::A, HypeFx::default());
+        let (master, _) = run(&mut m, 0.05);
+        assert!((peak(&master) - 0.5).abs() < 0.02, "back: {}", peak(&master));
+    }
+
+    #[test]
+    fn hype_gate_chops_the_sound() {
+        let mut m = solo(tone(440.0, 0.5));
+        m.set_fx(D::A, HypeFx { gate: true, ..Default::default() });
+        // Over a whole beat (0.5 s without a grid) the gate is closed about half the time.
+        let mut sum = (0.0f32, 0usize);
+        let (mut master, mut phones) = (vec![0.0; 960], vec![0.0; 960]);
+        for _ in 0..100 {
+            m.render(&mut master, &mut phones);
+            sum = (sum.0 + peak(&master), sum.1 + 1);
+        }
+        let avg = sum.0 / sum.1 as f32;
+        assert!(avg < 0.4 && avg > 0.15, "about half open: {avg}");
+    }
+
+    #[test]
+    fn hype_rise_thins_out_the_bass() {
+        let mut m = solo(tone(80.0, 0.5));
+        m.set_fx(D::A, HypeFx { rise: 1.0, ..Default::default() });
+        let (master, _) = run(&mut m, 0.3);
+        assert!(peak(&master) < 0.15, "the high-pass took the bass: {}", peak(&master));
+    }
+
+    #[test]
+    fn hype_roll_repeats_a_slice_while_the_song_runs_on() {
+        let mut m = solo(swell());
+        run(&mut m, 1.0);
+        m.set_fx(D::A, HypeFx { roll: Some(0.25), ..Default::default() });
+        // A quarter beat (0.125 s here) is caught, then repeated: later blocks stay as loud as it.
+        let (first, _) = run(&mut m, 0.15);
+        let (later, _) = run(&mut m, 1.0);
+        assert!((peak(&later) - peak(&first)).abs() < 0.03, "repeating: {} vs {}", peak(&later), peak(&first));
+        m.set_fx(D::A, HypeFx::default());
+        let (after, _) = run(&mut m, 0.05);
+        assert!(peak(&after) > peak(&first) + 0.1, "the song ran on underneath: {} vs {}", peak(&after), peak(&first));
     }
 
     #[test]

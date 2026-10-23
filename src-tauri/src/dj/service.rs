@@ -335,6 +335,13 @@ pub fn dj_choose_transition(transition: Option<super::autodj::Transition>, dj: S
     engine_do(&dj, |e| e.choose_transition(transition))
 }
 
+/// How much Auto DJ does inside songs: chill, party or festival (kept for next time).
+#[tauri::command]
+pub fn dj_set_hype(hype: super::hype::Hype, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    settings::set_dj_hype(&*db.lock().map_err(|e| e.to_string())?, hype).map_err(|e| e.to_string())?;
+    engine_do(&dj, |e| e.set_hype(hype)).or(Ok(()))
+}
+
 /// How Auto DJ mixes: smooth, party or chill (kept for next time).
 #[tauri::command]
 pub fn dj_set_style(style: super::autodj::Style, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
@@ -425,14 +432,15 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
         return Ok(s.engine.status());
     }
     let _ = player.run(crate::media_controls::Command::Pause);
-    let (master, phones, exclusive, style, transitions) = {
+    let (master, phones, exclusive, style, transitions, hype) = {
         let d = db.lock().map_err(|e| e.to_string())?;
-        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d), settings::dj_transitions(&d))
+        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d), settings::dj_transitions(&d), settings::dj_hype(&d))
     };
     let engine = DjEngine::start(master, phones).map_err(|e| {
         if exclusive { format!("{e} (exclusive mode holds the speakers: turn it off for DJ mode)") } else { e }
     })?;
     engine.set_style(style);
+    engine.set_hype(hype);
     engine.set_transitions(transitions);
     let status = engine.status();
     let alive = Arc::new(AtomicBool::new(true));

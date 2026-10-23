@@ -741,5 +741,10 @@
   "dj.vibe.hipHop": "hip-hop",
   "dj.vibe.chill": "nhạc nhẹ",
   "dj.vibe.pop": "pop",
-  "dj.vibe.none": "theo từng bài"
+  "dj.vibe.none": "theo từng bài",
+  "dj.hype": "Độ quẩy",
+  "dj.hypeHint": "DJ tự động làm gì trong bài: dồn lên, ngắt trước drop, vang cuối câu, cắt nhịp",
+  "dj.hype.chill": "Độ quẩy: nhẹ",
+  "dj.hype.party": "Độ quẩy: tiệc tùng",
+  "dj.hype.festival": "Độ quẩy: lễ hội"
 }

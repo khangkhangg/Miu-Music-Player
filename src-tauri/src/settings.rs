@@ -158,6 +158,17 @@ pub fn set_dj_style(db: &Db, style: crate::dj::autodj::Style) -> Result<()> {
     db.set_setting_json(DJ_STYLE, &style)
 }
 
+const DJ_HYPE: &str = "dj_hype";
+
+/// How much Auto DJ does inside songs (build-ups, fake-outs, echo throws, gates).
+pub fn dj_hype(db: &Db) -> crate::dj::hype::Hype {
+    db.setting_json(DJ_HYPE).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_dj_hype(db: &Db, hype: crate::dj::hype::Hype) -> Result<()> {
+    db.set_setting_json(DJ_HYPE, &hype)
+}
+
 const DJ_LEARNT: &str = "dj_midi_learnt";
 
 type Learnt = std::collections::BTreeMap<String, Vec<crate::dj::midi::Entry>>;

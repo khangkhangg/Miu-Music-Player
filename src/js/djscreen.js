@@ -225,6 +225,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     invoke('dj_set_source', { playlist: v ? Number(v) : null, smart: $('dj-smart').checked }).catch(showProblem);
   };
   $('dj-source').addEventListener('change', sendSource);
+  $('dj-hype').addEventListener('change', (e) => invoke('dj_set_hype', { hype: e.target.value }).catch(showProblem));
   $('dj-smart').addEventListener('change', sendSource);
   $('dj-phones').addEventListener('change', (e) => invoke('dj_set_phones', { name: e.target.value || null }).catch(showProblem));
   $('dj-search').addEventListener('input', () => renderList(true));
@@ -571,6 +572,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     }
     if (document.activeElement !== $('dj-style') && s.style) $('dj-style').value = s.style;
     $('dj-vibe').textContent = vibeLabel(s);
+    if (document.activeElement !== $('dj-hype') && s.hype) $('dj-hype').value = s.hype;
     $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);

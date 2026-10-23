@@ -95,6 +95,10 @@ pub struct EngineStatus {
     pub master_missing: Option<String>,
     /// The kind of music of the playlist Auto DJ plays from.
     pub vibe: Option<super::autodj::Vibe>,
+    /// How much Auto DJ does inside songs.
+    pub hype: super::hype::Hype,
+    /// The beat and the coming drop of the song on air, for the party screen.
+    pub show: Option<super::hype::Show>,
     pub auto_dj: bool,
     /// The deck the speakers play (Auto DJ's view).
     pub on_air: Option<Side>,
@@ -109,6 +113,7 @@ pub struct EngineStatus {
 enum Cmd {
     Action(Action),
     Vibe(Option<super::autodj::Vibe>),
+    Hype(super::hype::Hype),
     Loaded(Side, Arc<Track>),
     Phones(Option<String>),
     Style(super::autodj::Style),
@@ -321,6 +326,11 @@ impl DjEngine {
         let _ = self.tx.send(Cmd::Style(style));
     }
 
+    /// How much Auto DJ does inside songs.
+    pub fn set_hype(&self, hype: super::hype::Hype) {
+        let _ = self.tx.send(Cmd::Hype(hype));
+    }
+
     /// The kind of music Auto DJ is playing from (a playlist's), for the Auto style.
     pub fn set_vibe(&self, vibe: Option<super::autodj::Vibe>) {
         let _ = self.tx.send(Cmd::Vibe(vibe));
@@ -364,6 +374,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
     let _ = ready.send(Ok(()));
     let mut mixer = Mixer::new(out.rate);
     let mut auto = AutoMix::default();
+    let mut performer = super::hype::Performer::default();
     // Vocal/instrumental splits Auto DJ asked for, made on worker threads.
     let (stem_tx, stem_rx) = mpsc::channel::<(Side, i64, Arc<super::stems::Stems>)>();
     let mut stems_asked: std::collections::HashSet<(usize, i64)> = std::collections::HashSet::new();
@@ -392,6 +403,12 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                     s.transitions = t;
                 }
             }
+            Ok(Cmd::Hype(hype)) => {
+                performer.set_hype(hype);
+                if let Ok(mut s) = status.lock() {
+                    s.hype = hype;
+                }
+            }
             Ok(Cmd::Vibe(vibe)) => {
                 auto.set_vibe(vibe);
                 if let Ok(mut s) = status.lock() {
@@ -417,6 +434,8 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
             if let Some(Event::OnAir { deck, song_id }) = auto.tick(&mut mixer, BLOCK) {
                 log::info!("Auto DJ: song {song_id} on air on deck {deck:?}");
             }
+            // Hype: Auto DJ performs inside the song on air, never during a transition or a video.
+            performer.tick(&mut mixer, auto.live(), auto.is_on() && !auto.is_mixing() && !auto.is_holding());
             mixer.render(&mut master_buf, &mut phones_buf);
             out.write(&spread(&master_buf, out.channels));
             if let (Some(p), Some(r)) = (phones_out.as_mut(), resampler.as_mut()) {
@@ -494,6 +513,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 s.next = auto.next();
                 s.mixing = auto.is_mixing();
                 s.holding = auto.is_holding();
+                s.show = performer.show(&mixer);
                 s.master = out.name.clone();
                 s.phones = phones_out.as_ref().map(|p| p.name.clone());
                 if problem.is_some() {
