@@ -42,6 +42,13 @@
       </nav>
 
       <div class="section-label section-row">
+        <span data-i18n="playlists.title">Playlists</span>
+        <button class="icon-btn" id="playlist-new" type="button" title="New playlist" aria-label="New playlist" data-i18n-attr="title:playlists.new;aria-label:playlists.new">+</button>
+      </div>
+      <nav class="nav playlist-nav" id="playlist-list" aria-label="Playlists" data-i18n-attr="aria-label:playlists.title"></nav>
+      <p class="playlist-hint muted" id="playlist-hint" data-i18n="playlists.hint">Make a playlist with +, then drag songs onto it.</p>
+
+      <div class="section-label section-row">
         <span data-i18n="folders.title">Watched folders</span>
         <button class="icon-btn" id="add-folder" type="button" title="Add a folder" aria-label="Add a folder" data-i18n-attr="title:folders.add;aria-label:folders.add">+</button>
       </div>
@@ -187,15 +194,29 @@
 
       <section class="song-view" id="song-view" hidden>
         <header class="view-header">
-          <h1 data-i18n="nav.songs">Songs</h1>
+          <h1 id="songs-title" data-i18n="nav.songs">Songs</h1>
           <span class="muted" id="library-summary-text"></span>
           <button class="eq-btn accent-btn" id="edit-tags" type="button" hidden></button>
+          <span class="pl-add-wrap">
+            <button class="eq-btn" id="pl-add" type="button" aria-haspopup="menu" aria-expanded="false" hidden data-i18n="playlists.add">Add to playlist</button>
+            <div class="pl-menu" id="pl-menu" role="menu" hidden></div>
+          </span>
           <label class="search-box">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
             <input class="search" id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search" autocomplete="off" spellcheck="false" dir="auto"
               data-i18n-attr="placeholder:search.placeholder;aria-label:search.label">
           </label>
         </header>
+        <div class="pl-tools" id="pl-tools" hidden>
+          <button class="eq-btn accent-btn" id="pl-play" type="button" data-i18n="playlists.play">Play</button>
+          <button class="eq-btn" id="pl-up" type="button" data-i18n="playlists.moveUp">Move up</button>
+          <button class="eq-btn" id="pl-down" type="button" data-i18n="playlists.moveDown">Move down</button>
+          <button class="eq-btn" id="pl-remove" type="button" data-i18n="playlists.remove">Remove from playlist</button>
+          <span class="pl-tools-gap"></span>
+          <button class="eq-btn" id="pl-rename" type="button" data-i18n="playlists.rename">Rename</button>
+          <button class="eq-btn" id="pl-delete" type="button" data-i18n="playlists.delete">Delete playlist</button>
+          <p class="muted pl-note" id="pl-note"></p>
+        </div>
         <div class="chips" id="filter-chips" role="tablist" aria-label="Filter by rating" data-i18n-attr="aria-label:filters.label"></div>
         <div class="disliked-banner" id="disliked-banner" hidden>
           <p data-i18n="disliked.banner">Disliked songs never sync to your iPhone. Delete moves them to the Recycle Bin and out of Miu Music. Tap the thumbs-down again to keep a song.</p>
@@ -620,6 +641,17 @@
         <p class="out-note muted" data-i18n="output.pairingTip">If both speakers can pair with each other (Bose Stereo or Party mode, JBL PartyBoost, Auracast), use that instead: speakers keep themselves in step far better than a PC can over Bluetooth.</p>
       </details>
     </section>
+
+    <dialog class="editor pl-dialog" id="pl-dialog" aria-labelledby="pl-dialog-title">
+      <form method="dialog">
+        <h2 id="pl-dialog-title"></h2>
+        <input id="pl-name" type="text" maxlength="100" autocomplete="off" spellcheck="false" dir="auto" aria-labelledby="pl-dialog-title">
+        <div class="pl-dialog-actions">
+          <button class="eq-btn" value="cancel" type="submit" formnovalidate data-i18n="playlists.cancel">Cancel</button>
+          <button class="eq-btn accent-btn" value="ok" type="submit" data-i18n="playlists.save">Save</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog class="editor" id="editor" aria-labelledby="editor-heading">
       <form method="dialog" id="editor-form">

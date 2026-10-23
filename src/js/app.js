@@ -28,6 +28,7 @@ import { groupAlbums, groupArtists, libraryStats, splitTitle, syncRuleFor, hasSy
 import { formatDuration } from './songs.js';
 import { setupDj } from './djscreen.js';
 import { setupParty } from './partyscreen.js';
+import { playlistSongs, moveSelected, moveBefore, draggedIds, playlistLength } from './playlists.js';
 import {
   FIELDS, editorFields, changesFor, parseFilename, autoNumber, findReplace, changeCase, previewRows,
 } from './editor.js';
@@ -40,6 +41,8 @@ let activeFilter = 'all';
 let query = '';
 const SORT_LOCALE = sortLocale(navigator.languages);
 let songsById = new Map();
+let playlists = []; // [{ id, name, count }]
+let openPlaylist = null; // { id, name, ids } while a playlist is on screen
 let selection = { selected: new Set(), anchor: null };
 let playerState = null;
 
@@ -121,6 +124,7 @@ if (invoke) {
     openEditor();
   });
   setupEditor();
+  setupPlaylists();
   document.getElementById('np-shuffle').addEventListener('click', () => invoke('player_shuffle', { on: !playerState?.shuffle }));
   document.getElementById('np-repeat').addEventListener('click', () => invoke('player_repeat', { repeat: nextRepeat(playerState?.repeat) }));
   window.__TAURI__.event.listen('player', e => showPlayer(e.payload));
@@ -192,14 +196,15 @@ function loadSongs() {
 }
 
 function refreshList() {
-  shown = searchSongs(filterSongs(rawSongs, activeFilter), query);
+  shown = searchSongs(openPlaylist ? playlistSongs(openPlaylist.ids, songsById) : filterSongs(rawSongs, activeFilter), query);
   songs = shown.map(songRow);
   document.getElementById('song-spacer').style.height = `${songs.length * ROW_HEIGHT}px`;
   renderChips();
   renderSongs();
   updateRateButtons();
-  document.getElementById('disliked-banner').hidden = !(activeFilter === 'disliked' && shown.length > 0);
-  document.getElementById('duplicates-note').hidden = activeFilter !== 'duplicates';
+  document.getElementById('disliked-banner').hidden = !!openPlaylist || !(activeFilter === 'disliked' && shown.length > 0);
+  document.getElementById('duplicates-note').hidden = !!openPlaylist || activeFilter !== 'duplicates';
+  showPlaylistHeader();
   renderIndexBar();
   updateEditButton();
 }
@@ -207,7 +212,7 @@ function refreshList() {
 /** Letters down the right of the list; each jumps to its first song. Hidden for grouped views. */
 function renderIndexBar() {
   const bar = document.getElementById('index-bar');
-  const entries = activeFilter === 'duplicates' ? [] : indexEntries(shown, SORT_LOCALE);
+  const entries = activeFilter === 'duplicates' || openPlaylist ? [] : indexEntries(shown, SORT_LOCALE);
   bar.hidden = entries.length < 2;
   bar.replaceChildren(...entries.map(({ letter, index }) => {
     const b = document.createElement('button');
@@ -237,6 +242,7 @@ async function confirmDelete(list) {
 
 function renderChips() {
   const box = document.getElementById('filter-chips');
+  box.hidden = !!openPlaylist;
   box.replaceChildren(...filterChips(rawSongs, activeFilter).map(c => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -430,6 +436,7 @@ function renderSongs() {
     row.setAttribute('role', 'listitem');
     row.style.top = `${i * ROW_HEIGHT}px`;
     row.title = shown[i].path; // where the file is: tells copies apart
+    row.draggable = true; // onto a playlist, or within one to reorder
     if (selection.selected.has(s.id)) row.classList.add('selected');
     const main = document.createElement('span');
     main.className = 'song-main';
@@ -504,8 +511,11 @@ function showFolders(folders) {
   wizardState.folders = (folders ?? []).length;
   renderWizard();
   showView(view);
-  document.getElementById('library-summary-text').textContent = summary ?? '';
+  librarySummaryText = summary ?? '';
+  document.getElementById('library-summary-text').textContent = librarySummaryText;
+  if (openPlaylist) showPlaylistHeader();
 }
+let librarySummaryText = '';
 
 function showDevices(devices) {
   const card = deviceCard(devices);
@@ -1213,6 +1223,8 @@ function updateEditButton() {
   const b = document.getElementById('edit-tags');
   b.hidden = n === 0;
   b.textContent = t('editor.editN', { n });
+  document.getElementById('pl-add').hidden = n === 0;
+  if (openPlaylist) showPlaylistHeader();
 }
 
 function setupEditor() {
@@ -1372,6 +1384,228 @@ function toast(text, undoable) {
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 8000);
 }
 
+// ---- Playlists (PL) ----
+
+const SONGS_DRAG = 'application/x-miu-songs';
+
+async function loadPlaylists() {
+  playlists = await invoke('playlists_list').catch(() => []);
+  renderPlaylistNav();
+}
+
+/** The playlists in the sidebar: click to open, play button, drop songs onto one to add them. */
+function renderPlaylistNav() {
+  const nav = document.getElementById('playlist-list');
+  document.getElementById('playlist-hint').hidden = playlists.length > 0;
+  nav.replaceChildren(...playlists.map(p => {
+    const row = document.createElement('div');
+    row.className = 'nav-row';
+    const a = document.createElement('a');
+    a.className = 'nav-item';
+    a.href = '#';
+    a.classList.toggle('active', view === 'songs' && openPlaylist?.id === p.id);
+    const name = document.createElement('span');
+    name.textContent = p.name;
+    name.dir = 'auto';
+    const count = document.createElement('span');
+    count.className = 'nav-count';
+    count.textContent = String(p.count);
+    a.append(name, count);
+    a.addEventListener('click', e => { e.preventDefault(); showPlaylist(p.id); });
+    const play = document.createElement('button');
+    play.className = 'nav-play';
+    play.type = 'button';
+    play.setAttribute('aria-label', t('playlists.playName', { name: p.name }));
+    play.title = play.getAttribute('aria-label');
+    play.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z"/></svg>';
+    play.addEventListener('click', async () => playAll(playlistSongs(await invoke('playlist_songs', { id: p.id }), songsById)));
+    row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes(SONGS_DRAG)) { e.preventDefault(); row.classList.add('drop'); } });
+    row.addEventListener('dragleave', () => row.classList.remove('drop'));
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      row.classList.remove('drop');
+      addToPlaylist(p, JSON.parse(e.dataTransfer.getData(SONGS_DRAG) || '[]'));
+    });
+    row.append(a, play);
+    return row;
+  }));
+}
+
+async function showPlaylist(id) {
+  const p = playlists.find(x => x.id === id);
+  if (!p) return;
+  openPlaylist = { id, name: p.name, ids: await invoke('playlist_songs', { id }).catch(() => []) };
+  selection = { selected: new Set(), anchor: null };
+  document.getElementById('song-scroll').scrollTop = 0;
+  refreshList();
+  showView('songs');
+}
+
+/** The header of the song view: the playlist's name and tools, or plain Songs. */
+function showPlaylistHeader() {
+  const $ = id => document.getElementById(id);
+  $('songs-title').textContent = openPlaylist ? openPlaylist.name : t('nav.songs');
+  $('pl-tools').hidden = !openPlaylist;
+  if (!openPlaylist) { $('library-summary-text').textContent = librarySummaryText; return; }
+  const inList = playlistSongs(openPlaylist.ids, songsById);
+  const { h, min } = playlistLength(inList);
+  $('library-summary-text').textContent = t(h ? 'playlists.summaryHours' : 'playlists.summary', { n: inList.length, h, min });
+  const picked = selectedSongs().length > 0;
+  for (const id of ['pl-up', 'pl-down', 'pl-remove']) $(id).disabled = !picked;
+  $('pl-play').disabled = !openPlaylist.ids.length;
+  $('pl-note').textContent = openPlaylist.ids.length ? t('playlists.reorderHint') : t('playlists.emptyNote');
+}
+
+async function addToPlaylist(p, ids) {
+  if (!p || !ids.length) return;
+  try {
+    await invoke('playlist_add', { id: p.id, songIds: ids });
+  } catch (err) {
+    toast(String(err));
+    return;
+  }
+  toast(t('playlists.added', { n: ids.length, name: p.name }));
+  if (openPlaylist?.id === p.id) openPlaylist.ids = await invoke('playlist_songs', { id: p.id });
+  await loadPlaylists();
+  refreshList();
+}
+
+async function saveOrder(ids) {
+  if (!openPlaylist) return;
+  openPlaylist.ids = ids;
+  refreshList();
+  await invoke('playlist_set_order', { id: openPlaylist.id, songIds: ids }).catch(err => toast(String(err)));
+}
+
+/** Ask for a playlist name; resolves to the trimmed name, or null when cancelled. */
+function askPlaylistName(title, value = '') {
+  const $ = id => document.getElementById(id);
+  const dlg = $('pl-dialog');
+  $('pl-dialog-title').textContent = title;
+  $('pl-name').value = value;
+  dlg.returnValue = '';
+  dlg.showModal();
+  $('pl-name').select();
+  return new Promise(done => {
+    dlg.addEventListener('close', () => {
+      const name = $('pl-name').value.trim();
+      done(dlg.returnValue === 'ok' && name ? name : null);
+    }, { once: true });
+  });
+}
+
+async function newPlaylist(songIds = []) {
+  const name = await askPlaylistName(t('playlists.new'));
+  if (!name) return;
+  let id;
+  try {
+    id = await invoke('playlist_create', { name });
+  } catch (err) {
+    toast(String(err));
+    return;
+  }
+  await loadPlaylists();
+  if (songIds.length) await addToPlaylist(playlists.find(p => p.id === id), songIds);
+  else showPlaylist(id);
+}
+
+function setupPlaylists() {
+  const $ = id => document.getElementById(id);
+  loadPlaylists();
+  $('playlist-new').addEventListener('click', () => newPlaylist());
+  // Add to playlist: a small menu of playlists, and a new one.
+  const menu = $('pl-menu');
+  const closeMenu = () => { menu.hidden = true; $('pl-add').setAttribute('aria-expanded', 'false'); };
+  $('pl-add').addEventListener('click', () => {
+    if (!menu.hidden) { closeMenu(); return; }
+    const ids = selectedSongs().map(x => x.id);
+    const item = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = label;
+      b.dir = 'auto';
+      if (cls) b.className = cls;
+      b.addEventListener('click', () => { closeMenu(); fn(); });
+      return b;
+    };
+    menu.replaceChildren(
+      ...playlists.map(p => item(p.name, () => addToPlaylist(p, ids))),
+      item(t('playlists.newFromMenu'), () => newPlaylist(ids), 'pl-menu-new'),
+    );
+    menu.hidden = false;
+    $('pl-add').setAttribute('aria-expanded', 'true');
+    menu.querySelector('button')?.focus();
+  });
+  document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.pl-add-wrap')) closeMenu(); });
+  menu.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); $('pl-add').focus(); } });
+  // The open playlist's tools.
+  $('pl-play').addEventListener('click', () => { if (openPlaylist) playList(openPlaylist.ids.filter(id => songsById.has(id)), 0); });
+  const move = by => { if (openPlaylist) saveOrder(moveSelected(openPlaylist.ids, selection.selected, by)); };
+  $('pl-up').addEventListener('click', () => move(-1));
+  $('pl-down').addEventListener('click', () => move(1));
+  document.addEventListener('keydown', e => {
+    if (!openPlaylist || view !== 'songs' || !e.altKey || !selection.selected.size) return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); move(e.key === 'ArrowUp' ? -1 : 1); }
+  });
+  $('pl-remove').addEventListener('click', async () => {
+    if (!openPlaylist) return;
+    const ids = selectedSongs().map(x => x.id);
+    await invoke('playlist_remove', { id: openPlaylist.id, songIds: ids }).catch(err => toast(String(err)));
+    openPlaylist.ids = openPlaylist.ids.filter(id => !ids.includes(id));
+    selection = { selected: new Set(), anchor: null };
+    await loadPlaylists();
+    refreshList();
+  });
+  $('pl-rename').addEventListener('click', async () => {
+    if (!openPlaylist) return;
+    const name = await askPlaylistName(t('playlists.rename'), openPlaylist.name);
+    if (!name) return;
+    await invoke('playlist_rename', { id: openPlaylist.id, name }).catch(err => toast(String(err)));
+    openPlaylist.name = name;
+    await loadPlaylists();
+    refreshList();
+  });
+  $('pl-delete').addEventListener('click', async () => {
+    if (!openPlaylist) return;
+    const ok = await window.__TAURI__.dialog.ask(t('playlists.deleteAsk', { name: openPlaylist.name }), { title: t('playlists.delete'), kind: 'warning' });
+    if (!ok) return;
+    await invoke('playlist_delete', { id: openPlaylist.id }).catch(err => toast(String(err)));
+    openPlaylist = null;
+    await loadPlaylists();
+    refreshList();
+    showView('songs');
+  });
+  // Drag songs: onto a playlist in the sidebar, or within the open playlist to reorder.
+  const scroller = $('song-scroll');
+  scroller.addEventListener('dragstart', e => {
+    const row = e.target.closest('.song-row');
+    if (!row) return;
+    const ids = draggedIds(shown.map(x => x.id), selection.selected, shown[Number(row.dataset.index)].id);
+    e.dataTransfer.setData(SONGS_DRAG, JSON.stringify(ids));
+    e.dataTransfer.effectAllowed = 'copyMove';
+  });
+  const clearMarks = () => scroller.querySelectorAll('.drop-before').forEach(r => r.classList.remove('drop-before'));
+  scroller.addEventListener('dragover', e => {
+    if (!openPlaylist || !e.dataTransfer.types.includes(SONGS_DRAG)) return;
+    e.preventDefault();
+    clearMarks();
+    e.target.closest('.song-row')?.classList.add('drop-before');
+  });
+  scroller.addEventListener('dragleave', clearMarks);
+  scroller.addEventListener('dragend', clearMarks);
+  scroller.addEventListener('drop', e => {
+    if (!openPlaylist) return;
+    e.preventDefault();
+    clearMarks();
+    const ids = JSON.parse(e.dataTransfer.getData(SONGS_DRAG) || '[]');
+    const row = e.target.closest('.song-row');
+    const target = row ? shown[Number(row.dataset.index)].id : null;
+    const inList = ids.filter(id => openPlaylist.ids.includes(id));
+    if (inList.length) saveOrder(moveBefore(openPlaylist.ids, inList, target));
+  });
+}
+
 // ---- Views and settings (F5.5) ----
 let view = 'songs';
 let hasSongs = false;
@@ -1392,7 +1626,9 @@ function showView(name) {
   const navOn = name === 'songs' ? { all: 'nav-songs', liked: 'nav-liked', disliked: 'nav-disliked' }[activeFilter] ?? 'nav-songs'
     : name === 'page' ? (page?.kind === 'artist' ? 'nav-artists' : 'nav-albums') : name === 'show' ? 'nav-podcasts'
     : name === 'books' || name === 'book' ? 'nav-audiobooks' : `nav-${name}`;
-  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-podcasts', 'nav-audiobooks', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', id === navOn);
+  const onPlaylist = name === 'songs' && openPlaylist;
+  for (const id of ['nav-songs', 'nav-albums', 'nav-artists', 'nav-podcasts', 'nav-audiobooks', 'nav-liked', 'nav-disliked', 'nav-settings']) $(id).classList.toggle('active', !onPlaylist && id === navOn);
+  renderPlaylistNav();
   if (name === 'podcasts') loadPodcasts();
   if (name === 'books') loadBooks();
   if (name === 'albums' || name === 'artists') renderTiles();
@@ -1420,7 +1656,7 @@ function setupSettings(languageSetting) {
   $('language').value = languageSetting;
   $('language').addEventListener('change', () => invoke('set_ui_language', { language: $('language').value }));
   const go = (id, fn) => $(id).addEventListener('click', e => { e.preventDefault(); fn(); });
-  const songsWith = filter => () => { activeFilter = filter; refreshList(); showView('songs'); };
+  const songsWith = filter => () => { activeFilter = filter; openPlaylist = null; refreshList(); showView('songs'); };
   go('nav-songs', songsWith('all'));
   $('nav-songs-play').addEventListener('click', () => playAll(filterSongs(rawSongs, 'all')));
   $('nav-liked-play').addEventListener('click', () => playAll(filterSongs(rawSongs, 'liked')));
