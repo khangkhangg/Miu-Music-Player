@@ -7,6 +7,7 @@ pub mod lyrics;
 pub mod media_controls;
 #[cfg(windows)]
 pub mod media_controls_win;
+pub mod party;
 pub mod player;
 pub mod podcast;
 pub mod audiobook;
