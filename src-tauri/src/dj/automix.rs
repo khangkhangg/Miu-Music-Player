@@ -50,6 +50,9 @@ pub struct AutoMix {
     next: Option<Next>,
     /// A transition chosen by hand for the next mix (used once).
     chosen: Option<Transition>,
+    /// The kinds the DJ checked (none: any) and whether to pick among them at random.
+    allowed: Vec<autodj::Kind>,
+    mix_it_up: bool,
 }
 
 fn other(s: Side) -> Side {
@@ -149,6 +152,12 @@ impl AutoMix {
         self.style = style;
     }
 
+    /// Only these kinds of transition (none: any); `mix_it_up` picks among them at random.
+    pub fn set_transitions(&mut self, allowed: Vec<autodj::Kind>, mix_it_up: bool) {
+        self.allowed = allowed;
+        self.mix_it_up = mix_it_up;
+    }
+
     /// Use this transition for the next mix instead of the planned one (`None`: back to planning).
     pub fn set_next_transition(&mut self, t: Option<Transition>) {
         self.chosen = t;
@@ -197,7 +206,7 @@ impl AutoMix {
             if !waiting {
                 return None;
             }
-            let transition = self.chosen.unwrap_or_else(|| autodj::plan(&from, &to, self.style, self.mixes));
+            let transition = self.chosen.unwrap_or_else(|| autodj::plan_with(&from, &to, self.style, self.mixes, &self.allowed, self.mix_it_up));
             let start = autodj::start_at(&from, transition);
             let pos = m.deck(live).position_s();
             let speed = m.deck(live).speed();

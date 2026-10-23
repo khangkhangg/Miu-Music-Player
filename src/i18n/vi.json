@@ -662,5 +662,12 @@
   "dj.choose.auto": "Tự động (hợp nhất)",
   "dj.keyLock": "Khóa tông: đổi nhịp độ mà không đổi cao độ",
   "dj.keyUp": "Tăng tông nửa cung",
-  "dj.keyDown": "Giảm tông nửa cung"
+  "dj.keyDown": "Giảm tông nửa cung",
+  "dj.tr.summaryAuto": "Kiểu chuyển: hợp nhất",
+  "dj.tr.summary": "Kiểu chuyển: đã chọn {n}",
+  "dj.tr.summaryMixed": "Kiểu chuyển: đã chọn {n}, ngẫu nhiên",
+  "dj.tr.title": "Kiểu chuyển bài",
+  "dj.tr.hint": "Đánh dấu các kiểu DJ tự động được dùng. Không đánh dấu: tự chọn kiểu hợp nhất cho từng cặp bài.",
+  "dj.tr.mixItUp": "Ngẫu nhiên (chọn ngẫu nhiên trong các kiểu đã đánh dấu phù hợp)",
+  "dj.tr.clear": "Bỏ hết (tự chọn hợp nhất)"
 }

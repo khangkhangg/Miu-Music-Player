@@ -153,6 +153,107 @@ fn key_shift_to_fit(from: &Analysis, to: &Analysis) -> Option<i8> {
     [1i8, -1, 2, -2].into_iter().find(|&s| super::analysis::shift_camelot(b, s).is_some_and(|k| keys_compatible(a, &k)))
 }
 
+/// A kind of transition without its settings, for the DJ's checklist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Kind {
+    BeatBlend,
+    FilterBlend,
+    BreakdownBlend,
+    LoopOut,
+    DropSwap,
+    VocalOut,
+    KeyShiftBlend,
+    TempoRamp,
+    EchoOut,
+    ReverbWash,
+    SpinBack,
+    Brake,
+    Crossfade,
+    BalladGap,
+    Cut,
+}
+
+impl Transition {
+    pub fn kind(self) -> Kind {
+        match self {
+            Transition::BeatBlend { .. } => Kind::BeatBlend,
+            Transition::FilterBlend { .. } => Kind::FilterBlend,
+            Transition::BreakdownBlend { .. } => Kind::BreakdownBlend,
+            Transition::LoopOut { .. } => Kind::LoopOut,
+            Transition::DropSwap { .. } => Kind::DropSwap,
+            Transition::VocalOut { .. } => Kind::VocalOut,
+            Transition::KeyShiftBlend { .. } => Kind::KeyShiftBlend,
+            Transition::TempoRamp { .. } => Kind::TempoRamp,
+            Transition::EchoOut => Kind::EchoOut,
+            Transition::ReverbWash => Kind::ReverbWash,
+            Transition::SpinBack => Kind::SpinBack,
+            Transition::Brake => Kind::Brake,
+            Transition::Crossfade { .. } => Kind::Crossfade,
+            Transition::BalladGap => Kind::BalladGap,
+            Transition::Cut => Kind::Cut,
+        }
+    }
+}
+
+/// The transition of `kind` for this pair, if it can work: beat-matched ones need both songs to
+/// have a beat within reach (and a drop, a breakdown or a key that shifts into place where they
+/// need one). The others work for any pair.
+pub fn suitable(kind: Kind, from: &Analysis, to: &Analysis, style: Style) -> Option<Transition> {
+    let beats = from.beat_confidence >= MIN_BEAT_CONFIDENCE && to.beat_confidence >= MIN_BEAT_CONFIDENCE;
+    let in_tempo = beats && tempo_change(from.bpm, to.bpm).is_some();
+    let bars = if style == Style::Party { 8 } else { 16 };
+    Some(match kind {
+        Kind::BeatBlend if in_tempo => Transition::BeatBlend { bars },
+        Kind::FilterBlend if in_tempo => Transition::FilterBlend { bars },
+        Kind::BreakdownBlend if in_tempo && last_breakdown(from).is_some() => Transition::BreakdownBlend { bars: 8 },
+        Kind::LoopOut if in_tempo => Transition::LoopOut { bars: 8 },
+        Kind::DropSwap if in_tempo && to.structure.drop_s.is_some() => Transition::DropSwap { bars: 8 },
+        Kind::VocalOut if in_tempo => Transition::VocalOut { bars: 16 },
+        Kind::KeyShiftBlend if in_tempo => Transition::KeyShiftBlend { bars: 16, semitones: key_shift_to_fit(from, to)? },
+        Kind::TempoRamp if beats && !in_tempo && ramp_target(from.bpm, to.bpm).is_some() => Transition::TempoRamp { bars: 32 },
+        Kind::EchoOut => Transition::EchoOut,
+        Kind::ReverbWash => Transition::ReverbWash,
+        Kind::SpinBack => Transition::SpinBack,
+        Kind::Brake => Transition::Brake,
+        Kind::Crossfade => Transition::Crossfade { secs: 8.0 },
+        Kind::BalladGap => Transition::BalladGap,
+        Kind::Cut => Transition::Cut,
+        _ => return None,
+    })
+}
+
+/// When the planner's own pick is not checked: the checked kinds tried in this order (smooth blends
+/// first, hard cuts last).
+const FALLBACK_ORDER: [Kind; 15] = [
+    Kind::BeatBlend, Kind::FilterBlend, Kind::BreakdownBlend, Kind::KeyShiftBlend, Kind::TempoRamp, Kind::LoopOut,
+    Kind::VocalOut, Kind::DropSwap, Kind::EchoOut, Kind::ReverbWash, Kind::Crossfade, Kind::BalladGap, Kind::Brake,
+    Kind::SpinBack, Kind::Cut,
+];
+
+/// Like `plan`, but only with the kinds the DJ checked (none checked: any). `mix_it_up` picks at
+/// random among the checked kinds that suit the pair. When none of them can work for this pair,
+/// the planner's own pick is used rather than a mix that falls apart.
+pub fn plan_with(from: &Analysis, to: &Analysis, style: Style, seed: u64, allowed: &[Kind], mix_it_up: bool) -> Transition {
+    let best = plan(from, to, style, seed);
+    if allowed.is_empty() {
+        return best;
+    }
+    let fits: Vec<Transition> = FALLBACK_ORDER.iter().filter(|k| allowed.contains(k)).filter_map(|&k| suitable(k, from, to, style)).collect();
+    if fits.is_empty() {
+        return best;
+    }
+    if mix_it_up {
+        // jitter() is a stable 0..0.2 hash of the seed: spread it over the fitting kinds.
+        let r = jitter(seed as i64, seed.wrapping_add(7)) / 0.2;
+        return fits[((r * fits.len() as f64) as usize).min(fits.len() - 1)];
+    }
+    if allowed.contains(&best.kind()) {
+        return best;
+    }
+    fits[0]
+}
+
 /// How Auto DJ mixes: long smooth blends, party drama (drops, risers, tricks) or chilled filters,
 /// washes and fades.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -399,6 +500,28 @@ mod tests {
         assert!(matches!(p(&far_a, &far_b, Party), Transition::SpinBack | Transition::Brake), "a party trick");
         assert_ne!(plan(&far_a, &far_b, Party, 0), plan(&far_a, &far_b, Party, 1), "spin-back and brake take turns");
         assert_eq!(p(&song(90.0, "4A", 4, 0.8), &song(128.0, "11B", 5, 0.8), Party), Transition::Brake);
+    }
+
+    #[test]
+    fn only_the_transitions_the_dj_checked_are_used() {
+        use Kind::*;
+        use Style::*;
+        let house = song(124.0, "8A", 6, 0.8);
+        let near = song(126.0, "9A", 6, 0.8);
+        let far = song(95.0, "4A", 8, 0.8);
+        let pick = |a: &Analysis, b: &Analysis, allowed: &[Kind], mix: bool, seed: u64| plan_with(a, b, Smooth, seed, allowed, mix);
+        assert_eq!(pick(&house, &near, &[], false, 0), plan(&house, &near, Smooth, 0), "nothing checked: the best fit");
+        assert_eq!(pick(&house, &near, &[EchoOut, SpinBack], false, 0), Transition::EchoOut, "the best fit among the checked ones");
+        assert_eq!(pick(&house, &near, &[BeatBlend, Cut], false, 0), Transition::BeatBlend { bars: 16 }, "the planner's own pick when it is checked");
+        assert_eq!(pick(&house, &far, &[BeatBlend], false, 0), plan(&house, &far, Smooth, 0), "a beat blend cannot bridge that gap: the best fit instead");
+        assert_eq!(pick(&house, &near, &[DropSwap, Crossfade], false, 0), Transition::Crossfade { secs: 8.0 }, "no drop to swap into");
+        let mut seen = std::collections::HashSet::new();
+        for seed in 0..40 {
+            let t = pick(&house, &near, &[EchoOut, Cut, Brake, BeatBlend], true, seed);
+            assert!([Kind::EchoOut, Kind::Cut, Kind::Brake, Kind::BeatBlend].contains(&t.kind()), "{t:?}");
+            seen.insert(t.kind());
+        }
+        assert!(seen.len() >= 3, "mix it up: {seen:?}");
     }
 
     #[test]

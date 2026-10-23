@@ -244,3 +244,22 @@ export function moveSelection(index, steps, count) {
   const from = index < 0 ? (steps > 0 ? -1 : 0) : index;
   return Math.min(count - 1, Math.max(0, from + steps));
 }
+
+// Every kind of transition for the DJ's checklist, in the order the planner prefers them.
+const KINDS = [
+  { type: 'beatBlend', bars: 16 }, { type: 'filterBlend', bars: 16 }, { type: 'breakdownBlend', bars: 8 },
+  { type: 'keyShiftBlend', bars: 16, semitones: 0 }, { type: 'tempoRamp', bars: 32 }, { type: 'loopOut', bars: 8 },
+  { type: 'vocalOut', bars: 16 }, { type: 'dropSwap', bars: 8 }, { type: 'echoOut' }, { type: 'reverbWash' },
+  { type: 'crossfade', secs: 8 }, { type: 'balladGap' }, { type: 'brake' }, { type: 'spinBack' }, { type: 'cut' },
+];
+
+/** The checklist: each kind with its plain name (no bar counts). */
+export function kindChoices() {
+  return KINDS.map((k) => ({ kind: k.type, label: transitionName({ type: k.type, bars: 0 }).replace(/\s*\(.*\)$/, '') }));
+}
+
+/** "Transitions: best fit" / "Transitions: 4 chosen" / "..., mixed up". */
+export function transitionsSummary(choice) {
+  if (!choice?.allowed?.length) return t('dj.tr.summaryAuto');
+  return t(choice.mixItUp ? 'dj.tr.summaryMixed' : 'dj.tr.summary', { n: choice.allowed.length });
+}

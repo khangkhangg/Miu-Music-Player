@@ -662,5 +662,12 @@
   "dj.choose.auto": "Auto (best fit)",
   "dj.keyLock": "Key lock: change the tempo without changing the pitch",
   "dj.keyUp": "Key up a semitone",
-  "dj.keyDown": "Key down a semitone"
+  "dj.keyDown": "Key down a semitone",
+  "dj.tr.summaryAuto": "Transitions: best fit",
+  "dj.tr.summary": "Transitions: {n} chosen",
+  "dj.tr.summaryMixed": "Transitions: {n} chosen, mixed up",
+  "dj.tr.title": "Transitions",
+  "dj.tr.hint": "Tick the ones Auto DJ may use. None ticked: it picks the best fit for each pair.",
+  "dj.tr.mixItUp": "Mix it up (pick at random among the ticked ones that fit)",
+  "dj.tr.clear": "Untick all (best fit)"
 }

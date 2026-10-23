@@ -5,7 +5,7 @@ import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, keysCompatible, fits,
-  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel,
+  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel, kindChoices, transitionsSummary,
 } from '../../src/js/dj.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
@@ -205,4 +205,13 @@ test('key shift reads as semitones', () => {
   assert.equal(keyShiftLabel(0), '');
   assert.equal(keyShiftLabel(2), '+2');
   assert.equal(keyShiftLabel(-1), '-1');
+});
+
+test('the transition checklist: every kind with a name, and a short summary', () => {
+  const kinds = kindChoices();
+  assert.equal(kinds.length, 15);
+  for (const k of kinds) assert.ok(k.label && !k.label.includes('dj.'), `${k.kind}: ${k.label}`);
+  assert.equal(transitionsSummary({ allowed: [], mixItUp: false }), 'Transitions: best fit');
+  assert.equal(transitionsSummary({ allowed: ['echoOut', 'cut', 'brake', 'beatBlend'], mixItUp: false }), 'Transitions: 4 chosen');
+  assert.equal(transitionsSummary({ allowed: ['echoOut', 'cut'], mixItUp: true }), 'Transitions: 2 chosen, mixed up');
 });

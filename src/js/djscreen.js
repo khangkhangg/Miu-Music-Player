@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, fits, songMeta,
-  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel,
+  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary,
 } from './dj.js';
 
 const POLL_MS = 50;
@@ -173,6 +173,39 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
   const sendAuto = () => invoke('dj_set_auto', { curve: $('dj-curve').value, queue }).catch(() => {});
   $('dj-auto').addEventListener('change', (e) => act({ type: 'autoDj', on: e.target.checked }));
   $('dj-curve').addEventListener('change', sendAuto);
+  // Transitions popover: the checklist Auto DJ keeps to, mix it up, and the next one by hand.
+  const trPanel = $('dj-tr-panel');
+  const setTrPanel = (open) => { trPanel.hidden = !open; $('dj-tr-btn').setAttribute('aria-expanded', String(open)); };
+  const sendTransitions = () => {
+    const allowed = [...$('dj-tr-list').querySelectorAll('input:checked')].map((c) => c.value);
+    invoke('dj_set_transitions', { transitions: { allowed, mixItUp: $('dj-mix').checked } }).catch(showProblem);
+  };
+  $('dj-tr-btn').addEventListener('click', () => {
+    setTrPanel(trPanel.hidden);
+    if (trPanel.hidden) return;
+    const chosen = state?.transitions ?? { allowed: [], mixItUp: false };
+    $('dj-tr-list').replaceChildren(...kindChoices().map((k) => {
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = k.kind;
+      box.checked = chosen.allowed.includes(k.kind);
+      box.addEventListener('change', sendTransitions);
+      const name = document.createElement('span');
+      name.textContent = k.label;
+      label.append(box, name);
+      return label;
+    }));
+    $('dj-mix').checked = chosen.mixItUp;
+  });
+  $('dj-mix').addEventListener('change', sendTransitions);
+  $('dj-tr-clear').addEventListener('click', () => {
+    for (const box of $('dj-tr-list').querySelectorAll('input')) box.checked = false;
+    $('dj-mix').checked = false;
+    sendTransitions();
+  });
+  $('dj-tr-close').addEventListener('click', () => setTrPanel(false));
+
   $('dj-choose').addEventListener('change', (e) => {
     const v = e.target.value;
     invoke('dj_choose_transition', { transition: v === 'auto' ? null : JSON.parse(v) }).catch(showProblem);
@@ -508,6 +541,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
       lastOnAir = s.onAir;
     }
     if (document.activeElement !== $('dj-style') && s.style) $('dj-style').value = s.style;
+    $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
     renderParty();

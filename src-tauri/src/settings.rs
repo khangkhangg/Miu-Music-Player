@@ -131,6 +131,23 @@ pub fn set_dj_phones(db: &Db, name: Option<&str>) -> Result<()> {
 }
 
 const DJ_STYLE: &str = "dj_style";
+const DJ_TRANSITIONS: &str = "dj_transitions";
+
+/// Transitions the DJ checked for Auto DJ (none: any), and whether it picks among them at random.
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DjTransitions {
+    pub allowed: Vec<crate::dj::autodj::Kind>,
+    pub mix_it_up: bool,
+}
+
+pub fn dj_transitions(db: &Db) -> DjTransitions {
+    db.setting_json(DJ_TRANSITIONS).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_dj_transitions(db: &Db, t: &DjTransitions) -> Result<()> {
+    db.set_setting_json(DJ_TRANSITIONS, t)
+}
 
 /// How Auto DJ mixes (D.7): smooth, party or chill.
 pub fn dj_style(db: &Db) -> crate::dj::autodj::Style {
@@ -891,6 +908,16 @@ mod dj_tests {
         assert_eq!(dj_phones(&db).as_deref(), Some("Headphones (USB Audio)"));
         set_dj_phones(&db, None).unwrap();
         assert_eq!(dj_phones(&db), None);
+    }
+
+    #[test]
+    fn the_checked_transitions_are_remembered() {
+        use crate::dj::autodj::Kind;
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dj_transitions(&db), DjTransitions::default());
+        let t = DjTransitions { allowed: vec![Kind::EchoOut, Kind::SpinBack], mix_it_up: true };
+        set_dj_transitions(&db, &t).unwrap();
+        assert_eq!(dj_transitions(&db), t);
     }
 
     #[test]

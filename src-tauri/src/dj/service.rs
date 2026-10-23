@@ -223,6 +223,13 @@ pub fn dj_library(db: State<'_, SharedDb>) -> Result<Vec<DjSong>, String> {
     Ok(c.into_iter().map(|c| DjSong { song_id: c.song_id, analysis: c.analysis }).collect())
 }
 
+/// The kinds of transition Auto DJ may use (none checked: any), kept for next time.
+#[tauri::command]
+pub fn dj_set_transitions(transitions: settings::DjTransitions, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    settings::set_dj_transitions(&*db.lock().map_err(|e| e.to_string())?, &transitions).map_err(|e| e.to_string())?;
+    engine_do(&dj, |e| e.set_transitions(transitions)).or(Ok(()))
+}
+
 /// Pick the next transition by hand (`None`: Auto DJ picks the best fit).
 #[tauri::command]
 pub fn dj_choose_transition(transition: Option<super::autodj::Transition>, dj: State<'_, SharedDj>) -> Result<(), String> {
@@ -282,14 +289,15 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
         return Ok(s.engine.status());
     }
     let _ = player.run(crate::media_controls::Command::Pause);
-    let (master, phones, exclusive, style) = {
+    let (master, phones, exclusive, style, transitions) = {
         let d = db.lock().map_err(|e| e.to_string())?;
-        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d))
+        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d), settings::dj_transitions(&d))
     };
     let engine = DjEngine::start(master, phones).map_err(|e| {
         if exclusive { format!("{e} (exclusive mode holds the speakers: turn it off for DJ mode)") } else { e }
     })?;
     engine.set_style(style);
+    engine.set_transitions(transitions);
     let status = engine.status();
     let alive = Arc::new(AtomicBool::new(true));
     let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);

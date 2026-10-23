@@ -97,6 +97,7 @@ pub struct EngineStatus {
     pub next: Option<Next>,
     pub mixing: bool,
     pub style: super::autodj::Style,
+    pub transitions: crate::settings::DjTransitions,
 }
 
 enum Cmd {
@@ -105,6 +106,7 @@ enum Cmd {
     Phones(Option<String>),
     Style(super::autodj::Style),
     Choose(Option<super::autodj::Transition>),
+    Transitions(crate::settings::DjTransitions),
     Stop,
 }
 
@@ -253,6 +255,11 @@ impl DjEngine {
         self.overviews.lock().ok()?[side as usize].clone()
     }
 
+    /// Only the checked kinds of transition from now on.
+    pub fn set_transitions(&self, t: crate::settings::DjTransitions) {
+        let _ = self.tx.send(Cmd::Transitions(t));
+    }
+
     /// Use this transition for the next mix (`None`: Auto DJ picks).
     pub fn choose_transition(&self, t: Option<super::autodj::Transition>) {
         let _ = self.tx.send(Cmd::Choose(t));
@@ -318,6 +325,12 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 }
             }
             Ok(Cmd::Choose(t)) => auto.set_next_transition(t),
+            Ok(Cmd::Transitions(t)) => {
+                auto.set_transitions(t.allowed.clone(), t.mix_it_up);
+                if let Ok(mut s) = status.lock() {
+                    s.transitions = t;
+                }
+            }
             Ok(Cmd::Style(style)) => {
                 auto.set_style(style);
                 if let Ok(mut s) = status.lock() {
