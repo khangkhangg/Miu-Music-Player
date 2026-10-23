@@ -149,6 +149,19 @@ pub const MIGRATIONS: &[&str] = &[
         data TEXT NOT NULL,
         analyzed_at INTEGER NOT NULL
      ) STRICT;",
+    // 17: playlists (PL): the user's own lists, in their own order
+    "CREATE TABLE playlists (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+     ) STRICT;
+     CREATE TABLE playlist_songs (
+        playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+        song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        PRIMARY KEY (playlist_id, song_id)
+     ) STRICT;
+     CREATE INDEX playlist_songs_order ON playlist_songs(playlist_id, position);",
 ];
 
 #[derive(Debug, thiserror::Error)]

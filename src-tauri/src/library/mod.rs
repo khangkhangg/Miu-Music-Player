@@ -11,6 +11,7 @@ pub mod format;
 pub mod scan;
 pub mod service;
 pub mod songs;
+pub mod playlists;
 pub mod sync_rules;
 pub mod tags;
 pub mod transcode;
