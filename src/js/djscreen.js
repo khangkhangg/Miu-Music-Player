@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, fits, songMeta,
-  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary,
+  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary, outputNote,
 } from './dj.js';
 import { drawOverview, drawZoom, sectionSpans, phraseTimes, mixZone, cueMarks, deckSpeed } from './djwave.js';
 
@@ -357,13 +357,16 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   // ---- State ----
 
   let problemTimer = null;
-  function showProblem(message) {
+  /** A message at the bottom: a problem (red), or with `info` a note (yellow) shown longer. */
+  function showProblem(message, info = false) {
     const el = $('dj-problem');
     el.textContent = String(message);
+    el.classList.toggle('info', info);
     el.hidden = false;
     clearTimeout(problemTimer);
-    problemTimer = setTimeout(() => { el.hidden = true; }, 6000);
+    problemTimer = setTimeout(() => { el.hidden = true; }, info ? 10000 : 6000);
   }
+  let notedMissing = null;
 
   async function loadOverview(side, i, songId) {
     overviewIds[i] = songId;
@@ -562,6 +565,11 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
+    // The chosen speakers were not there: the music plays on the Windows default, say so once.
+    if ((s.masterMissing ?? null) !== notedMissing) {
+      notedMissing = s.masterMissing ?? null;
+      if (notedMissing) showProblem(outputNote(s), true);
+    }
     renderList();
   }
 
@@ -600,6 +608,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];
     overviewDrawn = ['', ''];
+    notedMissing = null;
     await Promise.all([refreshLibrary(), refreshOutputs()]);
     onOpen?.();
     refreshControllers();

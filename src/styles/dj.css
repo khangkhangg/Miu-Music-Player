@@ -200,6 +200,7 @@
 .dj-row button[data-load="B"] { color: var(--dj-b); }
 .dj-row button.queued { background: var(--dj-a); color: #111; }
 .dj-problem { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--dj-hot); color: #111; padding: 8px 14px; border-radius: 8px; font-weight: 600; margin: 0; }
+.dj-problem.info { background: var(--dj-a); }
 
 @media (max-width: 1100px) {
   .dj-desk { grid-template-columns: 1fr 1fr; }

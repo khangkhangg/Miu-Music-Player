@@ -705,5 +705,6 @@
   "dj.mixZone": "Chuyển bài",
   "party.fullScreen": "Toàn màn hình",
   "party.fullScreenHint": "Toàn màn hình (F11 hoặc nhấp đúp)",
-  "party.screenHint": "Mở trong cửa sổ riêng: kéo sang TV rồi bật toàn màn hình."
+  "party.screenHint": "Mở trong cửa sổ riêng: kéo sang TV rồi bật toàn màn hình.",
+  "dj.outputFallback": "{name} chưa được kết nối: đang phát trên {now} (mặc định của Windows)."
 }

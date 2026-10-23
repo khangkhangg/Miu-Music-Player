@@ -705,5 +705,6 @@
   "dj.mixZone": "Mix",
   "party.fullScreen": "Full screen",
   "party.fullScreenHint": "Full screen (F11 or double-click)",
-  "party.screenHint": "Opens in its own window: drag it to the TV and make it full screen."
+  "party.screenHint": "Opens in its own window: drag it to the TV and make it full screen.",
+  "dj.outputFallback": "{name} is not connected: playing on {now} (the Windows default)."
 }

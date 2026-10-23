@@ -91,6 +91,8 @@ pub struct EngineStatus {
     pub phones: Option<String>,
     /// What went wrong with a device (unplugged, refused).
     pub problem: Option<String>,
+    /// The speakers the DJ chose, when they were not there and the Windows default plays instead.
+    pub master_missing: Option<String>,
     pub auto_dj: bool,
     /// The deck the speakers play (Auto DJ's view).
     pub on_air: Option<Side>,
@@ -137,6 +139,20 @@ impl DeviceOut {
             b.copy_from_slice(&samples[a.len()..n]);
             chunk.commit_all();
         }
+    }
+}
+
+/// Opens the speakers the DJ chose, or the Windows default when they are not there (switched off,
+/// unplugged, Bluetooth asleep): the music still plays, and the missing name is returned so the
+/// screen can say so.
+fn open_or_default<T>(name: Option<&str>, open: impl Fn(Option<&str>) -> Result<T, String>) -> Result<(T, Option<String>), String> {
+    match open(name) {
+        Ok(o) => Ok((o, None)),
+        Err(e) if name.is_some() => {
+            log::warn!("DJ speakers: {e}; using the Windows default");
+            open(None).map(|o| (o, name.map(str::to_string)))
+        }
+        Err(e) => Err(e),
     }
 }
 
@@ -313,13 +329,17 @@ impl DjEngine {
 }
 
 fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<String>, phones: Option<String>, ready: Sender<Result<(), String>>) {
-    let mut out = match open(master.as_deref()) {
+    let (mut out, missing) = match open_or_default(master.as_deref(), open) {
         Ok(o) => o,
         Err(e) => {
             let _ = ready.send(Err(e));
             return;
         }
     };
+    if let Ok(mut s) = status.lock() {
+        s.master = out.name.clone();
+        s.master_missing = missing;
+    }
     let open_phones = |name: Option<&str>, master: &DeviceOut| {
         let p = name.and_then(|n| match open(Some(n)) {
             Ok(o) if o.name != master.name => Some(o),
@@ -394,7 +414,19 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
             }
         }
         if out.lost.load(Ordering::Acquire) && problem.is_none() {
-            problem = Some(format!("{} was disconnected", out.name));
+            // The speakers went away mid-party: carry on through the Windows default when it runs
+            // at the same rate (the decks are set up for it), else say so.
+            match open(None) {
+                Ok(o) if o.rate == out.rate && o.name != out.name => {
+                    log::warn!("DJ speakers {} disconnected; now on {}", out.name, o.name);
+                    let gone = std::mem::replace(&mut out, o).name;
+                    if let Ok(mut s) = status.lock() {
+                        s.master = out.name.clone();
+                        s.master_missing = Some(gone);
+                    }
+                }
+                _ => problem = Some(format!("{} was disconnected", out.name)),
+            }
         }
         if phones_out.as_ref().is_some_and(|p| p.lost.load(Ordering::Acquire)) {
             let name = phones_out.take().map(|p| p.name).unwrap_or_default();
@@ -482,6 +514,24 @@ mod tests {
         let t = decode_track(&stereo, 8, None).unwrap();
         assert_eq!((t.rate, t.frames()), (48_000, 960));
         assert!(decode_track(&dir.path().join("missing.mp3"), 9, None).is_err());
+    }
+
+    #[test]
+    fn speakers_that_are_not_there_fall_back_to_the_windows_default() {
+        let open = |name: Option<&str>| match name {
+            None => Ok("Default speakers".to_string()),
+            Some("Desk speakers") => Ok("Desk speakers".to_string()),
+            Some(n) => Err(format!("output device {n:?} not found")),
+        };
+        assert_eq!(open_or_default(Some("Desk speakers"), open), Ok(("Desk speakers".into(), None)));
+        assert_eq!(open_or_default(None, open), Ok(("Default speakers".into(), None)));
+        assert_eq!(
+            open_or_default(Some("Bose Flex SoundLink"), open),
+            Ok(("Default speakers".into(), Some("Bose Flex SoundLink".into()))),
+            "the default plays, and the DJ hears which speakers were missing"
+        );
+        let nothing = |_: Option<&str>| Err::<String, _>("no audio output device".to_string());
+        assert_eq!(open_or_default(Some("Bose Flex SoundLink"), nothing), Err("no audio output device".into()));
     }
 
     #[test]

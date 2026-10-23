@@ -256,3 +256,8 @@ export function transitionsSummary(choice) {
   if (!choice?.allowed?.length) return t('dj.tr.summaryAuto');
   return t(choice.mixItUp ? 'dj.tr.summaryMixed' : 'dj.tr.summary', { n: choice.allowed.length });
 }
+
+/** The chosen speakers were not there and the Windows default plays: say so (else nothing). */
+export function outputNote(status) {
+  return status?.masterMissing ? t('dj.outputFallback', { name: status.masterMissing, now: status.master }) : '';
+}
