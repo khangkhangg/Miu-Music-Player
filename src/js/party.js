@@ -45,3 +45,18 @@ export function entryLines(e) {
 export function partyLimitOptions() {
   return [1, 2, 3, 5, 10].map((value) => ({ value, label: String(value) }));
 }
+
+/** The line under the relay switch: the guests' link, or why it is not working yet. */
+export function relayNote(info) {
+  if (!info.relayOn) return '';
+  if (info.relayError === 'relayOff') return t('party.relayOff');
+  if (info.relayError === 'offline') return t('party.relayOffline');
+  if (info.relayError) return t('party.relayFailed', { code: info.relayError });
+  return info.relayUrl ?? t('party.relayOpening');
+}
+
+/** The QR code on the party screen: the relay's works for everyone, the Wi-Fi one while it does not. */
+export function partyQr(info) {
+  if (info.relayOn && info.relayQr && !info.relayError) return info.relayQr;
+  return info.localOn ? info.localQr ?? null : null;
+}

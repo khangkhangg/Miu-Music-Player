@@ -690,5 +690,10 @@
   "party.votes.other": "{n} votes",
   "party.autoDjNeeded": "Turn Auto DJ on to play the guests' queue.",
   "party.guests": "Guests",
-  "party.wifiOff": "Turn on the Wi-Fi page to show the QR code."
+  "party.wifiOff": "Turn on a guest page to show the QR code.",
+  "party.guestsRelay": "Guests anywhere (musicplayer.vietnamcos.com)",
+  "party.relayOpening": "Opening the party link…",
+  "party.relayOff": "The site has party links turned off right now.",
+  "party.relayOffline": "Cannot reach musicplayer.vietnamcos.com. Trying again…",
+  "party.relayFailed": "The party link is not working ({code}). Trying again…"
 }

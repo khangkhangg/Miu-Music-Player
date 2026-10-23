@@ -7,6 +7,7 @@ use serde::Serialize;
 use tauri::State;
 
 use super::queue::{Entry, Item, Queue, Settings, HOST};
+use super::relay::{self, HttpSite, RelayRunner};
 use super::server::{self, LocalServer};
 use super::web::Party;
 use crate::library::service::SharedDb;
@@ -56,6 +57,7 @@ pub fn host_view(q: &Queue) -> HostView {
 pub struct PartyHost {
     pub party: Arc<Party>,
     local: Mutex<Option<LocalServer>>,
+    relay: Mutex<Option<RelayRunner>>,
     /// The video playing on the party screen (id, title), while one is.
     video: Mutex<Option<(String, String)>>,
 }
@@ -64,7 +66,7 @@ pub type SharedParty = Arc<PartyHost>;
 
 impl Default for PartyHost {
     fn default() -> Self {
-        Self { party: Arc::new(Party::new(&server::new_token())), local: Mutex::new(None), video: Mutex::new(None) }
+        Self { party: Arc::new(Party::new(&server::new_token())), local: Mutex::new(None), relay: Mutex::new(None), video: Mutex::new(None) }
     }
 }
 
@@ -93,12 +95,27 @@ pub struct PartyInfo {
     /// The guests' link on the Wi-Fi and its QR code (SVG), while the page is on.
     pub local_url: Option<String>,
     pub local_qr: Option<String>,
+    pub relay_on: bool,
+    /// The guests' link through musicplayer.vietnamcos.com and its QR code, once the room is open.
+    pub relay_url: Option<String>,
+    pub relay_qr: Option<String>,
+    /// Why the relay is not working ("relayOff", "offline", ...), while it is not.
+    pub relay_error: Option<String>,
 }
 
 fn info(host: &PartyHost) -> PartyInfo {
     let port = host.local.lock().ok().and_then(|l| l.as_ref().map(|s| s.port()));
     let url = port.and_then(|p| server::lan_ip().map(|ip| format!("http://{ip}:{p}/p/{}/", host.party.token())));
-    PartyInfo { local_on: port.is_some(), local_qr: url.as_deref().map(server::qr_svg), local_url: url }
+    let relay = host.relay.lock().ok().and_then(|r| r.as_ref().map(RelayRunner::status));
+    PartyInfo {
+        local_on: port.is_some(),
+        local_qr: url.as_deref().map(server::qr_svg),
+        local_url: url,
+        relay_on: relay.is_some(),
+        relay_qr: relay.as_ref().and_then(|r| r.link.as_deref().map(server::qr_svg)),
+        relay_url: relay.as_ref().and_then(|r| r.link.clone()),
+        relay_error: relay.and_then(|r| r.error),
+    }
 }
 
 #[tauri::command]
@@ -117,6 +134,23 @@ pub fn party_set_local(on: bool, host: State<'_, SharedParty>, db: State<'_, Sha
         *local = None;
     }
     drop(local);
+    Ok(info(&host))
+}
+
+/// Turns the party link through musicplayer.vietnamcos.com on or off (for guests not on the Wi-Fi).
+#[tauri::command]
+pub fn party_set_relay(on: bool, host: State<'_, SharedParty>, db: State<'_, SharedDb>) -> Result<PartyInfo, String> {
+    let mut r = host.relay.lock().map_err(|e| e.to_string())?;
+    if on && r.is_none() {
+        host.refresh_library(&db);
+        // MIU_PARTY_RELAY points Miu at another copy of the site (testing).
+        let api = std::env::var("MIU_PARTY_RELAY").unwrap_or_else(|_| format!("{}api.php", relay::SITE));
+        *r = Some(RelayRunner::start(host.party.clone(), Box::new(HttpSite::new(&api)), server::title_online));
+    } else if !on {
+        // Dropping it ends the room on the site.
+        *r = None;
+    }
+    drop(r);
     Ok(info(&host))
 }
 

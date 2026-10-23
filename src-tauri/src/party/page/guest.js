@@ -1,6 +1,6 @@
 // Miu Party guest page: the queue (most votes first), voting, adding songs from the DJ's library
-// or YouTube links. Served by Miu on the Wi-Fi at /p/<token>/ and by the relay site; the API is
-// always ./api/ next to the page.
+// or YouTube links. Served by Miu on the Wi-Fi at /p/<token>/ (API at ./api/) and by the relay site
+// at /party/?r=ROOM (API at ./api.php).
 (() => {
   'use strict';
 
@@ -14,7 +14,8 @@
       justPlayed: 'That one just played.', notInLibrary: 'That song is not in the DJ’s library. Try a YouTube link.',
       unknownLink: 'Paste a YouTube, Spotify or Apple Music link.', offline: 'Lost the party, reconnecting…',
       waiting: '{n} of your songs waiting for the DJ', approval: 'The DJ approves new songs.', closedNote: 'The queue is closed right now.',
-      vote: 'Vote',
+      vote: 'Vote', sent: 'Sent to the DJ!', relayOff: 'The party link is off right now. Ask the DJ.', roomGone: 'This party has ended.',
+      slowDown: 'Too many tries. Wait a moment.', busy: 'The DJ is busy. Try again in a moment.', relayDown: 'The party link is not working. Try again soon.',
     },
     vi: {
       nowPlaying: 'Đang phát', nothing: 'Chờ bài đầu tiên', queue: 'Danh sách chờ', add: 'Thêm bài',
@@ -25,13 +26,22 @@
       justPlayed: 'Bài này vừa phát xong.', notInLibrary: 'Bài này không có trong thư viện của DJ. Thử đường dẫn YouTube.',
       unknownLink: 'Dán đường dẫn YouTube, Spotify hoặc Apple Music.', offline: 'Mất kết nối, đang kết nối lại…',
       waiting: '{n} bài của bạn đang chờ DJ duyệt', approval: 'DJ duyệt bài mới.', closedNote: 'Danh sách đang đóng.',
-      vote: 'Bình chọn',
+      vote: 'Bình chọn', sent: 'Đã gửi cho DJ!', relayOff: 'Đường dẫn tiệc đang tắt. Hỏi DJ nhé.', roomGone: 'Bữa tiệc đã kết thúc.',
+      slowDown: 'Thử nhiều quá. Chờ một chút nhé.', busy: 'DJ đang bận. Thử lại sau giây lát.', relayDown: 'Đường dẫn tiệc đang lỗi. Thử lại sau nhé.',
     },
   };
   const lang = (navigator.language || 'en').toLowerCase().startsWith('vi') ? 'vi' : 'en';
   const tr = (key, vars = {}) => (STRINGS[lang][key] || STRINGS.en[key] || key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
   const $ = (id) => document.getElementById(id);
-  const api = (op) => new URL(`api/${op}`, location.href.split('?')[0].replace(/[^/]*$/, '')).toString();
+  // On the Wi-Fi the API sits next to the page (./api/<op>); through the relay site the page link
+  // carries the room (?r=CODE) and every call goes to api.php with it.
+  const room = new URLSearchParams(location.search).get('r');
+  const api = (op, params = {}) => {
+    const u = room ? new URL('api.php', location.href) : new URL(`api/${op}`, location.href.split('?')[0].replace(/[^/]*$/, ''));
+    if (room) { u.searchParams.set('r', room); u.searchParams.set('op', op); }
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') u.searchParams.set(k, v);
+    return u.toString();
+  };
 
   document.documentElement.lang = lang;
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = tr(el.dataset.t);
@@ -125,13 +135,17 @@
   const follow = async () => {
     for (;;) {
       try {
-        const q = version >= 0 ? `&since=${version}` : '';
-        const r = await fetch(`${api('state')}?guest=${encodeURIComponent(guest)}${q}`, { cache: 'no-store' });
+        const r = await fetch(api('state', { guest, since: version >= 0 ? version : '' }), { cache: 'no-store' });
         const state = await r.json();
+        if (!r.ok) throw new Error(state.error || 'error');
         version = state.version;
         render(state);
-      } catch {
-        toast(tr('offline'));
+        // Through the relay the DJ's answer to an add comes later: refusals show here.
+        for (const n of state.notices ?? []) if (n.error) toast(tr(n.error));
+        // The relay answers at once (no waiting request): ask again in a few seconds.
+        if (room) await new Promise((ok) => setTimeout(ok, 3000));
+      } catch (err) {
+        toast(tr(['relayOff', 'roomGone', 'slowDown', 'relayDown'].includes(err.message) ? err.message : 'offline'));
         await new Promise((ok) => setTimeout(ok, 3000));
       }
     }
@@ -144,7 +158,7 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(async () => {
       const q = $('search').value.trim();
-      const list = q ? await fetch(`${api('search')}?q=${encodeURIComponent(q)}`).then((r) => r.json()).catch(() => []) : [];
+      const list = q ? await fetch(api('search', { q })).then((r) => r.json()).catch(() => []) : [];
       $('results').replaceChildren(...list.map((s) => {
         const li = document.createElement('li');
         const b = document.createElement('button');
@@ -152,7 +166,7 @@
         b.className = 'add';
         b.textContent = '+';
         b.setAttribute('aria-label', tr('add'));
-        b.addEventListener('click', () => post('add', { songId: s.songId }).then(() => { toast(tr('added')); tab('queue'); }).catch((err) => toast(tr(err.message))));
+        b.addEventListener('click', () => post('add', { songId: s.songId }).then((d) => { toast(tr(d.pending ? 'sent' : 'added')); tab('queue'); }).catch((err) => toast(tr(err.message))));
         li.append(line(s), b);
         return li;
       }));
@@ -163,6 +177,6 @@
   $('link-add').addEventListener('click', () => {
     const url = $('link').value.trim();
     if (!url) return;
-    post('add', { url }).then(() => { $('link').value = ''; toast(tr('added')); tab('queue'); }).catch((err) => toast(tr(err.message)));
+    post('add', { url }).then((d) => { $('link').value = ''; toast(tr(d.pending ? 'sent' : 'added')); tab('queue'); }).catch((err) => toast(tr(err.message)));
   });
 })();

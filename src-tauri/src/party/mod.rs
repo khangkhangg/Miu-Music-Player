@@ -6,3 +6,4 @@ pub mod links;
 pub mod web;
 pub mod server;
 pub mod service;
+pub mod relay;

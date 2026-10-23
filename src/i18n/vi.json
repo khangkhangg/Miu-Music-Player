@@ -690,5 +690,10 @@
   "party.votes.other": "{n} bình chọn",
   "party.autoDjNeeded": "Bật DJ tự động để phát danh sách của khách.",
   "party.guests": "Khách",
-  "party.wifiOff": "Bật trang Wi-Fi để hiện mã QR."
+  "party.wifiOff": "Bật một trang cho khách để hiện mã QR.",
+  "party.guestsRelay": "Khách ở bất cứ đâu (musicplayer.vietnamcos.com)",
+  "party.relayOpening": "Đang mở đường dẫn tiệc…",
+  "party.relayOff": "Trang web đang tắt đường dẫn tiệc.",
+  "party.relayOffline": "Không kết nối được musicplayer.vietnamcos.com. Đang thử lại…",
+  "party.relayFailed": "Đường dẫn tiệc đang lỗi ({code}). Đang thử lại…"
 }

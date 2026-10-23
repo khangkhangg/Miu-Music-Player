@@ -251,6 +251,48 @@ impl Queue {
             open: self.settings.open,
         }
     }
+
+    /// The queue for the relay site, which works out each guest's view from it (see `view`).
+    pub fn relay_view(&self) -> RelayView {
+        let entry = |e: &Entry| RelayEntry {
+            id: e.id,
+            item: e.item.clone(),
+            added_by: e.added_by.clone(),
+            added_name: e.added_name.clone(),
+            voters: e.votes.iter().cloned().collect(),
+        };
+        RelayView {
+            version: self.version,
+            now: self.now.as_ref().map(entry),
+            queue: self.ordered().into_iter().map(entry).collect(),
+            waiting: self.entries.iter().filter(|e| !e.approved).map(|e| e.added_by.clone()).collect(),
+            approval: self.settings.approval,
+            open: self.settings.open,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayEntry {
+    pub id: u64,
+    #[serde(flatten)]
+    pub item: Item,
+    pub added_by: String,
+    pub added_name: String,
+    pub voters: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayView {
+    pub version: u64,
+    pub now: Option<RelayEntry>,
+    pub queue: Vec<RelayEntry>,
+    /// Who has songs waiting for the DJ's approval (one per song).
+    pub waiting: Vec<String>,
+    pub approval: bool,
+    pub open: bool,
 }
 
 #[cfg(test)]
@@ -391,5 +433,22 @@ mod tests {
         assert_eq!(v.waiting_mine, 1, "her song waiting for the DJ");
         assert!(v.approval);
         let _ = a;
+    }
+
+    #[test]
+    fn the_relay_gets_enough_to_show_each_guest_their_view() {
+        let mut q = Queue::default();
+        q.add("ann", "Ann", song(1)).unwrap();
+        q.vote("bob", 1, true);
+        q.settings.approval = true;
+        q.add("cat", "Cat", video("abc")).unwrap();
+        let r = serde_json::to_value(q.relay_view()).unwrap();
+        assert_eq!(r["version"], q.version());
+        assert_eq!(r["queue"][0]["addedBy"], "ann");
+        assert_eq!(r["queue"][0]["voters"], serde_json::json!(["ann", "bob"]));
+        assert_eq!(r["queue"][0]["title"], "Song 1");
+        assert_eq!(r["waiting"], serde_json::json!(["cat"]), "only who is waiting, not what");
+        assert_eq!(r["approval"], true);
+        assert!(r["now"].is_null());
     }
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
-import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions } from '../../src/js/party.js';
+import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr } from '../../src/js/party.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
 useDictionary('en', en);
@@ -34,4 +34,20 @@ test('queue entries read as title and who added them', () => {
 
 test('the per-guest limit choices', () => {
   assert.deepEqual(partyLimitOptions().map((o) => o.value), [1, 2, 3, 5, 10]);
+});
+
+test('the relay link, or why it is not working', () => {
+  assert.equal(relayNote({ relayOn: false }), '');
+  assert.equal(relayNote({ relayOn: true }), 'Opening the party link…');
+  assert.equal(relayNote({ relayOn: true, relayUrl: 'https://musicplayer.vietnamcos.com/party/?r=AB12' }), 'https://musicplayer.vietnamcos.com/party/?r=AB12');
+  assert.equal(relayNote({ relayOn: true, relayError: 'relayOff' }), 'The site has party links turned off right now.');
+  assert.equal(relayNote({ relayOn: true, relayError: 'offline' }), 'Cannot reach musicplayer.vietnamcos.com. Trying again…');
+  assert.equal(relayNote({ relayOn: true, relayError: 'http502' }), 'The party link is not working (http502). Trying again…');
+});
+
+test('the party screen shows the link that works for everyone', () => {
+  assert.equal(partyQr({ localOn: false, relayOn: false }), null);
+  assert.equal(partyQr({ localOn: true, localQr: '<svg>wifi</svg>', relayOn: false }), '<svg>wifi</svg>');
+  assert.equal(partyQr({ localOn: true, localQr: '<svg>wifi</svg>', relayOn: true, relayQr: '<svg>relay</svg>' }), '<svg>relay</svg>');
+  assert.equal(partyQr({ localOn: true, localQr: '<svg>wifi</svg>', relayOn: true, relayError: 'offline' }), '<svg>wifi</svg>', 'the Wi-Fi one while the relay is not working');
 });

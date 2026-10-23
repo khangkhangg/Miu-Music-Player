@@ -208,6 +208,7 @@ pub fn run() {
             dj::service::dj_midi_forget,
             party::service::party_info,
             party::service::party_set_local,
+            party::service::party_set_relay,
             party::service::party_host_state,
             party::service::party_set_settings,
             party::service::party_remove,

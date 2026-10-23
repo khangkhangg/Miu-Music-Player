@@ -6,6 +6,7 @@
 //!   POST ./api/add     {guest,name,songId|url}   POST ./api/vote {guest,id,on}
 //!   GET  ./api/search?q=words                     songs in the DJ's library
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
@@ -30,6 +31,8 @@ pub struct Party {
     queue: Mutex<Queue>,
     changed: Condvar,
     library: RwLock<Vec<(i64, String, String)>>,
+    /// Moves on each time the library is set (the relay sends it again).
+    library_gen: AtomicU64,
     wait: Mutex<Duration>,
 }
 
@@ -64,7 +67,7 @@ impl Response {
 
 impl Party {
     pub fn new(token: &str) -> Self {
-        Self { token: token.to_string(), queue: Mutex::new(Queue::default()), changed: Condvar::new(), library: RwLock::new(Vec::new()), wait: Mutex::new(LONG_POLL) }
+        Self { token: token.to_string(), queue: Mutex::new(Queue::default()), changed: Condvar::new(), library: RwLock::new(Vec::new()), library_gen: AtomicU64::new(0), wait: Mutex::new(LONG_POLL) }
     }
 
     pub fn token(&self) -> &str {
@@ -76,6 +79,12 @@ impl Party {
         if let Ok(mut l) = self.library.write() {
             *l = songs;
         }
+        self.library_gen.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// The library and how many times it has been set.
+    pub fn library(&self) -> (u64, Vec<(i64, String, String)>) {
+        (self.library_gen.load(Ordering::Relaxed), self.library.read().map(|l| l.clone()).unwrap_or_default())
     }
 
     pub fn queue(&self) -> MutexGuard<'_, Queue> {

@@ -2,7 +2,7 @@
 // code and queue on the party screen, and YouTube videos in YouTube's own player.
 
 import { t } from './i18n.js';
-import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions } from './party.js';
+import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr } from './party.js';
 
 const POLL_MS = 1000;
 
@@ -24,14 +24,27 @@ export function setupParty({ invoke, listen }) {
     info = i;
     $('party-wifi').checked = i.localOn;
     $('party-url').textContent = i.localUrl ?? (i.localOn ? '' : t('party.wifiOff'));
-    $('dj-party-qr').innerHTML = i.localQr ?? '';
-    $('dj-party-guests').hidden = !i.localOn;
+    $('party-relay').checked = i.relayOn;
+    $('party-relay-url').textContent = relayNote(i);
+    const qr = partyQr(i);
+    if (qr !== shownQr) {
+      $('dj-party-qr').innerHTML = qr ?? '';
+      shownQr = qr;
+    }
+    $('dj-party-guests').hidden = !qr;
   }
+  let shownQr = null;
 
   $('party-wifi').addEventListener('change', (e) => {
     invoke('party_set_local', { on: e.target.checked }).then(showInfo).catch((err) => {
       e.target.checked = false;
       $('party-url').textContent = String(err);
+    });
+  });
+  $('party-relay').addEventListener('change', (e) => {
+    invoke('party_set_relay', { on: e.target.checked }).then(showInfo).catch((err) => {
+      e.target.checked = false;
+      $('party-relay-url').textContent = String(err);
     });
   });
   const sendSettings = () => invoke('party_set_settings', {
@@ -101,6 +114,8 @@ export function setupParty({ invoke, listen }) {
     if (dj.hidden) return;
     const [v, s] = await Promise.all([invoke('party_host_state').catch(() => null), invoke('dj_state').catch(() => null)]);
     if (v) render(v, !!s?.autoDj);
+    // The relay opens its room in the background: follow its link and errors.
+    if (info.relayOn) invoke('party_info').then(showInfo).catch(() => {});
   }
   setInterval(poll, POLL_MS);
 

@@ -380,6 +380,14 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   middle goes to the vocals, side instruments and bass stay, the parts add back up). Screen: style, next-transition
   menu, key lock and key shift per deck. Machine tests: structure of ten real songs; a real song split in 0.2 s;
   all fifteen transitions rendered from real songs to listen to. **Not yet listened to by a person.**
+- [ ] **D.8 Party mode** — *Test first:* the queue (most votes first, ties in order, one vote each, per-guest limit,
+  approval, the DJ removes and closes, just-played refused, Auto DJ loads the top early); links (YouTube, Spotify,
+  Apple Music) and library matching; the guest page API on the Wi-Fi (adds, votes, search, refusals say why, long
+  poll); the relay (Miu opens a room, pushes the queue only when it changes and the library once, handles guests'
+  actions like the Wi-Fi page and answers them, says when the site is off); relay/lib.php (relay/tests/test.php, run
+  on the server). Screen: Guests panel (Wi-Fi page, link through musicplayer.vietnamcos.com, approval, limit), QR and
+  up next on the party screen, YouTube videos in YouTube's own player with Auto DJ waiting for them; admin page
+  (relay/admin.php). Wi-Fi party checked in the app 2026-10-23. **Relay not deployed yet.**
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.
