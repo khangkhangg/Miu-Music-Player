@@ -369,6 +369,17 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   mapping, "not yet checked" note, forget learnt), MIDI learn on the booth's own controls, browse selection in the
   song list. Tried in the app without a controller (none here): panel, learn mode picking a knob without moving it.
   **Not yet tried on any controller.**
+- [x] **D.7 Smarter transitions** — *Test first:* song structure (sections of a made-up dance song, phrases where
+  the music changes, a one-bar dip is no breakdown, vocals, real end, no phrases without a beat) and re-analysis of
+  older songs; reverb with freeze, brake, riser and impact; fifteen transition scripts (each hands over once and
+  stops the old song, 3-step EQ swap, filter blend, drop swap on the drop with riser and impact, ballad gap with a
+  moment of quiet, reverb wash, spin-back and brake, loop out, tempo ramp with key lock, key-shift blend, vocal out
+  with stems) and Auto DJ playing them (the switch on the phrase, drop swap lands the new song on its drop, echo,
+  ballad gap, tempo ramp, stems asked for and a filter-blend fallback); planner by music type in three styles;
+  key lock / key shift (pitch kept at +8 %, two semitones up, speed 1.2 with key lock); stems (the voice in the
+  middle goes to the vocals, side instruments and bass stay, the parts add back up). Screen: style, next-transition
+  menu, key lock and key shift per deck. Machine tests: structure of ten real songs; a real song split in 0.2 s;
+  all fifteen transitions rendered from real songs to listen to. **Not yet listened to by a person.**
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.

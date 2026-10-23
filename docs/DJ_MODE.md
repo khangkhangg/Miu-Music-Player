@@ -83,6 +83,27 @@ party pads (short built-in sounds), keyboard map for DJ actions.
 - Built and unit-tested without the hardware; each mapping is marked "not yet tried on the device"
   until someone with that controller checks it.
 
+## Phase 4 — smarter transitions (agreed 2026-10-23)
+
+- **Song structure** (`dj::structure`, analysis version 2; older analyses are redone in the
+  background): 8-bar phrase grid, sections (intro, main, breakdown, build, drop, outro), the drop,
+  where vocals probably are, the real end.
+- **Transitions are scripts** (`dj::script`): ramps (crossfader, volume, EQ, filter, tempo) and
+  instant moves (effects, loops, sync, key lock, key shift, stems, play, stop, risers and impacts)
+  over the transition's progress. The new song takes over on a phrase.
+- **Fifteen transitions:** beat blend (lows, mids, highs swapped in turn), filter blend, breakdown
+  blend, loop out, drop swap, vocal out, key-shift blend, tempo ramp, echo out, reverb wash,
+  spin-back, brake, crossfade, ballad fade-and-pause, cut.
+- **Planner by music type**, in a chosen **style** (smooth, party, chill): no clear beat → ballad
+  fade or crossfade; in tempo and key → drop swap (party), breakdown blend, loop out (no outro),
+  one voice at a time (filter blend, or vocal out at a party), beat blend; key clash → key shift
+  up to two semitones, else echo out / reverb wash; tempo gap up to 25 % → tempo ramp; far apart →
+  cut, or spin-back / brake at a party. The next transition can also be picked by hand.
+- **Key lock** (`dj::stretch`): our own WSOLA time-stretcher (no GPL/LGPL library); per-deck key
+  lock and key shift.
+- **Stems** (`dj::stems`): centre-channel vocal/instrumental split by frequency (no model to
+  download, about 0.2 s a song); rougher than a trained separator, which could replace it later.
+
 ## Testing
 
 Test-first as everywhere in Miu: analysis on synthetic clicks/tones with known tempo and key, the

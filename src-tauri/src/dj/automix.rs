@@ -615,4 +615,76 @@ mod machine_tests {
         write_wav(&out, rate, &wav);
         println!("wrote {} s to {out}", wav.len() / 2 / rate as usize);
     }
+
+    // Machine test: every transition between two real songs (`MIU_DJ_A`, `MIU_DJ_B`; the tempo
+    // ramp goes into `MIU_DJ_C`, a song at another tempo), each into `MIU_DJ_OUT`/demo-<name>.wav,
+    // from 20 s before the switch to 15 s after. Run with --release.
+    #[test]
+    #[ignore]
+    fn demo_every_transition() {
+        use crate::dj::autodj::Style;
+        let env = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k}"));
+        let out_dir = std::path::PathBuf::from(env("MIU_DJ_OUT"));
+        let load = |p: &str, id: i64| -> Arc<Track> {
+            let (mono, r) = crate::dj::analysis::decode_mono(std::path::Path::new(p)).unwrap();
+            let a = crate::dj::analysis::analyze(&mono, r);
+            println!("{p}: {:.1} BPM conf {:.2} key {:?} energy {} phrases {:?} drop {:?}", a.bpm, a.beat_confidence, a.key, a.energy, a.structure.phrase_start_s, a.structure.drop_s);
+            Arc::new(decode_track(std::path::Path::new(p), id, Some(a)).unwrap())
+        };
+        let (a, b, c) = (load(&env("MIU_DJ_A"), 1), load(&env("MIU_DJ_B"), 2), load(&env("MIU_DJ_C"), 3));
+        let stems = |t: &Arc<Track>| Arc::new(crate::dj::stems::split(&t.pcm, t.rate));
+        let (sa, sb) = (stems(&a), stems(&b));
+        let all = [
+            ("beat-blend", Transition::BeatBlend { bars: 16 }, Style::Smooth),
+            ("filter-blend", Transition::FilterBlend { bars: 16 }, Style::Smooth),
+            ("breakdown-blend", Transition::BreakdownBlend { bars: 8 }, Style::Smooth),
+            ("loop-out", Transition::LoopOut { bars: 8 }, Style::Smooth),
+            ("drop-swap", Transition::DropSwap { bars: 8 }, Style::Party),
+            ("vocal-out", Transition::VocalOut { bars: 16 }, Style::Smooth),
+            ("key-shift-blend", Transition::KeyShiftBlend { bars: 16, semitones: 1 }, Style::Smooth),
+            ("echo-out", Transition::EchoOut, Style::Party),
+            ("reverb-wash", Transition::ReverbWash, Style::Smooth),
+            ("spin-back", Transition::SpinBack, Style::Party),
+            ("brake", Transition::Brake, Style::Party),
+            ("crossfade", Transition::Crossfade { secs: 8.0 }, Style::Smooth),
+            ("ballad-gap", Transition::BalladGap, Style::Smooth),
+            ("cut", Transition::Cut, Style::Party),
+            ("tempo-ramp", Transition::TempoRamp { bars: 32 }, Style::Smooth),
+        ];
+        for (name, t, style) in all {
+            let rate = 44_100;
+            let mut m = Mixer::new(rate);
+            let incoming = if name == "tempo-ramp" { c.clone() } else { b.clone() };
+            m.deck_mut(Side::A).load(a.clone());
+            m.deck_mut(Side::B).load(incoming);
+            if name == "vocal-out" {
+                m.deck_mut(Side::A).set_stems(sa.clone());
+                m.deck_mut(Side::B).set_stems(sb.clone());
+            }
+            let from = a.analysis.clone().unwrap();
+            let start = crate::dj::autodj::start_at(&from, t);
+            let switch = start + crate::dj::script::switch_point(t) as f64 * t.duration_s(&from);
+            m.deck_mut(Side::A).seek_s((switch.min(start) - 20.0).max(0.0));
+            let mut auto = AutoMix::default();
+            auto.set_style(style);
+            auto.set_next_transition(Some(t));
+            auto.set_on(true);
+            let (mut ma, mut mb) = (vec![0.0; 882], vec![0.0; 882]);
+            let mut wav = Vec::new();
+            let mut done = None;
+            for i in 0.. {
+                if let Some(Event::OnAir { deck: Side::B, .. }) = auto.tick(&mut m, 441) {
+                    done = Some(i);
+                }
+                m.render(&mut ma, &mut mb);
+                wav.extend_from_slice(&ma);
+                if done.is_some_and(|d| i > d + 1500) || i > 100 * 240 {
+                    break;
+                }
+            }
+            let path = out_dir.join(format!("demo-{name}.wav"));
+            write_wav(path.to_str().unwrap(), rate, &wav);
+            println!("{name}: {} s", wav.len() / 2 / rate as usize);
+        }
+    }
 }
