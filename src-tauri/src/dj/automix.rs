@@ -1,14 +1,15 @@
-//! Auto DJ at work (D.3): runs in the engine once per block. When the song on air reaches the
-//! planned moment it starts the song waiting on the other deck (synced for a beat blend), moves
-//! the crossfader, EQ and filter through the transition, then stops the old deck.
+//! Auto DJ at work (D.3, D.7): runs in the engine once per block. When the song on air reaches
+//! the planned moment it plays the transition's script: the new song is cued (and synced), then
+//! the script's ramps and moves drive the mixer until the old song is off and the new one on air.
 
 use serde::Serialize;
 
-use super::actions::{Action, Band, Deck as Side, Effect};
+use super::actions::{Action, Band, Deck as Side};
 use super::analysis::Analysis;
 use super::autodj::{self, Transition};
 use super::deck::Deck;
 use super::mixer::Mixer;
+use super::script::{self, Entry, Move, Script, Side as Role, Target};
 
 /// What Auto DJ did that the app has to follow up on.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,22 +27,25 @@ pub struct Next {
 }
 
 struct Mixing {
-    transition: Transition,
-    /// Position of the outgoing deck when the transition began, and how long it runs (both in
-    /// the outgoing song's time).
-    start_s: f64,
+    script: Script,
+    /// Real time since the transition began, and how long it runs (seconds).
+    elapsed_s: f64,
     duration_s: f64,
     incoming: Side,
-    incoming_started: bool,
-    echoing: bool,
+    /// Progress at the last block (instant moves between it and now are due).
+    prev_p: f32,
 }
 
 #[derive(Default)]
 pub struct AutoMix {
     on: bool,
+    /// Party style: risers, impacts and more drama in the transitions.
+    party: bool,
     live: Option<Side>,
     mixing: Option<Mixing>,
     next: Option<Next>,
+    /// A transition chosen by hand for the next mix (used once).
+    chosen: Option<Transition>,
 }
 
 fn other(s: Side) -> Side {
@@ -84,11 +88,14 @@ fn entry_s(a: &Analysis) -> f64 {
     (a.downbeat_s + ((a.mix_in_s - a.downbeat_s) / bar).floor() * bar).max(0.0)
 }
 
-/// How far into the transition the incoming song starts playing.
-fn incoming_starts_at(t: Transition) -> f32 {
-    match t {
-        Transition::EchoOut => 0.75,
-        _ => 0.0,
+/// Where the incoming song starts for a script's entry.
+fn start_point(a: &Analysis, entry: Entry) -> f64 {
+    match entry {
+        Entry::MixIn => entry_s(a),
+        Entry::Drop => a.structure.drop_s.unwrap_or_else(|| entry_s(a)),
+        // Its first downbeat (its very start without a beat).
+        Entry::Intro if a.bpm > 0.0 && a.beat_confidence >= autodj::MIN_BEAT_CONFIDENCE => a.downbeat_s.rem_euclid(240.0 / a.bpm as f64),
+        Entry::Intro => 0.0,
     }
 }
 
@@ -97,6 +104,7 @@ fn flatten(m: &mut Mixer, deck: Side) {
         m.apply(&Action::Eq { deck, band, value: 0.0 });
     }
     m.apply(&Action::Filter { deck, value: 0.0 });
+    m.apply(&Action::Volume { deck, value: 1.0 });
 }
 
 fn full(deck: Side) -> f32 {
@@ -104,6 +112,19 @@ fn full(deck: Side) -> f32 {
         Side::A => -1.0,
         Side::B => 1.0,
     }
+}
+
+/// Every ramp target a script moves.
+fn targets(s: &Script) -> Vec<Target> {
+    let mut out: Vec<Target> = Vec::new();
+    for st in &s.steps {
+        if let Move::Ramp { target, .. } = st.mv {
+            if !out.contains(&target) {
+                out.push(target);
+            }
+        }
+    }
+    out
 }
 
 impl AutoMix {
@@ -120,6 +141,15 @@ impl AutoMix {
         self.on
     }
 
+    pub fn set_party(&mut self, party: bool) {
+        self.party = party;
+    }
+
+    /// Use this transition for the next mix instead of the planned one (`None`: back to planning).
+    pub fn set_next_transition(&mut self, t: Option<Transition>) {
+        self.chosen = t;
+    }
+
     /// The deck on air.
     pub fn live(&self) -> Option<Side> {
         self.live
@@ -133,8 +163,8 @@ impl AutoMix {
         self.mixing.is_some()
     }
 
-    /// Called before each block the engine renders.
-    pub fn tick(&mut self, m: &mut Mixer) -> Option<Event> {
+    /// Called before each block of `frames` the engine renders.
+    pub fn tick(&mut self, m: &mut Mixer, frames: usize) -> Option<Event> {
         if !self.on {
             return None;
         }
@@ -154,21 +184,29 @@ impl AutoMix {
             if !waiting {
                 return None;
             }
-            let transition = autodj::plan(&from, &to);
+            let transition = self.chosen.unwrap_or_else(|| autodj::plan(&from, &to));
             let start = autodj::start_at(&from, transition);
             let pos = m.deck(live).position_s();
-            self.next = Some(Next { transition, starts_in_s: ((start - pos) / m.deck(live).speed()).max(0.0) });
+            let speed = m.deck(live).speed();
+            self.next = Some(Next { transition, starts_in_s: ((start - pos) / speed).max(0.0) });
             if pos < start && !m.deck(live).ended() {
                 return None;
             }
-            m.deck_mut(incoming).seek_s(entry_s(&to));
-            if matches!(transition, Transition::BeatBlend { .. }) {
+            self.chosen = None;
+            let script = script::script(transition, self.party);
+            let at = start_point(&to, script.entry);
+            m.deck_mut(incoming).seek_s(at);
+            if script.sync {
                 m.apply(&Action::Sync { deck: incoming });
+                if script.entry == Entry::Drop {
+                    m.deck_mut(incoming).seek_s(at); // tempo matched; it starts right on its drop
+                }
             }
             flatten(m, incoming);
-            self.mixing = Some(Mixing { transition, start_s: pos, duration_s: transition.duration_s(&from), incoming, incoming_started: false, echoing: false });
+            let duration_s = transition.duration_s(&from) / speed;
+            self.mixing = Some(Mixing { script, elapsed_s: 0.0, duration_s, incoming, prev_p: -1.0 });
         }
-        self.step(m, live)
+        self.step(m, live, frames)
     }
 
     /// Nothing plays: start a loaded song that has not been played to its end.
@@ -183,29 +221,39 @@ impl AutoMix {
         Some(Event::OnAir { deck: s, song_id: m.deck(s).track()?.song_id })
     }
 
-    fn step(&mut self, m: &mut Mixer, live: Side) -> Option<Event> {
+    fn step(&mut self, m: &mut Mixer, live: Side, frames: usize) -> Option<Event> {
         let mx = self.mixing.as_mut()?;
-        let progress = if mx.duration_s > 0.0 && !m.deck(live).ended() {
-            ((m.deck(live).position_s() - mx.start_s) / mx.duration_s) as f32
-        } else {
-            1.0
-        };
-        if !mx.incoming_started && progress >= incoming_starts_at(mx.transition) {
-            m.deck_mut(mx.incoming).play();
-            mx.incoming_started = true;
-        }
-        let mv = autodj::moves(mx.transition, progress);
-        let echoing = mx.echoing;
-        mx.echoing = mv.outgoing_echo;
+        let p = if mx.duration_s > 0.0 { (mx.elapsed_s / mx.duration_s).min(1.0) as f32 } else { 1.0 };
+        mx.elapsed_s += frames as f64 / m.rate() as f64;
         let incoming = mx.incoming;
-        m.apply(&Action::Crossfader { value: mv.crossfader * full(incoming) });
-        m.apply(&Action::Eq { deck: live, band: Band::Low, value: mv.outgoing_low });
-        m.apply(&Action::Eq { deck: incoming, band: Band::Low, value: mv.incoming_low });
-        m.apply(&Action::Filter { deck: live, value: mv.outgoing_filter });
-        if mv.outgoing_echo != echoing {
-            m.apply(&Action::Effect { deck: live, effect: Effect::Echo, on: mv.outgoing_echo });
+        let deck = |r: Role| if r == Role::Out { live } else { incoming };
+        for target in targets(&mx.script) {
+            let Some(v) = script::value_at(&mx.script, target, p) else { continue };
+            m.apply(&match target {
+                Target::Crossfader => Action::Crossfader { value: v * full(incoming) },
+                Target::Volume(r) => Action::Volume { deck: deck(r), value: v },
+                Target::Eq(r, band) => Action::Eq { deck: deck(r), band, value: v },
+                Target::Filter(r) => Action::Filter { deck: deck(r), value: v },
+            });
         }
-        if progress < 1.0 {
+        for mv in script::instants(&mx.script, mx.prev_p, p) {
+            match *mv {
+                Move::Effect { side, effect, on } => {
+                    m.apply(&Action::Effect { deck: deck(side), effect, on });
+                }
+                Move::Loop { side, beats } => {
+                    m.apply(&Action::Loop { deck: deck(side), beats });
+                }
+                Move::Play => m.deck_mut(incoming).play(),
+                Move::Stop => m.deck_mut(live).pause(),
+                Move::Pad(slot) => {
+                    m.apply(&Action::Pad { slot: slot as u8 });
+                }
+                Move::Ramp { .. } => {}
+            }
+        }
+        mx.prev_p = p;
+        if p < 1.0 {
             return None;
         }
         // Off the deck, or it would count as the next song; the app loads the real next one there.
@@ -242,10 +290,66 @@ mod tests {
         let (mut a, mut b) = (vec![0.0; 160], vec![0.0; 160]);
         let mut events = Vec::new();
         for _ in 0..(secs * 100.0) as usize {
-            events.extend(auto.tick(m));
+            events.extend(auto.tick(m, 80));
             m.render(&mut a, &mut b);
         }
         events
+    }
+
+    /// A 120 BPM song with 8-bar phrases from 0 and, if given, a drop.
+    fn song(id: i64, secs: f64, mix_out_s: f64, drop_s: Option<f64>) -> Arc<Track> {
+        let mut a = Analysis { bpm: 120.0, beat_confidence: 0.8, key: Some("8A".into()), energy: 7, mix_in_s: 2.0, mix_out_s, duration_s: secs, ..Default::default() };
+        a.structure.phrase_start_s = Some(0.0);
+        a.structure.drop_s = drop_s;
+        a.structure.end_s = secs;
+        Arc::new(Track { song_id: id, rate: RATE, pcm: vec![0; (secs * RATE as f64) as usize * 2], analysis: Some(a) })
+    }
+
+    fn ready(a: Arc<Track>, b: Arc<Track>, t: Transition) -> (Mixer, AutoMix) {
+        let mut m = Mixer::new(RATE);
+        m.deck_mut(Side::A).load(a);
+        m.deck_mut(Side::B).load(b);
+        let mut auto = AutoMix::default();
+        auto.set_next_transition(Some(t));
+        auto.set_on(true);
+        (m, auto)
+    }
+
+    #[test]
+    fn the_drop_swap_brings_the_new_song_in_on_its_drop() {
+        // 8 bars = 16 s ending at the phrase at 48 s (mix out 50): the build starts at 32 s.
+        let (mut m, mut auto) = ready(song(1, 60.0, 50.0, None), song(2, 90.0, 80.0, Some(30.0)), Transition::DropSwap { bars: 8 });
+        run(&mut m, &mut auto, 0.05);
+        assert!((auto.next().unwrap().starts_in_s - 32.0).abs() < 0.2, "{:?}", auto.next());
+        run(&mut m, &mut auto, 47.9);
+        assert!(!m.deck(Side::B).is_playing(), "still building");
+        let events = run(&mut m, &mut auto, 0.2);
+        assert_eq!(events, vec![Event::OnAir { deck: Side::B, song_id: 2 }]);
+        let p = m.deck(Side::B).position_s();
+        assert!((30.0..30.25).contains(&p), "the new song started on its drop: {p}");
+    }
+
+    #[test]
+    fn echo_out_uses_the_echo_and_lets_it_ring() {
+        // 4 bars = 8 s; the new song comes in on the phrase at 48 (three quarters in): it starts at 42,
+        // the echo comes on at 46.
+        let (mut m, mut auto) = ready(song(1, 60.0, 50.0, None), song(2, 90.0, 80.0, None), Transition::EchoOut);
+        run(&mut m, &mut auto, 47.0);
+        assert!(m.effects(Side::A).0, "echo on before the drop");
+        run(&mut m, &mut auto, 1.5);
+        assert!(!m.effects(Side::A).0, "off at the drop: the repeats ring out");
+        assert!(m.deck(Side::B).is_playing());
+    }
+
+    #[test]
+    fn the_ballad_gap_has_a_moment_of_quiet() {
+        let (mut m, mut auto) = ready(song(1, 40.0, 38.0, None), song(2, 60.0, 50.0, None), Transition::BalladGap);
+        // It fades out by the real end (40 s): starts 4.4 s before; quiet from 4.4 s to 5.6 s in.
+        run(&mut m, &mut auto, 35.6 + 5.0);
+        assert!(m.volume(Side::A) < 0.01 && m.volume(Side::B) < 0.01, "quiet: {} {}", m.volume(Side::A), m.volume(Side::B));
+        run(&mut m, &mut auto, 3.2);
+        assert_eq!(m.volume(Side::B), 1.0, "the new song is up");
+        assert_eq!(auto.live(), Some(Side::B));
     }
 
     #[test]
@@ -413,7 +517,7 @@ mod machine_tests {
         let mut wav = Vec::new();
         let mut after = None;
         for i in 0.. {
-            if let Some(Event::OnAir { deck: Side::B, .. }) = auto.tick(&mut m) {
+            if let Some(Event::OnAir { deck: Side::B, .. }) = auto.tick(&mut m, 441) {
                 after = Some(i);
                 println!("on air: deck B at block {i}; its tempo {:+.1} %", m.deck(Side::B).tempo() * 8.0);
             }

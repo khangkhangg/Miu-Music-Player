@@ -101,8 +101,24 @@ pub fn pick(now: &Analysis, candidates: &[Candidate], played: &HashSet<i64>, que
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Transition {
-    /// Tempo synced, downbeats lined up, a long crossfade with the bass swapped half way.
+    /// Tempo synced, downbeats lined up, a long crossfade with lows, mids and highs swapped in turn.
     BeatBlend { bars: u8 },
+    /// The new song comes in thin (high-pass) and opens up while the old one goes dark (low-pass).
+    FilterBlend { bars: u8 },
+    /// The new song's intro comes in under the old song's breakdown (no two sets of drums).
+    BreakdownBlend { bars: u8 },
+    /// The end of the old song is looped to make room for a full blend.
+    LoopOut { bars: u8 },
+    /// The old song builds up; the new one comes in right on its drop.
+    DropSwap { bars: u8 },
+    /// A wash of reverb freezes the old song; the new one rises out of it.
+    ReverbWash,
+    /// The old record is spun back; the new one slams in.
+    SpinBack,
+    /// The old record slows to a stop; the new one starts.
+    Brake,
+    /// A ballad ends almost by itself, a moment of quiet, the next one starts softly.
+    BalladGap,
     /// The outgoing song is swept away with a high-pass; the new one drops in on a downbeat.
     EchoOut,
     /// A plain crossfade at the mix points, no beat-matching.
@@ -134,65 +150,71 @@ impl Transition {
     pub fn duration_s(self, from: &Analysis) -> f64 {
         match self {
             Transition::BeatBlend { bars } => bar_s(from).map_or(16.0, |b| b * bars as f64),
+            Transition::FilterBlend { bars } | Transition::BreakdownBlend { bars } | Transition::LoopOut { bars } | Transition::DropSwap { bars } => {
+                bar_s(from).map_or(16.0, |b| b * bars as f64)
+            }
             Transition::EchoOut => bar_s(from).map_or(8.0, |b| b * 4.0),
+            Transition::ReverbWash => 8.0,
+            Transition::SpinBack => 1.5,
+            Transition::Brake => 2.0,
+            Transition::BalladGap => 8.0,
             Transition::Crossfade { secs } => secs as f64,
             Transition::Cut => 0.0,
         }
     }
 
     fn on_the_beat(self) -> bool {
-        !matches!(self, Transition::Crossfade { .. })
+        !matches!(self, Transition::Crossfade { .. } | Transition::ReverbWash | Transition::BalladGap)
     }
 }
 
-/// Where in the outgoing song the transition starts: so it ends by the mix-out point, on a
-/// downbeat for the beat-based ones.
+/// The grid transitions line up with: 8-bar phrases when known, else bars.
+fn grid(from: &Analysis) -> Option<(f64, f64)> {
+    let bar = bar_s(from).filter(|_| from.beat_confidence >= MIN_BEAT_CONFIDENCE)?;
+    Some(match from.structure.phrase_start_s {
+        Some(p) => (p, bar * 8.0),
+        None => (from.downbeat_s, bar),
+    })
+}
+
+/// Where the outgoing song really ends (trailing silence left out).
+fn real_end(from: &Analysis) -> f64 {
+    if from.structure.end_s > 0.0 { from.structure.end_s } else { from.duration_s.max(from.mix_out_s) }
+}
+
+/// Where in the outgoing song the transition starts. The moment the new song takes over lands
+/// on a phrase (or bar) and the transition is over by the mix-out point; a ballad gap fades out
+/// by the real end; a breakdown blend starts on the old song's last breakdown.
 pub fn start_at(from: &Analysis, t: Transition) -> f64 {
-    let target = from.mix_out_s - t.duration_s(from);
-    let start = match bar_s(from).filter(|_| t.on_the_beat()) {
-        Some(bar) => from.downbeat_s + ((target - from.downbeat_s) / bar).floor() * bar,
-        None => target,
-    };
-    start.max(0.0)
-}
-
-/// The mixer's position at `progress` (0..1) through a transition. The crossfader runs from the
-/// outgoing deck (-1) to the incoming one (1); EQ and filter values as in `actions`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Moves {
-    pub crossfader: f32,
-    pub outgoing_low: f32,
-    pub incoming_low: f32,
-    pub outgoing_filter: f32,
-    /// Echo on the outgoing song (turned off at the drop, so its repeats ring over the new one).
-    pub outgoing_echo: bool,
-}
-
-/// Where the echo out drops the new song in.
-const DROP_AT: f32 = 0.75;
-
-pub fn moves(t: Transition, progress: f32) -> Moves {
-    let p = progress.clamp(0.0, 1.0);
-    let flat = Moves { crossfader: -1.0, outgoing_low: 0.0, incoming_low: 0.0, outgoing_filter: 0.0, outgoing_echo: false };
-    match t {
-        Transition::BeatBlend { .. } => {
-            let swapped = p >= 0.5;
-            Moves {
-                crossfader: -1.0 + 2.0 * p,
-                outgoing_low: if swapped { -1.0 } else { 0.0 },
-                incoming_low: if swapped { 0.0 } else { -1.0 },
-                ..flat
-            }
-        }
-        Transition::EchoOut => Moves {
-            crossfader: if p >= DROP_AT { 1.0 } else { -1.0 },
-            outgoing_filter: 0.8 * (p / DROP_AT).min(1.0),
-            outgoing_echo: (0.5..DROP_AT).contains(&p),
-            ..flat
-        },
-        Transition::Crossfade { .. } => Moves { crossfader: -1.0 + 2.0 * p, ..flat },
-        Transition::Cut => Moves { crossfader: 1.0, ..flat },
+    let dur = t.duration_s(from);
+    if t == Transition::BalladGap {
+        return (real_end(from) - BALLAD_FADE * dur).max(0.0);
     }
+    if let Transition::BreakdownBlend { .. } = t {
+        if let Some(b) = last_breakdown(from) {
+            return b;
+        }
+    }
+    let switch_p = super::script::switch_point(t) as f64;
+    let latest_switch = from.mix_out_s - (1.0 - switch_p) * dur;
+    let switch = match grid(from).filter(|_| t.on_the_beat()) {
+        Some((anchor, step)) => anchor + ((latest_switch - anchor) / step + 1e-9).floor() * step,
+        None => latest_switch,
+    };
+    (switch - switch_p * dur).max(0.0)
+}
+
+/// Share of a ballad gap spent fading the old song out (it is silent by the real end).
+pub const BALLAD_FADE: f64 = 0.55;
+
+/// Start of the old song's last breakdown in its second half, if it has one.
+pub fn last_breakdown(from: &Analysis) -> Option<f64> {
+    from.structure
+        .sections
+        .iter()
+        .filter(|s| s.kind == super::structure::SectionKind::Breakdown && s.start_s > from.duration_s / 2.0 && s.start_s < from.mix_out_s)
+        .map(|s| s.start_s)
+        .last()
 }
 
 #[cfg(test)]
@@ -281,35 +303,5 @@ mod tests {
         assert!((start - 166.5).abs() < 1e-9, "200 - 32 = 168, the downbeat at or before it: {start}");
         assert!((start_at(&a, Transition::Crossfade { secs: 8.0 }) - 192.0).abs() < 1e-9);
         assert!((start_at(&a, Transition::Cut) - 198.5).abs() < 1e-9, "the last downbeat before the mix out");
-    }
-
-    #[test]
-    fn a_beat_blend_swaps_the_bass_half_way() {
-        let blend = Transition::BeatBlend { bars: 16 };
-        let at = |t| moves(blend, t);
-        assert_eq!(at(0.0).crossfader, -1.0);
-        assert_eq!(at(0.0).incoming_low, -1.0, "the incoming bass waits");
-        assert_eq!(at(0.0).outgoing_low, 0.0);
-        assert_eq!(at(0.6).incoming_low, 0.0, "after half way the bass is swapped");
-        assert_eq!(at(0.6).outgoing_low, -1.0);
-        assert_eq!(at(1.0).crossfader, 1.0);
-        assert!(at(0.25).crossfader > -1.0 && at(0.25).crossfader < 0.0);
-    }
-
-    #[test]
-    fn echo_out_sweeps_the_outgoing_song_away_before_the_drop() {
-        let at = |t| moves(Transition::EchoOut, t);
-        assert_eq!(at(0.0).outgoing_filter, 0.0);
-        assert!(at(0.5).outgoing_filter > 0.3, "high-pass sweep");
-        assert_eq!(at(0.5).crossfader, -1.0, "the new song is not in yet");
-        assert_eq!(at(0.76).crossfader, 1.0, "the drop");
-        assert!(!at(0.3).outgoing_echo && at(0.6).outgoing_echo, "echo on before the drop");
-        assert!(!at(0.8).outgoing_echo, "off at the drop: the repeats ring over the new song");
-    }
-
-    #[test]
-    fn crossfade_and_cut() {
-        assert_eq!(moves(Transition::Crossfade { secs: 8.0 }, 0.5).crossfader, 0.0);
-        assert_eq!(moves(Transition::Cut, 0.0).crossfader, 1.0);
     }
 }

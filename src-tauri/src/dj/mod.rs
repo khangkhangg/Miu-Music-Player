@@ -11,6 +11,7 @@ pub mod engine;
 pub mod midi;
 pub mod mixer;
 pub mod pads;
+pub mod script;
 pub mod service;
 pub mod store;
 pub mod structure;

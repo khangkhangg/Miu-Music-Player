@@ -126,6 +126,11 @@ impl Mixer {
         (ch.echo.is_on(), ch.sweep.is_some())
     }
 
+    /// A deck's channel fader, 0..1.
+    pub fn volume(&self, side: Side) -> f32 {
+        self.channels[index(side)].volume
+    }
+
     pub fn crossfader(&self) -> f32 {
         self.crossfader
     }

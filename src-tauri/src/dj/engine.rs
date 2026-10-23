@@ -307,7 +307,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
             Err(RecvTimeoutError::Timeout) => {}
         }
         while out.buffered_frames() < target {
-            if let Some(Event::OnAir { deck, song_id }) = auto.tick(&mut mixer) {
+            if let Some(Event::OnAir { deck, song_id }) = auto.tick(&mut mixer, BLOCK) {
                 log::info!("Auto DJ: song {song_id} on air on deck {deck:?}");
             }
             mixer.render(&mut master_buf, &mut phones_buf);
