@@ -5,7 +5,7 @@ import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, keysCompatible, fits,
-  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats,
+  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection,
 } from '../../src/js/dj.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
@@ -150,4 +150,27 @@ test('a loop is shown by its length in beats (of the song, whatever the tempo)',
   assert.equal(loopBeats({ loopS: [10, 12], bpm: 120, tempo: 0 }), 4);
   assert.equal(loopBeats({ loopS: [10, 14], bpm: 124.8, tempo: 0.5 }), 8, 'the song is at 120, played 4 % faster');
   assert.equal(loopBeats({ loopS: null, bpm: 120, tempo: 0 }), null);
+});
+
+test('MIDI learn: each control on the screen stands for a controller control', () => {
+  assert.deepEqual(learnControl({ ctl: 'play' }, 'A'), { control: 'playPause', deck: 'A' });
+  assert.deepEqual(learnControl({ ctl: 'eq', band: 'mid' }, 'B'), { control: 'eqMid', deck: 'B' });
+  assert.deepEqual(learnControl({ ctl: 'phones' }, 'A'), { control: 'headphoneCue', deck: 'A' });
+  assert.deepEqual(learnControl({ slot: '2' }, 'B'), { control: 'hotCue3', deck: 'B' });
+  assert.deepEqual(learnControl({ loop: '4' }, 'A'), { control: 'loop4', deck: 'A' });
+  assert.deepEqual(learnControl({ loop: 'off' }, 'A'), { control: 'loopExit', deck: 'A' });
+  assert.deepEqual(learnControl({ fx: 'echo' }, 'A'), { control: 'fxOn', deck: 'A' });
+  assert.deepEqual(learnControl({ ctl: 'xfader' }, null), { control: 'crossfader', deck: null });
+  assert.deepEqual(learnControl({ ctl: 'master' }, null), { control: 'masterVolume', deck: null });
+  assert.deepEqual(learnControl({ ctl: 'jog' }, 'B'), { control: 'jog', deck: 'B' });
+  assert.equal(learnControl({ loop: '16' }, 'A'), null, 'only the 4-beat loop has a controller button');
+  assert.equal(learnControl({ pad: '1' }, null), null);
+});
+
+test('a controller browse knob moves the list selection, within the list', () => {
+  assert.equal(moveSelection(-1, 1, 10), 0, 'nothing selected: the first');
+  assert.equal(moveSelection(3, 2, 10), 5);
+  assert.equal(moveSelection(8, 5, 10), 9);
+  assert.equal(moveSelection(1, -3, 10), 0);
+  assert.equal(moveSelection(0, 1, 0), -1, 'empty list');
 });

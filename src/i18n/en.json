@@ -628,5 +628,19 @@
   "dj.pad.1": "Siren",
   "dj.pad.2": "Laser",
   "dj.pad.3": "Drop",
-  "dj.keysHelp": "Keys: deck A Z play, X cue, C sync, 1-4 hot cues, Q W E loop, A S D effects; deck B M play, N cue, B sync, 7-0 hot cues, U I O loop, J K L effects; F1-F4 pads; arrows crossfader"
+  "dj.keysHelp": "Keys: deck A Z play, X cue, C sync, 1-4 hot cues, Q W E loop, A S D effects; deck B M play, N cue, B sync, 7-0 hot cues, U I O loop, J K L effects; F1-F4 pads; arrows crossfader",
+  "dj.ctl.title": "Controller",
+  "dj.ctl.close": "Close",
+  "dj.ctl.none": "No MIDI controller connected. Plug one in: it is picked up straight away.",
+  "dj.ctl.ready": "Ready: {name}",
+  "dj.ctl.notSetUp": "Not set up yet: teach it with MIDI learn",
+  "dj.ctl.untried": "Built-in mapping from the maker's MIDI list, not yet checked on this controller",
+  "dj.ctl.learnt.one": "{n} control learnt",
+  "dj.ctl.learnt.other": "{n} controls learnt",
+  "dj.ctl.forget": "Forget learnt controls",
+  "dj.ctl.learn": "MIDI learn",
+  "dj.ctl.learnHint": "Click a control here, then move the matching control on your controller.",
+  "dj.ctl.waiting": "Now move it on your controller…",
+  "dj.ctl.learntOk": "Learnt. Click the next control, or turn MIDI learn off.",
+  "dj.ctl.cannotLearn": "That one has no controller button: pick another."
 }

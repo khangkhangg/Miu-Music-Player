@@ -130,7 +130,8 @@ pub struct AutoPrefs {
 pub struct DjSession {
     pub engine: DjEngine,
     pub auto: AutoPrefs,
-    /// Cleared when DJ mode closes, which stops the Auto DJ controller.
+    pub midi: Arc<super::controllers::MidiShared>,
+    /// Cleared when DJ mode closes, which stops the Auto DJ controller and the DJ controllers.
     alive: Arc<AtomicBool>,
 }
 
@@ -222,6 +223,33 @@ pub fn dj_library(db: State<'_, SharedDb>) -> Result<Vec<DjSong>, String> {
     Ok(c.into_iter().map(|c| DjSong { song_id: c.song_id, analysis: c.analysis }).collect())
 }
 
+/// MIDI devices seen while DJ mode is open, with the mapping each uses.
+#[tauri::command]
+pub fn dj_controllers(dj: State<'_, SharedDj>) -> Result<Vec<super::controllers::Device>, String> {
+    let g = dj.lock().map_err(|e| e.to_string())?;
+    Ok(g.as_ref().and_then(|s| s.midi.devices.lock().ok().map(|d| d.clone())).unwrap_or_default())
+}
+
+/// MIDI learn: the next control moved on any device is taught as `control` (for `deck`);
+/// `None` stops learning.
+#[tauri::command]
+pub fn dj_midi_learn(control: Option<super::midi::Control>, deck: Option<Side>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    let g = dj.lock().map_err(|e| e.to_string())?;
+    let s = g.as_ref().ok_or("DJ mode is not open")?;
+    *s.midi.learn.lock().map_err(|e| e.to_string())? = control.map(|c| (c, deck));
+    Ok(())
+}
+
+/// Forgets everything learnt for a device (it goes back to its built-in mapping, if any).
+#[tauri::command]
+pub fn dj_midi_forget(device: String, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    settings::clear_dj_learnt(&*db.lock().map_err(|e| e.to_string())?, &device).map_err(|e| e.to_string())?;
+    if let Some(s) = dj.lock().map_err(|e| e.to_string())?.as_ref() {
+        s.midi.reload.store(true, Ordering::Release);
+    }
+    Ok(())
+}
+
 /// Auto DJ's energy curve and the songs queued by hand (played first, in order).
 #[tauri::command]
 pub fn dj_set_auto(curve: EnergyCurve, queue: Vec<i64>, dj: State<'_, SharedDj>) -> Result<(), String> {
@@ -235,7 +263,7 @@ pub fn dj_set_auto(curve: EnergyCurve, queue: Vec<i64>, dj: State<'_, SharedDj>)
 /// Opens DJ mode: the normal player pauses and the DJ engine takes the speakers (the player's
 /// output) and the chosen headphones.
 #[tauri::command]
-pub fn dj_enter(db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: State<'_, SharedDj>) -> Result<EngineStatus, String> {
+pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: State<'_, SharedDj>) -> Result<EngineStatus, String> {
     let mut g = dj.lock().map_err(|e| e.to_string())?;
     if let Some(s) = g.as_ref() {
         return Ok(s.engine.status());
@@ -251,8 +279,22 @@ pub fn dj_enter(db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: St
     let status = engine.status();
     let alive = Arc::new(AtomicBool::new(true));
     let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
-    *g = Some(DjSession { engine, auto: AutoPrefs { seed, ..Default::default() }, alive: alive.clone() });
-    auto_controller(dj.inner().clone(), db.inner().clone(), alive);
+    let midi = Arc::new(super::controllers::MidiShared::default());
+    *g = Some(DjSession { engine, auto: AutoPrefs { seed, ..Default::default() }, midi: midi.clone(), alive: alive.clone() });
+    auto_controller(dj.inner().clone(), db.inner().clone(), alive.clone());
+    let (to_engine, from_engine) = (dj.inner().clone(), dj.inner().clone());
+    super::controllers::start(
+        app,
+        db.inner().clone(),
+        midi,
+        alive,
+        move |a| {
+            if let Some(s) = to_engine.lock().ok().as_ref().and_then(|g| g.as_ref()) {
+                s.engine.apply(a);
+            }
+        },
+        move || from_engine.lock().ok().and_then(|g| g.as_ref().map(|s| s.engine.status())),
+    );
     Ok(status)
 }
 

@@ -205,3 +205,33 @@
   .dj-desk { grid-template-columns: 1fr 1fr; }
   .dj-mixer { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* Controllers (D.6): status in the top bar, the panel, MIDI learn */
+.dj-ctl-btn { display: inline-flex; align-items: center; gap: 6px; }
+.dj-ctl-btn svg { width: 18px; height: 18px; }
+.dj-ctl-btn span:not(.dj-ctl-dot) { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.dj-ctl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dj-muted); }
+.dj-ctl-dot.on { background: var(--dj-ok); }
+.dj-ctl-panel {
+  position: absolute; top: 56px; right: 14px; z-index: 5; width: min(420px, calc(100% - 28px));
+  background: var(--dj-panel-2); border: 1px solid var(--dj-line); border-radius: var(--dj-radius);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); padding: 12px 14px; display: grid; gap: 10px;
+}
+.dj-ctl-panel[hidden] { display: none; }
+.dj-ctl-panel header { display: flex; align-items: center; justify-content: space-between; }
+.dj-ctl-panel h2 { margin: 0; font-size: 15px; }
+.dj-ctl-panel .icon-btn svg { width: 16px; height: 16px; }
+.dj-ctl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dj-ctl-list li { display: grid; gap: 3px; padding: 8px 10px; border-radius: 8px; background: var(--dj-panel); font-size: 13px; }
+.dj-ctl-list li.muted { color: var(--dj-muted); }
+.dj-ctl-list small { color: var(--dj-muted); font-size: 12px; }
+.dj-ctl-list li div { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.dj-ctl-learn { display: grid; gap: 6px; }
+.dj-ctl-learn p { margin: 0; font-size: 12px; color: var(--dj-muted); }
+#dj-learn[aria-pressed="true"] { background: var(--dj-a); color: #111; }
+.dj.learning .dj-desk [data-ctl], .dj.learning .dj-desk [data-slot], .dj.learning .dj-desk [data-loop], .dj.learning .dj-desk [data-fx] {
+  outline: 1px dashed rgba(242, 193, 46, 0.6); outline-offset: 2px; cursor: crosshair;
+}
+.dj.learning .dj-desk .learn-target { outline: 2px solid var(--dj-a); animation: dj-learn 0.8s ease-in-out infinite alternate; }
+@keyframes dj-learn { from { outline-color: var(--dj-a); } to { outline-color: transparent; } }
+.dj-row.sel { background: rgba(242, 193, 46, 0.14); box-shadow: inset 3px 0 0 var(--dj-a); }

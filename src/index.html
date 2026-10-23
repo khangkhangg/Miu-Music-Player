@@ -688,6 +688,7 @@
       <label class="dj-field dj-phones-pick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg><span class="dj-sr" data-i18n="dj.phones">Headphones</span>
         <select id="dj-phones"></select>
       </label>
+      <button class="dj-top-btn dj-ctl-btn" id="dj-ctl-btn" type="button" aria-expanded="false" aria-controls="dj-ctl-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="8" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/></svg><span id="dj-ctl-label" data-i18n="dj.ctl.title">Controller</span><span class="dj-ctl-dot" id="dj-ctl-dot" aria-hidden="true"></span></button>
       <button class="dj-top-btn" id="dj-party" type="button" data-i18n="dj.party">Party screen</button>
       <button class="dj-top-btn dj-exit" id="dj-exit" type="button" data-i18n="dj.exit">Exit DJ mode</button>
     </header>
@@ -780,7 +781,7 @@
         </div>
         <div class="dj-xfader-row">
           <span class="dj-letter" aria-hidden="true">A</span>
-          <input class="dj-xfader" id="dj-xfader" type="range" min="-1" max="1" step="0.01" value="0" aria-label="Crossfader" data-i18n-attr="aria-label:dj.crossfader">
+          <input class="dj-xfader" id="dj-xfader" data-ctl="xfader" type="range" min="-1" max="1" step="0.01" value="0" aria-label="Crossfader" data-i18n-attr="aria-label:dj.crossfader">
           <span class="dj-letter" aria-hidden="true">B</span>
         </div>
       </section>
@@ -840,6 +841,14 @@
         <label class="dj-check"><input type="checkbox" id="dj-fits"><span data-i18n="dj.fitsOnly">Fits the song on air</span></label>
       </div>
       <div class="dj-list" id="dj-list" role="list"></div>
+    </section>
+    <section class="dj-ctl-panel" id="dj-ctl-panel" aria-labelledby="dj-ctl-heading" hidden>
+      <header><h2 id="dj-ctl-heading" data-i18n="dj.ctl.title">Controller</h2><button class="icon-btn" id="dj-ctl-close" type="button" aria-label="Close" title="Close" data-i18n-attr="aria-label:dj.ctl.close;title:dj.ctl.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+      <ul class="dj-ctl-list" id="dj-ctl-list"></ul>
+      <div class="dj-ctl-learn">
+        <button class="dj-top-btn" id="dj-learn" type="button" aria-pressed="false" data-i18n="dj.ctl.learn">MIDI learn</button>
+        <p id="dj-learn-hint" role="status" data-i18n="dj.ctl.learnHint">Click a control here, then move the matching control on your controller.</p>
+      </div>
     </section>
     <p class="dj-problem" id="dj-problem" role="alert" hidden></p>
   </section>

@@ -189,3 +189,29 @@ export function loopBeats(deck) {
   const songBpm = deck.bpm / (1 + deck.tempo * (TEMPO_RANGE / 100));
   return Math.round(((deck.loopS[1] - deck.loopS[0]) * songBpm) / 60);
 }
+
+const LEARN = {
+  play: 'playPause', cue: 'cue', sync: 'sync', tempo: 'tempo', jog: 'jog', filter: 'filter', gain: 'gain',
+  volume: 'volume', phones: 'headphoneCue', xfader: 'crossfader', master: 'masterVolume', cueMix: 'cueMix',
+  phonesVolume: 'headphoneVolume',
+};
+const BANDS = { high: 'eqHigh', mid: 'eqMid', low: 'eqLow' };
+
+/** MIDI learn: the controller control a screen element stands for (from its data attributes), or null. */
+export function learnControl(data, deck) {
+  let control = null;
+  if (data.ctl === 'eq') control = BANDS[data.band];
+  else if (data.ctl) control = LEARN[data.ctl];
+  else if (data.slot != null) control = `hotCue${Number(data.slot) + 1}`;
+  else if (data.loop === '4') control = 'loop4';
+  else if (data.loop === 'off') control = 'loopExit';
+  else if (data.fx === 'echo') control = 'fxOn';
+  return control ? { control, deck: deck ?? null } : null;
+}
+
+/** The song list selection after a browse knob turned `steps`, kept inside `count` rows (-1: none). */
+export function moveSelection(index, steps, count) {
+  if (count <= 0) return -1;
+  const from = index < 0 ? (steps > 0 ? -1 : 0) : index;
+  return Math.min(count - 1, Math.max(0, from + steps));
+}

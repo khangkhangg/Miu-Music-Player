@@ -41,6 +41,7 @@ rss = { version = "2.1.2", default-features = false }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "alloc"] }
 ureq = "3.4.2"
 quick-xml = "0.41"
+midir = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

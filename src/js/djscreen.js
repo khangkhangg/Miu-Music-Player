@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, fits, songMeta,
-  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats,
+  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection,
 } from './dj.js';
 
 const POLL_MS = 50;
@@ -185,6 +185,119 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     }
   });
 
+  // ---- DJ controllers: devices, MIDI learn, browsing from the controller ----
+
+  const panel = $('dj-ctl-panel');
+  let learning = false;
+  let learnEl = null;
+  const setPanel = (open) => { panel.hidden = !open; $('dj-ctl-btn').setAttribute('aria-expanded', String(open)); };
+  $('dj-ctl-btn').addEventListener('click', () => { setPanel(panel.hidden); if (!panel.hidden) refreshControllers(); });
+  $('dj-ctl-close').addEventListener('click', () => setPanel(false));
+
+  function setLearning(on) {
+    learning = on;
+    root.classList.toggle('learning', on);
+    $('dj-learn').setAttribute('aria-pressed', String(on));
+    $('dj-learn-hint').textContent = t('dj.ctl.learnHint');
+    learnEl?.classList.remove('learn-target');
+    learnEl = null;
+    if (!on) invoke('dj_midi_learn', { control: null, deck: null }).catch(() => {});
+  }
+  $('dj-learn').addEventListener('click', () => setLearning(!learning));
+
+  // In learn mode a click picks the control to teach instead of using it.
+  const learnPick = (e) => {
+    if (!learning) return;
+    const el = e.target.closest('.dj-desk [data-ctl], .dj-desk [data-slot], .dj-desk [data-loop], .dj-desk [data-fx]');
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type !== 'pointerdown') return;
+    const target = learnControl(el.dataset, el.closest('[data-deck]')?.dataset.deck);
+    learnEl?.classList.remove('learn-target');
+    if (!target) { learnEl = null; $('dj-learn-hint').textContent = t('dj.ctl.cannotLearn'); return; }
+    learnEl = el;
+    el.classList.add('learn-target');
+    $('dj-learn-hint').textContent = t('dj.ctl.waiting');
+    invoke('dj_midi_learn', target).catch(showProblem);
+  };
+  for (const ev of ['pointerdown', 'click', 'dblclick', 'contextmenu', 'input']) root.addEventListener(ev, learnPick, true);
+  listen('dj-midi-learnt', () => {
+    learnEl?.classList.remove('learn-target');
+    learnEl = null;
+    $('dj-learn-hint').textContent = t('dj.ctl.learntOk');
+    refreshControllers();
+  });
+
+  function renderControllers(devices) {
+    const ready = devices.filter((d) => d.mapping);
+    $('dj-ctl-dot').classList.toggle('on', ready.length > 0);
+    $('dj-ctl-label').textContent = ready.length ? ready[0].mapping : t('dj.ctl.title');
+    const list = $('dj-ctl-list');
+    if (!devices.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = t('dj.ctl.none');
+      list.replaceChildren(li);
+      return;
+    }
+    list.replaceChildren(...devices.map((d) => {
+      const li = document.createElement('li');
+      const name = document.createElement('b');
+      name.textContent = d.name;
+      const state = document.createElement('span');
+      state.textContent = d.mapping ? t('dj.ctl.ready', { name: d.mapping }) : t('dj.ctl.notSetUp');
+      li.append(name, state);
+      if (d.builtIn && !d.triedOnDevice) {
+        const warn = document.createElement('small');
+        warn.textContent = t('dj.ctl.untried');
+        li.append(warn);
+      }
+      if (d.note) {
+        const note = document.createElement('small');
+        note.textContent = d.note;
+        li.append(note);
+      }
+      if (d.learnt) {
+        const row = document.createElement('div');
+        const count = document.createElement('small');
+        count.textContent = t('dj.ctl.learnt', { n: d.learnt });
+        const forget = document.createElement('button');
+        forget.type = 'button';
+        forget.className = 'dj-top-btn';
+        forget.textContent = t('dj.ctl.forget');
+        forget.addEventListener('click', () => invoke('dj_midi_forget', { device: d.name }).then(refreshControllers).catch(showProblem));
+        row.append(count, forget);
+        li.append(row);
+      }
+      return li;
+    }));
+  }
+
+  async function refreshControllers() {
+    renderControllers(await invoke('dj_controllers').catch(() => []));
+  }
+  listen('dj-controllers', (e) => renderControllers(e.payload));
+
+  // The browse knob moves a selection through the song list; load buttons load it.
+  let selectedId = null;
+  const rowsShown = () => [...$('dj-list').querySelectorAll('.dj-row')];
+  function markSelected() {
+    for (const r of rowsShown()) r.classList.toggle('sel', Number(r.dataset.id) === selectedId);
+    $('dj-list').querySelector('.dj-row.sel')?.scrollIntoView({ block: 'nearest' });
+  }
+  listen('dj-controller', (e) => {
+    const a = e.payload;
+    const rows = rowsShown();
+    if (a.type === 'browse') {
+      const at = moveSelection(rows.findIndex((r) => Number(r.dataset.id) === selectedId), a.steps, rows.length);
+      selectedId = at >= 0 ? Number(rows[at].dataset.id) : null;
+      markSelected();
+    } else if (a.type === 'loadSelected' && selectedId != null) {
+      invoke('dj_load', { deck: a.deck, songId: selectedId }).catch(showProblem);
+    }
+  });
+
   // ---- Party screen and guest lock ----
 
   let locked = false;
@@ -353,6 +466,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
       return row;
     });
     $('dj-list').replaceChildren(...rows);
+    markSelected();
   }
 
   async function poll() {
@@ -404,6 +518,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];
     await Promise.all([refreshLibrary(), refreshOutputs()]);
+    refreshControllers();
     invoke('dj_analysis_progress').then((p) => { $('dj-analysis').textContent = analysisText(p); }).catch(() => {});
     clearInterval(timer);
     timer = setInterval(poll, POLL_MS);
@@ -417,6 +532,8 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
   }
 
   async function close() {
+    setLearning(false);
+    setPanel(false);
     clearInterval(timer);
     timer = null;
     party.hidden = true;

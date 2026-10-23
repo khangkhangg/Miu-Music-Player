@@ -67,12 +67,18 @@ party pads (short built-in sounds), keyboard map for DJ actions.
 
 ## Phase 3 — controllers
 
-- MIDI input (`midir`), hot-plug, one controller at a time.
+- MIDI input (`midir`), hot-plug; every MIDI input is listened to while DJ mode is open.
 - **Built-in mappings for five popular party/entry controllers**, written from each maker's
-  published MIDI specification (not copied from other apps):
-  Pioneer DJ DDJ-FLX4, Pioneer DJ DDJ-FLX2, Numark Mixtrack Platinum FX, Numark Party Mix Live,
-  Hercules DJControl Inpulse 300 MK2. Jog wheels, LEDs where the spec allows.
-- **MIDI learn** for any other controller: click a control in Miu, move a knob, saved per device.
+  published MIDI list (not copied from other apps), in `src-tauri/src/dj/mappings/`:
+  Pioneer DJ DDJ-FLX4, DDJ-FLX2 and DDJ-400 (AlphaTheta's lists), Hercules DJControl Inpulse 300
+  and Inpulse 200 (Hercules' lists for the original models; the MK2s are expected to match).
+  Jog wheels, shift layers, LEDs for play, cue, headphone cue, hot cues and loops.
+  Master / headphone level and headphone mix are left to the controller's own sound card.
+- **Numark Mixtrack Platinum FX and Party Mix Live** were in the first plan, but Numark publishes no
+  MIDI list for them (checked 2026-10-23: user guides, product pages, support site). The only
+  numbers around come from other apps' mapping files, so they are set up with MIDI learn instead.
+- **MIDI learn** for any other controller: click a control in Miu, move a knob, saved per device
+  (on top of a built-in mapping, or on its own).
 - Mappings are data (JSON) so more can be added without code.
 - Built and unit-tested without the hardware; each mapping is marked "not yet tried on the device"
   until someone with that controller checks it.

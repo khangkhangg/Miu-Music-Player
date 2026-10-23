@@ -359,7 +359,16 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   keyboard map by physical key (any layout); loop length in song beats. Screen: hot cue pads (right-click clears),
   loop 4/8/16 and end, Echo / Sweep / Spin back, pads in the mixer, key list on the title. Tried in the app: keys
   played a deck, set a hot cue, looped 4 beats and turned the echo on.
-- [ ] **D.6 Controllers** — MIDI, five built-in mappings, MIDI learn.
+- [x] **D.6 Controllers** — *Test first:* buttons (press, release, held cue), shift layer (hot cue clear), toggles
+  (headphone cue, echo), 7-bit and 14-bit knobs and faders with a flat centre detent, jog and browse in both
+  encodings, one 4 BEAT/EXIT button, LEDs follow the engine and only changes are sent, MIDI learn (notes, knobs,
+  jog as endless), learnt controls on top of a built-in mapping and kept per device, Windows port numbers ignored,
+  browse/load go to the screen; the five built-in mappings parse, cover both decks and never map one message twice.
+  Built-in: DDJ-FLX4, DDJ-FLX2, DDJ-400 (AlphaTheta lists), Inpulse 300 and 200 (Hercules lists, original
+  models). Numark publishes no MIDI list, so Numark controllers use MIDI learn. Screen: Controller panel (devices,
+  mapping, "not yet checked" note, forget learnt), MIDI learn on the booth's own controls, browse selection in the
+  song list. Tried in the app without a controller (none here): panel, learn mode picking a knob without moving it.
+  **Not yet tried on any controller.**
 
 ## Phase 6 – Packaging
 - [ ] **F6.1 Installer + ffmpeg sidecar** — *Test first:* sidecar path resolution in dev and installed layouts.

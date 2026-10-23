@@ -628,5 +628,19 @@
   "dj.pad.1": "Còi hú",
   "dj.pad.2": "Laser",
   "dj.pad.3": "Bass rơi",
-  "dj.keysHelp": "Phím: bàn A Z phát, X cue, C đồng bộ, 1-4 điểm nhớ, Q W E lặp, A S D hiệu ứng; bàn B M phát, N cue, B đồng bộ, 7-0 điểm nhớ, U I O lặp, J K L hiệu ứng; F1-F4 hiệu ứng tiệc; mũi tên: cần chuyển"
+  "dj.keysHelp": "Phím: bàn A Z phát, X cue, C đồng bộ, 1-4 điểm nhớ, Q W E lặp, A S D hiệu ứng; bàn B M phát, N cue, B đồng bộ, 7-0 điểm nhớ, U I O lặp, J K L hiệu ứng; F1-F4 hiệu ứng tiệc; mũi tên: cần chuyển",
+  "dj.ctl.title": "Bộ điều khiển",
+  "dj.ctl.close": "Đóng",
+  "dj.ctl.none": "Chưa có bộ điều khiển MIDI. Cắm vào là Miu nhận ngay.",
+  "dj.ctl.ready": "Sẵn sàng: {name}",
+  "dj.ctl.notSetUp": "Chưa thiết lập: dạy bằng MIDI learn",
+  "dj.ctl.untried": "Bản đồ có sẵn theo tài liệu MIDI của hãng, chưa thử trên thiết bị này",
+  "dj.ctl.learnt.one": "{n} nút đã dạy",
+  "dj.ctl.learnt.other": "{n} nút đã dạy",
+  "dj.ctl.forget": "Quên các nút đã dạy",
+  "dj.ctl.learn": "MIDI learn",
+  "dj.ctl.learnHint": "Nhấp một nút ở đây, rồi vặn hoặc bấm nút tương ứng trên bộ điều khiển.",
+  "dj.ctl.waiting": "Giờ hãy vặn hoặc bấm nút đó trên bộ điều khiển…",
+  "dj.ctl.learntOk": "Đã dạy. Nhấp nút tiếp theo, hoặc tắt MIDI learn.",
+  "dj.ctl.cannotLearn": "Nút này không gán được: hãy chọn nút khác."
 }

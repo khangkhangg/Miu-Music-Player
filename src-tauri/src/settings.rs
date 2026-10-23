@@ -130,6 +130,29 @@ pub fn set_dj_phones(db: &Db, name: Option<&str>) -> Result<()> {
     db.set_setting_json(DJ_PHONES, &name)
 }
 
+const DJ_LEARNT: &str = "dj_midi_learnt";
+
+type Learnt = std::collections::BTreeMap<String, Vec<crate::dj::midi::Entry>>;
+
+/// Controls taught to a DJ controller with MIDI learn (D.6), by device name.
+pub fn dj_learnt(db: &Db, device: &str) -> Vec<crate::dj::midi::Entry> {
+    db.setting_json::<Learnt>(DJ_LEARNT).ok().flatten().and_then(|mut m| m.remove(device)).unwrap_or_default()
+}
+
+pub fn add_dj_learnt(db: &Db, device: &str, e: crate::dj::midi::Entry) -> Result<()> {
+    let mut all: Learnt = db.setting_json(DJ_LEARNT).ok().flatten().unwrap_or_default();
+    let list = all.entry(device.to_string()).or_default();
+    list.retain(|x| !(x.control == e.control && x.deck == e.deck));
+    list.push(e);
+    db.set_setting_json(DJ_LEARNT, &all)
+}
+
+pub fn clear_dj_learnt(db: &Db, device: &str) -> Result<()> {
+    let mut all: Learnt = db.setting_json(DJ_LEARNT).ok().flatten().unwrap_or_default();
+    all.remove(device);
+    db.set_setting_json(DJ_LEARNT, &all)
+}
+
 /// Same sound on both outputs (default) or stereo split.
 pub fn dual_mode(db: &Db) -> crate::audio::dual::DualMode {
     db.setting_json(DUAL_MODE).ok().flatten().unwrap_or_default()
@@ -857,5 +880,18 @@ mod dj_tests {
         assert_eq!(dj_phones(&db).as_deref(), Some("Headphones (USB Audio)"));
         set_dj_phones(&db, None).unwrap();
         assert_eq!(dj_phones(&db), None);
+    }
+
+    #[test]
+    fn controls_learnt_for_a_controller_are_kept_per_device() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(dj_learnt(&db, "DDJ-FLX4").is_empty());
+        let e = crate::dj::midi::learn(crate::dj::midi::Control::Sync, Some(crate::dj::actions::Deck::A), &[0x90, 1, 127]).unwrap();
+        add_dj_learnt(&db, "DDJ-FLX4", e.clone()).unwrap();
+        add_dj_learnt(&db, "DDJ-FLX4", e.clone()).unwrap();
+        assert_eq!(dj_learnt(&db, "DDJ-FLX4"), vec![e], "learning a control again replaces it");
+        assert!(dj_learnt(&db, "Other").is_empty());
+        clear_dj_learnt(&db, "DDJ-FLX4").unwrap();
+        assert!(dj_learnt(&db, "DDJ-FLX4").is_empty());
     }
 }
