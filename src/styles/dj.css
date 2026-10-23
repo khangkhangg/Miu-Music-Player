@@ -265,3 +265,9 @@
 .dj-ctl-list .acts { display: flex; gap: 4px; }
 .dj-ctl-list .acts button { border: 1px solid var(--dj-line); background: var(--dj-panel-2); color: var(--dj-text); border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
 .dj-ctl-list .vtag { font-size: 10px; font-weight: 700; color: #111; background: var(--dj-hot); border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
+
+/* Playing from a playlist, and what Auto heard */
+.dj-smart { font-size: 13px; color: var(--dj-muted); white-space: nowrap; }
+.dj-smart input:disabled + span { opacity: 0.5; }
+#dj-source { max-width: 200px; }
+.dj-vibe { font-size: 12px; color: var(--dj-a); white-space: nowrap; }

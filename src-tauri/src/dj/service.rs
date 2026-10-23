@@ -121,9 +121,23 @@ pub fn dj_song_analysis(song_id: i64, db: State<'_, SharedDb>) -> Result<Option<
 #[derive(Default)]
 pub struct AutoPrefs {
     pub curve: EnergyCurve,
+    /// Songs queued by hand in the DJ list, played first.
     pub queue: Vec<i64>,
     pub played: HashSet<i64>,
     pub seed: u64,
+    /// The playlist Auto DJ plays from (None: the whole library), its songs in the order to play.
+    pub source: Option<i64>,
+    pub smart: bool,
+    pub setlist: Vec<i64>,
+}
+
+/// What Auto DJ plays next, in order: songs queued by hand, then the playlist. When every song of
+/// the playlist has played, it starts over (the songs are forgotten from `played`).
+pub fn setlist_queue(hand: &[i64], setlist: &[i64], played: &mut HashSet<i64>) -> Vec<i64> {
+    if !setlist.is_empty() && setlist.iter().all(|id| played.contains(id)) {
+        played.retain(|id| !setlist.contains(id));
+    }
+    hand.iter().chain(setlist).copied().collect()
 }
 
 /// DJ mode while it is open: the engine and Auto DJ's choices.
@@ -217,10 +231,10 @@ fn auto_controller(app: tauri::AppHandle, dj: SharedDj, db: SharedDb, party: cra
         let mut last_on_air: Option<i64> = None;
         while alive.load(Ordering::Acquire) {
             std::thread::sleep(std::time::Duration::from_millis(250));
-            let (status, curve, queue, mut played, seed) = {
+            let (status, curve, hand, setlist, mut played, seed) = {
                 let Ok(g) = dj.lock() else { return };
                 let Some(s) = g.as_ref() else { return };
-                (s.engine.status(), s.auto.curve, s.auto.queue.clone(), s.auto.played.clone(), s.auto.seed)
+                (s.engine.status(), s.auto.curve, s.auto.queue.clone(), s.auto.setlist.clone(), s.auto.played.clone(), s.auto.seed)
             };
             // The party queue: what went on air leaves it; its top entry comes before Auto DJ's own pick.
             let on_air_song = status.on_air.and_then(|d| status.decks[d as usize].song_id);
@@ -265,6 +279,7 @@ fn auto_controller(app: tauri::AppHandle, dj: SharedDj, db: SharedDb, party: cra
             }
             // Whatever has been on a deck counts as played, by hand or by Auto DJ.
             played.extend(status.decks.iter().filter_map(|d| d.song_id));
+            let queue = setlist_queue(&hand, &setlist, &mut played);
             let pick = needs_song(&status).and_then(|(deck, current)| {
                 let candidates = db.lock().ok().and_then(|d| store::candidates(&d).ok())?;
                 let now = current
@@ -276,7 +291,8 @@ fn auto_controller(app: tauri::AppHandle, dj: SharedDj, db: SharedDb, party: cra
             });
             let Ok(mut g) = dj.lock() else { return };
             let Some(s) = g.as_mut() else { return };
-            s.auto.played.extend(played);
+            // Replaced, not extended: a playlist that starts over forgets its songs.
+            s.auto.played = played;
             if let Some((deck, next, path, analysis)) = pick {
                 s.engine.load(deck, path, next, analysis);
                 s.auto.played.insert(next);
@@ -351,6 +367,43 @@ pub fn dj_midi_forget(device: String, db: State<'_, SharedDb>, dj: State<'_, Sha
         s.midi.reload.store(true, Ordering::Release);
     }
     Ok(())
+}
+
+/// The playlist Auto DJ plays from (`None`: the whole library), in its own order or in a smart
+/// order (warm up, peak, come down; neighbours that mix well). Its kind of music steers the Auto
+/// style; returned so the screen can show it.
+#[tauri::command]
+pub fn dj_set_source(playlist: Option<i64>, smart: bool, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<Option<autodj::Vibe>, String> {
+    let (setlist, vibe) = match playlist {
+        None => (Vec::new(), None),
+        Some(id) => {
+            let d = db.lock().map_err(|e| e.to_string())?;
+            let ids = crate::library::playlists::songs(&d, id)?;
+            let analysed: Vec<(i64, Analysis)> = store::candidates(&d)
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .filter(|c| ids.contains(&c.song_id))
+                .map(|c| (c.song_id, c.analysis))
+                .collect();
+            let vibe = autodj::vibe_of(&analysed.iter().map(|(_, a)| a.clone()).collect::<Vec<_>>());
+            let order = if smart {
+                // Songs not analysed yet go at the end, in the playlist's order.
+                let mut o = autodj::smart_order(&analysed, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0));
+                o.extend(ids.iter().filter(|id| !analysed.iter().any(|(a, _)| a == *id)));
+                o
+            } else {
+                ids
+            };
+            (order, vibe)
+        }
+    };
+    let mut g = dj.lock().map_err(|e| e.to_string())?;
+    let s = g.as_mut().ok_or("DJ mode is not open")?;
+    s.auto.source = playlist;
+    s.auto.smart = smart;
+    s.auto.setlist = setlist;
+    s.engine.set_vibe(vibe);
+    Ok(vibe)
 }
 
 /// Auto DJ's energy curve and the songs queued by hand (played first, in order).
@@ -461,6 +514,18 @@ mod tests {
     use super::*;
     use crate::dj::engine::DeckStatus;
     use crate::library::db::Db;
+
+    #[test]
+    fn the_playlist_follows_hand_queued_songs_and_starts_over_when_done() {
+        let mut played: HashSet<i64> = [1, 9].into();
+        assert_eq!(setlist_queue(&[7], &[1, 2, 3], &mut played), vec![7, 1, 2, 3]);
+        assert_eq!(played, [1, 9].into(), "not done yet: nothing forgotten");
+        let mut played: HashSet<i64> = [1, 2, 3, 9].into();
+        assert_eq!(setlist_queue(&[], &[1, 2, 3], &mut played), vec![1, 2, 3]);
+        assert_eq!(played, [9].into(), "all played: the playlist starts over");
+        let mut played: HashSet<i64> = [9].into();
+        assert_eq!(setlist_queue(&[4], &[], &mut played), vec![4], "no playlist: the whole library");
+    }
 
     fn deck(song_id: Option<i64>, loading: bool) -> DeckStatus {
         DeckStatus { song_id, loading, ..Default::default() }

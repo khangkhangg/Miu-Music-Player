@@ -729,5 +729,17 @@
   "playlists.summary.one": "{n} song · {min} min",
   "playlists.summary.other": "{n} songs · {min} min",
   "playlists.summaryHours.one": "{n} song · {h} h {min} min",
-  "playlists.summaryHours.other": "{n} songs · {h} h {min} min"
+  "playlists.summaryHours.other": "{n} songs · {h} h {min} min",
+  "dj.style.auto": "Auto",
+  "dj.source": "Play from",
+  "dj.sourceAll": "All songs",
+  "dj.sourceCount": "{name} ({n})",
+  "dj.smartOrder": "Smart order",
+  "dj.smartOrderHint": "Play the playlist as a DJ set: warm up, peak, come down, with songs that mix well next to each other.",
+  "dj.vibe": "Auto: {kind}",
+  "dj.vibe.dance": "dance",
+  "dj.vibe.hipHop": "hip-hop",
+  "dj.vibe.chill": "chill",
+  "dj.vibe.pop": "pop",
+  "dj.vibe.none": "song by song"
 }

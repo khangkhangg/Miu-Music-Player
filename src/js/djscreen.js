@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, fits, songMeta,
-  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary, outputNote,
+  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary, outputNote, sourceOptions, vibeLabel,
 } from './dj.js';
 import { drawOverview, drawZoom, sectionSpans, phraseTimes, mixZone, cueMarks, deckSpeed } from './djwave.js';
 
@@ -218,6 +218,14 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     invoke('dj_choose_transition', { transition: v === 'auto' ? null : JSON.parse(v) }).catch(showProblem);
   });
   $('dj-style').addEventListener('change', (e) => invoke('dj_set_style', { style: e.target.value }).catch(showProblem));
+  // Play from a playlist (in its order or as a smart DJ set), or the whole library.
+  const sendSource = () => {
+    const v = $('dj-source').value;
+    $('dj-smart').disabled = !v;
+    invoke('dj_set_source', { playlist: v ? Number(v) : null, smart: $('dj-smart').checked }).catch(showProblem);
+  };
+  $('dj-source').addEventListener('change', sendSource);
+  $('dj-smart').addEventListener('change', sendSource);
   $('dj-phones').addEventListener('change', (e) => invoke('dj_set_phones', { name: e.target.value || null }).catch(showProblem));
   $('dj-search').addEventListener('input', () => renderList(true));
   $('dj-fits').addEventListener('change', () => renderList(true));
@@ -562,6 +570,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
       lastOnAir = s.onAir;
     }
     if (document.activeElement !== $('dj-style') && s.style) $('dj-style').value = s.style;
+    $('dj-vibe').textContent = vibeLabel(s);
     $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
@@ -604,6 +613,9 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     translatePage(root);
     root.querySelector('.dj-brand').title = t('dj.keysHelp');
     $('dj-choose').replaceChildren(...transitionChoices().map((c) => new Option(c.label, c.value)));
+    const lists = await invoke('playlists_list').catch(() => []);
+    $('dj-source').replaceChildren(...sourceOptions(lists).map((o) => new Option(o.label, o.value)));
+    $('dj-smart').disabled = true;
     root.hidden = false;
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];

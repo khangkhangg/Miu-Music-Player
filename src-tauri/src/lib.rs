@@ -207,6 +207,7 @@ pub fn run() {
             dj::service::dj_state,
             dj::service::dj_set_auto,
             dj::service::dj_set_style,
+            dj::service::dj_set_source,
             dj::service::dj_choose_transition,
             dj::service::dj_set_transitions,
             dj::service::dj_overview,

@@ -261,3 +261,17 @@ export function transitionsSummary(choice) {
 export function outputNote(status) {
   return status?.masterMissing ? t('dj.outputFallback', { name: status.masterMissing, now: status.master }) : '';
 }
+
+/** The "Play from" menu: the whole library, then every playlist that has songs. */
+export function sourceOptions(playlists) {
+  return [
+    { value: '', label: t('dj.sourceAll') },
+    ...playlists.filter((p) => p.count > 0).map((p) => ({ value: String(p.id), label: t('dj.sourceCount', { name: p.name, n: p.count }) })),
+  ];
+}
+
+/** Under the Auto style: the kind of music it heard in the playlist (else nothing). */
+export function vibeLabel(status) {
+  if (status?.style !== 'auto') return '';
+  return t('dj.vibe', { kind: t(status.vibe ? `dj.vibe.${status.vibe}` : 'dj.vibe.none') });
+}

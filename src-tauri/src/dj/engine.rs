@@ -93,6 +93,8 @@ pub struct EngineStatus {
     pub problem: Option<String>,
     /// The speakers the DJ chose, when they were not there and the Windows default plays instead.
     pub master_missing: Option<String>,
+    /// The kind of music of the playlist Auto DJ plays from.
+    pub vibe: Option<super::autodj::Vibe>,
     pub auto_dj: bool,
     /// The deck the speakers play (Auto DJ's view).
     pub on_air: Option<Side>,
@@ -106,6 +108,7 @@ pub struct EngineStatus {
 
 enum Cmd {
     Action(Action),
+    Vibe(Option<super::autodj::Vibe>),
     Loaded(Side, Arc<Track>),
     Phones(Option<String>),
     Style(super::autodj::Style),
@@ -318,6 +321,11 @@ impl DjEngine {
         let _ = self.tx.send(Cmd::Style(style));
     }
 
+    /// The kind of music Auto DJ is playing from (a playlist's), for the Auto style.
+    pub fn set_vibe(&self, vibe: Option<super::autodj::Vibe>) {
+        let _ = self.tx.send(Cmd::Vibe(vibe));
+    }
+
     /// Switch the headphones to another device (`None`: no headphone cue) while playing.
     pub fn set_phones(&self, name: Option<String>) {
         let _ = self.tx.send(Cmd::Phones(name));
@@ -382,6 +390,12 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 auto.set_transitions(t.allowed.clone(), t.mix_it_up);
                 if let Ok(mut s) = status.lock() {
                     s.transitions = t;
+                }
+            }
+            Ok(Cmd::Vibe(vibe)) => {
+                auto.set_vibe(vibe);
+                if let Ok(mut s) = status.lock() {
+                    s.vibe = vibe;
                 }
             }
             Ok(Cmd::Style(style)) => {

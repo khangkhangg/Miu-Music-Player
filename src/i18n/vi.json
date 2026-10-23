@@ -729,5 +729,17 @@
   "playlists.summary.one": "{n} bài · {min} phút",
   "playlists.summary.other": "{n} bài · {min} phút",
   "playlists.summaryHours.one": "{n} bài · {h} giờ {min} phút",
-  "playlists.summaryHours.other": "{n} bài · {h} giờ {min} phút"
+  "playlists.summaryHours.other": "{n} bài · {h} giờ {min} phút",
+  "dj.style.auto": "Tự động",
+  "dj.source": "Phát từ",
+  "dj.sourceAll": "Tất cả bài hát",
+  "dj.sourceCount": "{name} ({n})",
+  "dj.smartOrder": "Sắp xếp thông minh",
+  "dj.smartOrderHint": "Phát danh sách như một set DJ: khởi động, lên đỉnh, rồi lắng xuống, các bài cạnh nhau hòa nhịp tốt.",
+  "dj.vibe": "Tự động: {kind}",
+  "dj.vibe.dance": "nhạc dance",
+  "dj.vibe.hipHop": "hip-hop",
+  "dj.vibe.chill": "nhạc nhẹ",
+  "dj.vibe.pop": "pop",
+  "dj.vibe.none": "theo từng bài"
 }

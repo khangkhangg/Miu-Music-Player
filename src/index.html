@@ -706,6 +706,10 @@
     <header class="dj-top">
       <h1 class="dj-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg><span data-i18n="dj.title">DJ mode</span></h1>
       <label class="dj-switch"><input type="checkbox" id="dj-auto" role="switch"><span class="dj-switch-track" aria-hidden="true"></span><span data-i18n="dj.auto">Auto DJ</span></label>
+      <label class="dj-field"><span class="dj-sr" data-i18n="dj.source">Play from</span>
+        <select id="dj-source" title="Play from" data-i18n-attr="title:dj.source"></select>
+      </label>
+      <label class="dj-check dj-smart" title="Play the playlist as a DJ set" data-i18n-attr="title:dj.smartOrderHint"><input type="checkbox" id="dj-smart" checked><span data-i18n="dj.smartOrder">Smart order</span></label>
       <label class="dj-field"><span class="dj-sr" data-i18n="dj.curve">Energy</span>
         <select id="dj-curve" title="Energy" data-i18n-attr="title:dj.curve">
           <option value="warmUp" data-i18n="dj.curve.warmUp">Warm up</option>
@@ -716,11 +720,13 @@
       </label>
       <label class="dj-field"><span class="dj-sr" data-i18n="dj.style">Style</span>
         <select id="dj-style" title="Style" data-i18n-attr="title:dj.style">
-          <option value="smooth" data-i18n="dj.style.smooth" selected>Smooth</option>
+          <option value="auto" data-i18n="dj.style.auto" selected>Auto</option>
+          <option value="smooth" data-i18n="dj.style.smooth">Smooth</option>
           <option value="party" data-i18n="dj.style.party">Party</option>
           <option value="chill" data-i18n="dj.style.chill">Chill</option>
         </select>
       </label>
+      <span class="dj-vibe" id="dj-vibe"></span>
       <span class="dj-next" id="dj-next" role="status"></span>
       <button class="dj-top-btn" id="dj-tr-btn" type="button" aria-expanded="false" aria-controls="dj-tr-panel" data-i18n="dj.tr.summaryAuto">Transitions: best fit</button>
       <div class="dj-top-right">

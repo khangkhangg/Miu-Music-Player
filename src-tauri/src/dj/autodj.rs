@@ -62,6 +62,119 @@ fn keys_fit(a: &Analysis, b: &Analysis) -> Option<bool> {
     Some(keys_compatible(a.key.as_deref()?, b.key.as_deref()?))
 }
 
+/// What kind of music a playlist is, from its songs' analyses: it decides the Auto style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Vibe {
+    /// Steady beat around 115–140 BPM with drops.
+    Dance,
+    /// Punchy beat around 75–105 BPM (or double time).
+    HipHop,
+    /// Ballads, acoustic, lounge: soft or no beat.
+    Chill,
+    /// Everything else: mixed tempos, vocal songs.
+    Pop,
+}
+
+/// A tempo folded into 70–150 BPM, so double- and half-time songs count as what dancers feel.
+fn felt_bpm(bpm: f32) -> f32 {
+    let mut b = bpm;
+    while b > 150.0 {
+        b /= 2.0;
+    }
+    while b > 0.0 && b < 70.0 {
+        b *= 2.0;
+    }
+    b
+}
+
+fn median(mut v: Vec<f32>) -> f32 {
+    v.sort_by(|a, b| a.total_cmp(b));
+    let n = v.len();
+    if n % 2 == 1 { v[n / 2] } else { (v[n / 2 - 1] + v[n / 2]) / 2.0 }
+}
+
+/// The kind of music in a set of songs (None when there are none).
+pub fn vibe_of(songs: &[Analysis]) -> Option<Vibe> {
+    if songs.is_empty() {
+        return None;
+    }
+    let n = songs.len() as f32;
+    let strong = songs.iter().filter(|a| a.beat_confidence >= 0.5).count() as f32 / n;
+    let energy = median(songs.iter().map(|a| a.energy as f32).collect());
+    let bpms: Vec<f32> = songs.iter().filter(|a| a.bpm > 0.0).map(|a| felt_bpm(a.bpm)).collect();
+    let bpm = if bpms.is_empty() { 0.0 } else { median(bpms) };
+    let drops = songs.iter().filter(|a| a.structure.drop_s.is_some()).count() as f32 / n;
+    Some(if energy <= QUIET as f32 || strong < 0.4 {
+        Vibe::Chill
+    } else if (115.0..=140.0).contains(&bpm) && drops >= 0.3 {
+        Vibe::Dance
+    } else if (75.0..=105.0).contains(&bpm) && energy >= 5.0 {
+        Vibe::HipHop
+    } else {
+        Vibe::Pop
+    })
+}
+
+fn is_quiet(a: &Analysis) -> bool {
+    a.energy <= QUIET || a.beat_confidence < 0.4
+}
+
+/// The style for one mix under the Auto style: the playlist's kind of music, but a ballad on
+/// either side always gets a gentle change. Without a playlist, two big songs get the party moves.
+pub fn auto_style(vibe: Option<Vibe>, from: &Analysis, to: &Analysis) -> Style {
+    if is_quiet(from) || is_quiet(to) {
+        return Style::Chill;
+    }
+    match vibe {
+        Some(Vibe::Dance | Vibe::HipHop) => Style::Party,
+        Some(Vibe::Pop) => Style::Smooth,
+        Some(Vibe::Chill) => Style::Chill,
+        None if from.energy >= 7 && to.energy >= 7 => Style::Party,
+        None => Style::Smooth,
+    }
+}
+
+/// A playlist as a DJ set: starts warm, climbs to its peak about two-thirds in, then comes down a
+/// little; each next song is the one closest to that energy that mixes well (reachable tempo,
+/// compatible key).
+pub fn smart_order(songs: &[(i64, Analysis)], seed: u64) -> Vec<i64> {
+    let n = songs.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let (lo, hi) = songs.iter().fold((u8::MAX, 0u8), |(lo, hi), (_, a)| (lo.min(a.energy), hi.max(a.energy)));
+    let target = |i: usize| {
+        let p = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.0 };
+        let arc = if p <= 0.7 { p / 0.7 } else { 1.0 - 0.45 * (p - 0.7) / 0.3 };
+        lo as f64 + (hi as f64 - lo as f64) * arc
+    };
+    let mut left: Vec<&(i64, Analysis)> = songs.iter().collect();
+    let mut order = Vec::with_capacity(n);
+    let mut prev: Option<&Analysis> = None;
+    for i in 0..n {
+        let t = target(i);
+        let cost = |(id, a): &(i64, Analysis)| {
+            let energy = (a.energy as f64 - t).abs();
+            let mix = prev.map_or(0.0, |p| {
+                let tempo = tempo_change(p.bpm, a.bpm).map_or(3.0, |c| c.abs() / TEMPO_RANGE * 0.5);
+                let key = match keys_fit(p, a) {
+                    Some(true) => 0.0,
+                    Some(false) => 0.7,
+                    None => 0.2,
+                };
+                tempo + key
+            });
+            energy + mix + jitter(*id, seed)
+        };
+        let best = (0..left.len()).min_by(|&x, &y| cost(left[x]).total_cmp(&cost(left[y]))).unwrap_or(0);
+        let chosen = left.remove(best);
+        prev = Some(&chosen.1);
+        order.push(chosen.0);
+    }
+    order
+}
+
 /// A small, stable per-party shuffle so equal songs don't always come in the same order.
 fn jitter(song_id: i64, seed: u64) -> f64 {
     let mut x = (song_id as u64) ^ seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
@@ -259,10 +372,19 @@ pub fn plan_with(from: &Analysis, to: &Analysis, style: Style, seed: u64, allowe
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Style {
+    /// Picked for each mix from the music (see `auto_style`).
     #[default]
+    Auto,
     Smooth,
     Party,
     Chill,
+}
+
+impl Style {
+    /// The style for one mix: Auto decides from the pair and the playlist's kind of music.
+    pub fn for_pair(self, vibe: Option<Vibe>, from: &Analysis, to: &Analysis) -> Style {
+        if self == Style::Auto { auto_style(vibe, from, to) } else { self }
+    }
 }
 
 /// Energy up to this counts as a quiet song (ballad, acoustic).
@@ -313,7 +435,7 @@ pub fn plan(from: &Analysis, to: &Analysis, style: Style, seed: u64) -> Transiti
         return match style {
             Style::Chill => FilterBlend { bars: 16 },
             Style::Party => BeatBlend { bars: 8 },
-            Style::Smooth => BeatBlend { bars: 16 },
+            Style::Smooth | Style::Auto => BeatBlend { bars: 16 },
         };
     }
     if tempo_ok {
@@ -330,7 +452,7 @@ pub fn plan(from: &Analysis, to: &Analysis, style: Style, seed: u64) -> Transiti
     match style {
         Style::Party => Brake,
         Style::Chill => ReverbWash,
-        Style::Smooth => EchoOut,
+        Style::Smooth | Style::Auto => EchoOut,
     }
 }
 
@@ -465,6 +587,74 @@ mod tests {
         assert_eq!(pick(&now, &list, &none, &[], EnergyCurve::BuildUp, 0), Some(3));
         assert_eq!(pick(&now, &list, &none, &[], EnergyCurve::Keep, 0), Some(2));
         assert_eq!(pick(&now, &list, &none, &[], EnergyCurve::WindDown, 0), Some(1));
+    }
+
+    fn with_drop(mut a: Analysis) -> Analysis {
+        a.structure.drop_s = Some(60.0);
+        a
+    }
+
+    #[test]
+    fn a_playlist_says_what_kind_of_music_it_is() {
+        let dance: Vec<Analysis> = (0..6).map(|i| with_drop(song(124.0 + i as f32, "8A", 7, 0.9))).collect();
+        assert_eq!(vibe_of(&dance), Some(Vibe::Dance));
+        let hiphop: Vec<Analysis> = (0..6).map(|i| song(88.0 + i as f32, "4A", 6, 0.8)).collect();
+        assert_eq!(vibe_of(&hiphop), Some(Vibe::HipHop));
+        let ballads: Vec<Analysis> = (0..6).map(|_| song(72.0, "5B", 3, 0.3)).collect();
+        assert_eq!(vibe_of(&ballads), Some(Vibe::Chill));
+        let pop: Vec<Analysis> = [100.0, 110.0, 118.0, 140.0, 105.0, 96.0].iter().map(|&b| song(b, "8B", 6, 0.7)).collect();
+        assert_eq!(vibe_of(&pop), Some(Vibe::Pop));
+        let double_time: Vec<Analysis> = (0..6).map(|i| song(176.0 + i as f32, "4A", 6, 0.8)).collect();
+        assert_eq!(vibe_of(&double_time), Some(Vibe::HipHop), "176 BPM rap counts as 88");
+        assert_eq!(vibe_of(&[]), None);
+    }
+
+    #[test]
+    fn the_auto_style_follows_the_playlist_and_spares_ballads() {
+        let banger = with_drop(song(126.0, "8A", 8, 0.9));
+        let ballad = song(70.0, "8A", 3, 0.3);
+        assert_eq!(auto_style(Some(Vibe::Dance), &banger, &banger), Style::Party);
+        assert_eq!(auto_style(Some(Vibe::Pop), &banger, &banger), Style::Smooth);
+        assert_eq!(auto_style(Some(Vibe::Chill), &banger, &banger), Style::Chill);
+        assert_eq!(auto_style(Some(Vibe::Dance), &banger, &ballad), Style::Chill, "a ballad never gets a drop swap");
+        assert_eq!(auto_style(None, &banger, &banger), Style::Party, "no playlist: two bangers still get the party moves");
+        assert_eq!(auto_style(None, &song(110.0, "8A", 5, 0.7), &song(112.0, "8A", 5, 0.7)), Style::Smooth);
+    }
+
+    #[test]
+    fn smart_order_warms_up_peaks_and_lands() {
+        let list: Vec<(i64, Analysis)> = vec![
+            (1, song(124.0, "8A", 9, 0.9)),
+            (2, song(122.0, "8A", 4, 0.9)),
+            (3, song(126.0, "9A", 7, 0.9)),
+            (4, song(124.0, "8A", 6, 0.9)),
+            (5, song(125.0, "8A", 8, 0.9)),
+            (6, song(120.0, "8A", 3, 0.9)),
+        ];
+        let order = smart_order(&list, 0);
+        assert_eq!(order.len(), 6);
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![1, 2, 3, 4, 5, 6], "every song once");
+        let energy = |id: i64| list.iter().find(|(i, _)| *i == id).unwrap().1.energy;
+        assert!(energy(order[0]) <= 4, "starts warm: {order:?}");
+        let peak = order.iter().position(|&id| energy(id) == 9).unwrap();
+        assert!((2..6).contains(&peak), "peaks past the middle: {order:?}");
+        assert!(energy(order[5]) < 9, "does not end on the peak: {order:?}");
+    }
+
+    #[test]
+    fn smart_order_keeps_neighbours_mixable() {
+        // Two tempo groups: the order should not zig-zag between them.
+        let list: Vec<(i64, Analysis)> = vec![
+            (1, song(90.0, "8A", 5, 0.9)),
+            (2, song(128.0, "8A", 5, 0.9)),
+            (3, song(91.0, "8A", 5, 0.9)),
+            (4, song(127.0, "8A", 5, 0.9)),
+        ];
+        let order = smart_order(&list, 0);
+        let jumps = order.windows(2).filter(|w| tempo_change(list[(w[0] - 1) as usize].1.bpm, list[(w[1] - 1) as usize].1.bpm).is_none()).count();
+        assert_eq!(jumps, 1, "only one jump between the tempo groups: {order:?}");
     }
 
     #[test]

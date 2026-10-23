@@ -46,6 +46,8 @@ struct Mixing {
 pub struct AutoMix {
     on: bool,
     style: autodj::Style,
+    /// The kind of music of the playlist being played (Auto style), if any.
+    vibe: Option<autodj::Vibe>,
     /// Mixes done this session (varies the party tricks).
     mixes: u64,
     live: Option<Side>,
@@ -163,6 +165,10 @@ impl AutoMix {
         self.style = style;
     }
 
+    pub fn set_vibe(&mut self, vibe: Option<autodj::Vibe>) {
+        self.vibe = vibe;
+    }
+
     /// Only these kinds of transition (none: any); `mix_it_up` picks among them at random.
     pub fn set_transitions(&mut self, allowed: Vec<autodj::Kind>, mix_it_up: bool) {
         self.allowed = allowed;
@@ -243,7 +249,8 @@ impl AutoMix {
             if !waiting {
                 return None;
             }
-            let transition = self.chosen.unwrap_or_else(|| autodj::plan_with(&from, &to, self.style, self.mixes, &self.allowed, self.mix_it_up));
+            let style = self.style.for_pair(self.vibe, &from, &to);
+            let transition = self.chosen.unwrap_or_else(|| autodj::plan_with(&from, &to, style, self.mixes, &self.allowed, self.mix_it_up));
             let start = autodj::start_at(&from, transition);
             let pos = m.deck(live).position_s();
             let speed = m.deck(live).speed();
@@ -253,11 +260,11 @@ impl AutoMix {
             }
             self.chosen = None;
             let mut transition = transition;
-            let mut script = script::script(transition, self.style == autodj::Style::Party);
+            let mut script = script::script(transition, style == autodj::Style::Party);
             if script.needs_stems && !(m.deck(live).has_stems() && m.deck(incoming).has_stems()) {
                 // Not split in time: a filter blend keeps one voice at a time too.
                 transition = Transition::FilterBlend { bars: 8 };
-                script = script::script(transition, self.style == autodj::Style::Party);
+                script = script::script(transition, style == autodj::Style::Party);
             }
             self.mixes += 1;
             let at = start_point(&to, script.entry);
@@ -577,6 +584,7 @@ mod tests {
         m.deck_mut(Side::A).load(track(1, 30.0, 70.0, 20.0, 0.1));
         m.deck_mut(Side::B).load(track(2, 30.0, 120.0, 25.0, 0.8));
         let mut auto = AutoMix::default();
+        auto.set_style(autodj::Style::Smooth); // Auto would treat the ballad as chill
         auto.set_on(true);
         run(&mut m, &mut auto, 11.0);
         assert!(!m.deck(Side::B).is_playing(), "the crossfade starts 8 s before the mix out (12 s)");
