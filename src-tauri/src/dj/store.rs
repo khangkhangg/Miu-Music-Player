@@ -3,7 +3,7 @@
 
 use rusqlite::{params, OptionalExtension};
 
-use super::analysis::Analysis;
+use super::analysis::{Analysis, ANALYSIS_VERSION};
 use super::autodj::Candidate;
 use crate::library::db::{Db, Result};
 
@@ -56,11 +56,12 @@ pub fn pending(db: &Db, limit: usize) -> Result<Vec<Pending>> {
     let mut stmt = db.conn().prepare(
         "SELECT s.id, s.path, s.size, s.mtime FROM songs s
          LEFT JOIN dj_analysis a ON a.song_id = s.id AND a.size = s.size AND a.mtime = s.mtime
+           AND (a.data = 'null' OR COALESCE(json_extract(a.data, '$.version'), 0) >= ?2)
          WHERE a.song_id IS NULL AND s.rating >= 0
          ORDER BY s.rating DESC, s.id
          LIMIT ?1",
     )?;
-    let rows = stmt.query_map([limit as i64], |r| {
+    let rows = stmt.query_map(params![limit as i64, ANALYSIS_VERSION], |r| {
         Ok(Pending { song_id: r.get(0)?, path: r.get(1)?, size: r.get(2)?, mtime: r.get(3)? })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -89,8 +90,9 @@ pub fn progress(db: &Db) -> Result<(u32, u32)> {
     Ok(db.conn().query_row(
         "SELECT COUNT(a.song_id), COUNT(*) FROM songs s
          LEFT JOIN dj_analysis a ON a.song_id = s.id AND a.size = s.size AND a.mtime = s.mtime
+           AND (a.data = 'null' OR COALESCE(json_extract(a.data, '$.version'), 0) >= ?1)
          WHERE s.rating >= 0",
-        [],
+        [ANALYSIS_VERSION],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?)
 }
@@ -98,6 +100,7 @@ pub fn progress(db: &Db) -> Result<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
 
     fn song(db: &Db, path: &str, rating: i64) -> i64 {
         db.conn()
@@ -117,6 +120,7 @@ mod tests {
 
     fn sample() -> Analysis {
         Analysis {
+            version: ANALYSIS_VERSION,
             bpm: 124.0,
             beat_confidence: 0.6,
             first_beat_s: 0.12,
@@ -126,6 +130,7 @@ mod tests {
             mix_in_s: 8.0,
             mix_out_s: 200.0,
             duration_s: 215.0,
+            ..Default::default()
         }
     }
 
@@ -149,6 +154,20 @@ mod tests {
         let p = pending(&db, 10).unwrap();
         assert_eq!(p, vec![Pending { song_id: id, path: "C:/M/a.mp3".into(), size: 10, mtime: 200 }]);
         save(&db, id, 10, 200, &sample(), 6).unwrap();
+        assert!(pending(&db, 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn older_analyses_are_done_again() {
+        let db = Db::open_in_memory().unwrap();
+        let id = song(&db, "C:/M/a.mp3", 0);
+        let mut old = sample();
+        old.version = ANALYSIS_VERSION - 1;
+        save(&db, id, 10, 100, &old, 5).unwrap();
+        assert_eq!(pending(&db, 10).unwrap().len(), 1, "an older analysis waits to be redone");
+        assert_eq!(get(&db, id).unwrap(), Some(old), "and is still used until then");
+        assert_eq!(progress(&db).unwrap(), (0, 1));
+        save(&db, id, 10, 100, &sample(), 6).unwrap();
         assert!(pending(&db, 10).unwrap().is_empty());
     }
 

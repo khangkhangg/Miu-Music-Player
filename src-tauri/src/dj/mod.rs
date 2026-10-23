@@ -13,3 +13,4 @@ pub mod mixer;
 pub mod pads;
 pub mod service;
 pub mod store;
+pub mod structure;

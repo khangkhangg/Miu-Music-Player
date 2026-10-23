@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::actions::{Action, Band, Deck as Side, Effect};
 use super::deck::Deck;
-use super::dsp::{self, DjFilter, Echo, ThreeBand};
+use super::dsp::{self, DjFilter, Echo, Reverb, ThreeBand};
 
 /// The limiter leaves the music alone below this and bends it smoothly under 1.0 above.
 const KNEE: f32 = 0.8;
@@ -28,6 +28,7 @@ struct Channel {
     /// Filter sweep effect in progress, 0..1.
     sweep: Option<f32>,
     echo: Echo,
+    reverb: Reverb,
     gain: f32,
     volume: f32,
     cue: bool,
@@ -38,7 +39,7 @@ struct Channel {
 
 impl Channel {
     fn new(rate: u32) -> Self {
-        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0 }
+        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), reverb: Reverb::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0 }
     }
 }
 
@@ -97,7 +98,7 @@ impl Mixer {
             phones_volume: 1.0,
             last_out: (1.0, 1.0),
             scratch: [Vec::new(), Vec::new()],
-            pads: (0..super::pads::PADS).map(|p| Arc::new(super::pads::sound(p, rate))).collect(),
+            pads: (0..=super::pads::IMPACT).map(|p| Arc::new(super::pads::sound(p, rate))).collect(),
             voices: Vec::new(),
         }
     }
@@ -186,6 +187,13 @@ impl Mixer {
                             self.deck_mut(deck).spin_back();
                         }
                     }
+                    Effect::Reverb => ch.reverb.set_on(on),
+                    Effect::Freeze => ch.reverb.set_freeze(on),
+                    Effect::Brake => {
+                        if on {
+                            self.deck_mut(deck).brake();
+                        }
+                    }
                 }
             }
             Action::Pad { slot } => {
@@ -248,6 +256,7 @@ impl Mixer {
             // After the crossfader, so the repeats ring on when the deck is faded out.
             ch.echo.set_delay_s(ECHO_BEATS * beat_s);
             ch.echo.process(buf, master);
+            ch.reverb.process(buf, master);
             ch.last = (trim, fader, x);
         }
         self.voices.retain_mut(|(sound, pos)| {
@@ -480,6 +489,22 @@ mod tests {
         assert!(first > 0.1, "the first repeat: {first}");
         assert!(later > 0.01 && later < first, "fading repeats: {later} < {first}");
         assert!(peak_between(&tail, 2.6, 3.0) < 0.02, "and gone");
+    }
+
+    #[test]
+    fn a_reverb_wash_rings_on_after_the_deck_is_faded_out_and_the_brake_stops_it() {
+        let silent = || Arc::new(Track { song_id: 2, rate: RATE, pcm: vec![0; RATE as usize * 8], analysis: None });
+        let mut m = mixer(click(), silent());
+        m.apply(&Action::Crossfader { value: -1.0 });
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::Reverb, on: true });
+        record(&mut m, 0.2);
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::Reverb, on: false });
+        m.apply(&Action::Crossfader { value: 1.0 });
+        let tail = record(&mut m, 1.0);
+        assert!(peak_between(&tail, 0.1, 0.5) > 0.01, "the wash rings on: {}", peak_between(&tail, 0.1, 0.5));
+        m.apply(&Action::Effect { deck: D::A, effect: Effect::Brake, on: true });
+        record(&mut m, 2.0);
+        assert!(!m.deck(D::A).is_playing(), "braked to a stop");
     }
 
     #[test]

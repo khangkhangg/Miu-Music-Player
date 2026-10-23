@@ -24,6 +24,12 @@ pub enum Effect {
     Echo,
     FilterSweep,
     SpinBack,
+    /// A wash of reverb that rings on after the deck is faded out.
+    Reverb,
+    /// Holds the reverb tail as it is (nothing new goes in).
+    Freeze,
+    /// The record slows to a stop.
+    Brake,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

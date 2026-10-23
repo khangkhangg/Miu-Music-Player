@@ -67,6 +67,7 @@ fn analysis_of(deck: &Deck) -> Option<Analysis> {
         mix_in_s: 0.0,
         mix_out_s: duration,
         duration_s: duration,
+        ..Default::default()
     });
     if a.mix_out_s <= 0.0 || a.mix_out_s > duration {
         a.mix_out_s = duration;
@@ -232,7 +233,7 @@ mod tests {
     const RATE: u32 = 8000;
 
     fn track(id: i64, secs: f64, bpm: f32, mix_out_s: f64, confidence: f32) -> Arc<Track> {
-        let a = Analysis { bpm, beat_confidence: confidence, first_beat_s: 0.0, downbeat_s: 0.0, key: Some("8A".into()), energy: 6, mix_in_s: 2.0, mix_out_s, duration_s: secs };
+        let a = Analysis { bpm, beat_confidence: confidence, first_beat_s: 0.0, downbeat_s: 0.0, key: Some("8A".into()), energy: 6, mix_in_s: 2.0, mix_out_s, duration_s: secs, ..Default::default() };
         Arc::new(Track { song_id: id, rate: RATE, pcm: vec![0; (secs * RATE as f64) as usize * 2], analysis: Some(a) })
     }
 

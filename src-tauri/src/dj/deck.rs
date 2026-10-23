@@ -75,12 +75,16 @@ pub struct Deck {
     looping: Option<(f64, f64)>,
     /// Spin-back in progress: the current (negative) speed.
     spin: Option<f64>,
+    /// Brake in progress: the share of normal speed left (1 down to 0).
+    braking: Option<f64>,
 }
 
 pub const HOT_CUES: usize = 4;
 /// Spin-back: starts at three times normal speed backwards and stops within this long.
 const SPIN_SPEED: f64 = 3.0;
 const SPIN_S: f64 = 1.0;
+/// The brake brings the record to a stop in this long.
+const BRAKE_S: f64 = 1.5;
 
 impl Deck {
     /// Puts a song on the deck, paused at its first beat (the cue point).
@@ -262,6 +266,14 @@ impl Deck {
         self.looping.map(|(a, b)| (a / self.rate(), b / self.rate()))
     }
 
+    /// The record slows to a stop, like a turntable switched off.
+    pub fn brake(&mut self) {
+        if self.playing {
+            self.braking = Some(1.0);
+            self.looping = None;
+        }
+    }
+
     /// The record is spun back by hand and stops (a party trick to end a song).
     pub fn spin_back(&mut self) {
         if self.playing {
@@ -338,6 +350,14 @@ impl Deck {
                 step *= self.jog_bend.0;
                 self.jog_bend.1 -= 1;
             }
+            if let Some(left) = self.braking.as_mut() {
+                step *= *left;
+                *left -= 1.0 / (BRAKE_S * out_rate as f64);
+                if *left <= 0.0 {
+                    self.braking = None;
+                    self.playing = false;
+                }
+            }
             if let Some(spin) = self.spin.as_mut() {
                 // Backwards, slowing down to a stop.
                 step = track.rate as f64 / out_rate as f64 * *spin;
@@ -375,7 +395,7 @@ mod tests {
     const OUT: u32 = 48_000;
 
     fn analysis(bpm: f32, first_beat_s: f64, downbeat_s: f64) -> Analysis {
-        Analysis { bpm, beat_confidence: 0.8, first_beat_s, downbeat_s, key: None, energy: 5, mix_in_s: 0.0, mix_out_s: 0.0, duration_s: 0.0 }
+        Analysis { bpm, beat_confidence: 0.8, first_beat_s, downbeat_s, key: None, energy: 5, mix_in_s: 0.0, mix_out_s: 0.0, duration_s: 0.0, ..Default::default() }
     }
 
     /// `secs` of a slow ramp at `rate`, both channels equal.
@@ -512,6 +532,19 @@ mod tests {
         let mut plain = Deck::default();
         plain.load(track(OUT, 60.0, None));
         assert!(!plain.set_loop(Some(4)), "no beat grid, no beat loop");
+    }
+
+    #[test]
+    fn the_brake_slows_the_record_to_a_stop() {
+        let mut d = Deck::default();
+        d.load(track(OUT, 60.0, None));
+        d.seek_s(20.0);
+        d.play();
+        d.brake();
+        render_secs(&mut d, 2.0);
+        assert!(!d.is_playing(), "stopped");
+        let p = d.position_s();
+        assert!(p > 20.4 && p < 21.2, "slowed down over about a second and a half: {p}");
     }
 
     #[test]

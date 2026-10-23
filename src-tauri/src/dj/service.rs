@@ -186,7 +186,7 @@ fn auto_controller(dj: SharedDj, db: SharedDb, alive: Arc<AtomicBool>) {
                 let candidates = db.lock().ok().and_then(|d| store::candidates(&d).ok())?;
                 let now = current
                     .and_then(|id| candidates.iter().find(|c| c.song_id == id).map(|c| c.analysis.clone()))
-                    .unwrap_or(Analysis { bpm: 0.0, beat_confidence: 0.0, first_beat_s: 0.0, downbeat_s: 0.0, key: None, energy: 5, mix_in_s: 0.0, mix_out_s: 0.0, duration_s: 0.0 });
+                    .unwrap_or(Analysis { bpm: 0.0, beat_confidence: 0.0, first_beat_s: 0.0, downbeat_s: 0.0, key: None, energy: 5, mix_in_s: 0.0, mix_out_s: 0.0, duration_s: 0.0, ..Default::default() });
                 let next = autodj::pick(&now, &candidates, &played, &queue, curve, seed)?;
                 let analysis = candidates.iter().find(|c| c.song_id == next).map(|c| c.analysis.clone());
                 Some((deck, next, song_path(&db, next)?, analysis))

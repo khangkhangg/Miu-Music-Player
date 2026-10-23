@@ -4,6 +4,10 @@
 use std::f32::consts::PI;
 
 pub const PADS: usize = 4;
+/// Sounds Auto DJ plays itself during transitions (not on the pads): a rising sweep before a
+/// drop and a hit on it.
+pub const RISER: usize = 4;
+pub const IMPACT: usize = 5;
 
 /// Attack/release envelope so a sound starts and ends without a click.
 fn envelope(i: usize, n: usize, rate: u32) -> f32 {
@@ -11,6 +15,15 @@ fn envelope(i: usize, n: usize, rate: u32) -> f32 {
     let a = (i as f32 / edge as f32).min(1.0);
     let r = ((n - i) as f32 / (edge * 4) as f32).min(1.0);
     a * r
+}
+
+/// White noise -0.5..0.5 as a function of the sample number (the same every time).
+fn noise_at(i: u64) -> f32 {
+    let mut x = i.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0xD1B5_4A32_D192_ED03;
+    x ^= x >> 31;
+    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 29;
+    (x >> 40) as f32 / (1u64 << 24) as f32 - 0.5
 }
 
 /// A band-limited-enough sawtooth: the first harmonics only (no aliasing whistle).
@@ -52,6 +65,30 @@ pub fn sound(slot: usize, rate: u32) -> Vec<f32> {
             let phase = 2.0 * PI * (40.0 * t + 70.0 / 2.0 * (1.0 - (-2.0 * t).exp()));
             phase.sin() * (1.0 - t / 1.8)
         }),
+        // Riser: noise and a tone sweeping up, getting louder, for six seconds.
+        RISER => {
+            let mut seed = 11u64;
+            let mut lp = 0.0f32;
+            let n = (6.0 * r) as usize;
+            (0..n)
+                .map(|i| {
+                    let t = i as f32 / r;
+                    let p = t / 6.0;
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    let noise = (seed >> 33) as f32 / (1u64 << 31) as f32 - 0.5;
+                    // The noise opens up as it rises (a one-pole low-pass sweeping up).
+                    let a = (-2.0 * PI * (300.0 + 8000.0 * p * p) / r).exp();
+                    lp = noise + a * (lp - noise);
+                    let tone = (2.0 * PI * (200.0 * t + 1800.0 / 2.0 * t * p)).sin() * 0.3;
+                    (lp * 1.5 + tone) * p * p * envelope(i, n, rate)
+                })
+                .collect()
+        }
+        // Impact: a deep boom and a burst of noise, dying away over two and a half seconds.
+        IMPACT => render(2.5, &|t| {
+            let phase = 2.0 * PI * (35.0 * t + 25.0 / 3.0 * (1.0 - (-3.0 * t).exp()));
+            phase.sin() * (-t * 2.0).exp() + noise_at((t * r) as u64) * (-t * 4.0).exp() * 0.5
+        }),
         _ => Vec::new(),
     };
     let peak = out.iter().fold(0.0f32, |m, v| m.max(v.abs()));
@@ -68,6 +105,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn transition_sounds_rise_and_hit() {
+        let rms = |x: &[f32]| (x.iter().map(|s| s * s).sum::<f32>() / x.len().max(1) as f32).sqrt();
+        let riser = sound(RISER, 48_000);
+        let secs = riser.len() as f32 / 48_000.0;
+        assert!((5.0..=8.0).contains(&secs), "riser {secs} s");
+        let q = riser.len() / 4;
+        assert!(rms(&riser[3 * q..]) > rms(&riser[..q]) * 3.0, "it rises");
+        let impact = sound(IMPACT, 48_000);
+        let t = impact.len() / 8;
+        assert!(rms(&impact[..t]) > rms(&impact[impact.len() - t..]) * 5.0, "it hits, then fades");
+        assert!(impact.iter().chain(&riser).all(|s| s.abs() <= 0.9));
+    }
+
+    #[test]
     fn every_pad_has_a_short_sound_that_does_not_clip() {
         let sounds: Vec<Vec<f32>> = (0..PADS).map(|p| sound(p, 48_000)).collect();
         for (p, s) in sounds.iter().enumerate() {
@@ -78,6 +129,6 @@ mod tests {
             assert!(s.last().unwrap().abs() < 0.01, "pad {p} ends quietly, no click");
         }
         assert_ne!(sounds[0], sounds[1]);
-        assert!(sound(PADS, 48_000).is_empty(), "no such pad");
+        assert!(sound(99, 48_000).is_empty(), "no such pad");
     }
 }

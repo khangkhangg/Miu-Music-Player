@@ -212,6 +212,7 @@ mod tests {
             mix_in_s: 8.0,
             mix_out_s: 200.0,
             duration_s: 210.0,
+            ..Default::default()
         }
     }
 

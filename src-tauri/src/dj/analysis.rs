@@ -4,9 +4,15 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Analyses older than this are done again in the background (2: song structure).
+pub const ANALYSIS_VERSION: u8 = 2;
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Analysis {
+    /// Which analysis made this (0: before versions were kept).
+    #[serde(default)]
+    pub version: u8,
     pub bpm: f32,
     /// 0..1: how clearly the song has a steady beat. Low for ballads without drums.
     pub beat_confidence: f32,
@@ -22,6 +28,9 @@ pub struct Analysis {
     pub mix_in_s: f64,
     pub mix_out_s: f64,
     pub duration_s: f64,
+    /// Phrases, sections, drop, vocals, real end (version 2 on).
+    #[serde(default)]
+    pub structure: super::structure::Structure,
 }
 
 /// Analyse mono samples at `rate`.
@@ -31,8 +40,11 @@ pub fn analyze(mono: &[f32], rate: u32) -> Analysis {
     let (env, hop_s) = onset_envelope(&x, r);
     let (bpm, beat_confidence, first_beat_s) = tempo_and_phase(&env, hop_s);
     let downbeat_s = downbeat(&env, hop_s, bpm, first_beat_s);
+    let beat = (beat_confidence >= 0.2).then_some((bpm, downbeat_s));
     let (mix_in_s, mix_out_s) = mix_points(&x, r);
     Analysis {
+        version: ANALYSIS_VERSION,
+        structure: super::structure::structure(&x, r, beat),
         bpm,
         beat_confidence,
         first_beat_s,
@@ -417,6 +429,16 @@ mod tests {
     }
 
     #[test]
+    fn analyses_carry_their_version_and_the_song_structure() {
+        let a = analyze(&hits(30.0, &beats(120.0, 26.0, 0.25)), RATE);
+        assert_eq!(a.version, ANALYSIS_VERSION);
+        assert!(a.structure.phrase_start_s.is_some(), "a steady beat has phrases");
+        assert!((a.structure.end_s - 26.0).abs() < 1.0, "{}", a.structure.end_s);
+        let old: Analysis = serde_json::from_str(r#"{"bpm":120.0,"beatConfidence":0.5,"firstBeatS":0.0,"downbeatS":0.0,"key":null,"energy":5,"mixInS":0.0,"mixOutS":10.0,"durationS":12.0}"#).unwrap();
+        assert_eq!(old.version, 0, "analysed before structure: done again");
+    }
+
+    #[test]
     fn mix_points_skip_silence_and_fades() {
         // 4 s silence, 4 s fade-in, 30 s of beat, 6 s fade-out.
         let body = hits(44.0, &beats(120.0, 44.0, 4.0));
@@ -470,6 +492,16 @@ mod machine_tests {
                 a.bpm, a.beat_confidence, a.key.as_deref().unwrap_or("-"), a.energy, a.mix_in_s, a.mix_out_s, a.duration_s,
                 decoded.as_millis(), (t.elapsed() - decoded).as_millis(),
                 p.file_name().unwrap().to_string_lossy()
+            );
+            let s = &a.structure;
+            let parts: Vec<String> = s.sections.iter().map(|x| format!("{:?} {:.0}-{:.0}", x.kind, x.start_s, x.end_s)).collect();
+            println!(
+                "        phrases from {:?}, drop {:?}, end {:.0}, vocals {:?}\n        {}",
+                s.phrase_start_s.map(|p| (p * 10.0).round() / 10.0),
+                s.drop_s.map(|d| d.round()),
+                s.end_s,
+                s.vocals.iter().map(|v| format!("{:.0}-{:.0}", v[0], v[1])).collect::<Vec<_>>(),
+                parts.join(" | ")
             );
         }
     }

@@ -237,6 +237,118 @@ impl Echo {
     }
 }
 
+/// One feedback comb with damping (Freeverb).
+struct Comb {
+    buf: Vec<f32>,
+    pos: usize,
+    store: f32,
+}
+
+impl Comb {
+    #[inline]
+    fn tick(&mut self, x: f32, feedback: f32, damp: f32) -> f32 {
+        let y = self.buf[self.pos];
+        self.store = y * (1.0 - damp) + self.store * damp;
+        self.buf[self.pos] = x + self.store * feedback;
+        self.pos = (self.pos + 1) % self.buf.len();
+        y
+    }
+}
+
+struct AllPass {
+    buf: Vec<f32>,
+    pos: usize,
+}
+
+impl AllPass {
+    #[inline]
+    fn tick(&mut self, x: f32) -> f32 {
+        let b = self.buf[self.pos];
+        self.buf[self.pos] = x + b * 0.5;
+        self.pos = (self.pos + 1) % self.buf.len();
+        b - x
+    }
+}
+
+const COMBS: [usize; 8] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617];
+const ALLPASSES: [usize; 4] = [556, 441, 341, 225];
+const STEREO_SPREAD: usize = 23;
+const REVERB_ROOM: f32 = 0.86;
+const REVERB_DAMP: f32 = 0.25;
+const REVERB_WET: f32 = 0.35;
+
+/// A big-room reverb (Freeverb) for washing a song out: what goes in while it is on rings on for
+/// seconds after; frozen, the tail holds as it is and nothing new goes in.
+pub struct Reverb {
+    combs: [Vec<Comb>; 2],
+    allpasses: [Vec<AllPass>; 2],
+    on: bool,
+    freeze: bool,
+    /// Frames until the tail has died away once off (no work after that).
+    ringing: usize,
+    rate: u32,
+}
+
+impl Reverb {
+    pub fn new(rate: u32) -> Self {
+        let scale = |n: usize, side: usize| ((n + side * STEREO_SPREAD) as f32 * rate as f32 / 44_100.0) as usize;
+        let make = |side: usize| {
+            let combs = COMBS.iter().map(|&n| Comb { buf: vec![0.0; scale(n, side).max(1)], pos: 0, store: 0.0 }).collect();
+            let aps = ALLPASSES.iter().map(|&n| AllPass { buf: vec![0.0; scale(n, side).max(1)], pos: 0 }).collect();
+            (combs, aps)
+        };
+        let (c0, a0) = make(0);
+        let (c1, a1) = make(1);
+        Self { combs: [c0, c1], allpasses: [a0, a1], on: false, freeze: false, ringing: 0, rate }
+    }
+
+    pub fn set_on(&mut self, on: bool) {
+        self.on = on;
+    }
+
+    pub fn is_on(&self) -> bool {
+        self.on
+    }
+
+    pub fn set_freeze(&mut self, freeze: bool) {
+        self.freeze = freeze;
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        self.freeze
+    }
+
+    /// Feeds `input` (while on and not frozen) and adds the reverb to `out`; both stereo.
+    pub fn process(&mut self, input: &[f32], out: &mut [f32]) {
+        if self.on || self.freeze {
+            self.ringing = self.rate as usize * 10;
+        } else if self.ringing == 0 {
+            return;
+        }
+        let (feedback, damp, gain) = if self.freeze { (1.0, 0.0, 0.0) } else { (REVERB_ROOM, REVERB_DAMP, if self.on { 0.015 } else { 0.0 }) };
+        for (inp, o) in input.chunks_exact(2).zip(out.chunks_exact_mut(2)) {
+            let x = (inp[0] + inp[1]) * gain;
+            for ch in 0..2 {
+                let mut y: f32 = self.combs[ch].iter_mut().map(|c| c.tick(x, feedback, damp)).sum();
+                for a in &mut self.allpasses[ch] {
+                    y = a.tick(y);
+                }
+                o[ch] += y * REVERB_WET;
+            }
+            self.ringing = self.ringing.saturating_sub(1);
+        }
+        if !self.on && !self.freeze && self.ringing == 0 {
+            for c in self.combs.iter_mut().flatten() {
+                c.buf.fill(0.0);
+                c.store = 0.0;
+            }
+            for a in self.allpasses.iter_mut().flatten() {
+                a.buf.fill(0.0);
+            }
+        }
+    }
+}
+
 /// Gain trim: 0..1 with 0.5 = unity, ±12 dB at the ends.
 pub fn gain(v: f32) -> f32 {
     10f32.powf((v.clamp(0.0, 1.0) - 0.5) * 24.0 / 20.0)
@@ -329,6 +441,45 @@ mod tests {
         assert_eq!(fader(0.0), 0.0);
         assert_eq!(fader(1.0), 1.0);
         assert!(fader(0.5) < 0.5, "a fader curve gets quiet quickly at the bottom");
+    }
+
+    /// Level (RMS) of a stretch of a stereo signal.
+    fn level(x: &[f32]) -> f32 {
+        (x.iter().map(|s| s * s).sum::<f32>() / x.len().max(1) as f32).sqrt()
+    }
+
+    #[test]
+    fn reverb_rings_on_and_freezes() {
+        let r = RATE as usize;
+        let mut rev = Reverb::new(RATE);
+        rev.set_on(true);
+        // A short click, then silence; the reverb adds its tail to `out`.
+        let mut input = vec![0.0f32; r * 2 * 8];
+        for s in &mut input[..200] {
+            *s = 0.8;
+        }
+        let mut out = vec![0.0f32; input.len()];
+        rev.process(&input, &mut out);
+        let at = |s: f32| (s * RATE as f32) as usize * 2;
+        assert!(level(&out[at(0.2)..at(0.4)]) > 1e-3, "the tail rings");
+        assert!(level(&out[at(6.0)..at(7.0)]) < level(&out[at(0.2)..at(0.4)]) * 0.05, "and dies away");
+        // Frozen: the sound in it holds while nothing new goes in.
+        let mut rev = Reverb::new(RATE);
+        rev.set_on(true);
+        let mut out = vec![0.0f32; r * 2];
+        let tone: Vec<f32> = (0..r * 2).map(|i| ((i / 2) as f32 * 0.05).sin() * 0.5).collect();
+        rev.process(&tone, &mut out);
+        rev.set_freeze(true);
+        let quiet = vec![0.0f32; r * 2 * 4];
+        let mut held = vec![0.0f32; quiet.len()];
+        rev.process(&quiet, &mut held);
+        let (early, late) = (level(&held[at(0.5)..at(1.0)]), level(&held[at(3.0)..at(3.5)]));
+        assert!(late > early * 0.7, "frozen: {early} then {late}");
+        rev.set_freeze(false);
+        rev.set_on(false);
+        let mut gone = vec![0.0f32; r * 2 * 8];
+        rev.process(&vec![0.0; gone.len()], &mut gone);
+        assert!(level(&gone[at(7.0)..at(8.0)]) < late * 0.05, "let go, it fades");
     }
 
     #[test]
