@@ -42,6 +42,9 @@ chrono = { version = "0.4.45", default-features = false, features = ["std", "all
 ureq = "3.4.2"
 quick-xml = "0.41"
 midir = "0.10"
+tiny_http = { version = "0.12", default-features = false }
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+getrandom = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

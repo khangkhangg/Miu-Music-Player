@@ -205,6 +205,22 @@ impl Queue {
         Some(e)
     }
 
+    /// The entry that plays next (left in the queue until it starts).
+    pub fn peek(&self) -> Option<&Entry> {
+        self.ordered().into_iter().next()
+    }
+
+    /// `item` went on air: if it is queued it leaves the queue and becomes what plays now; if it
+    /// came from outside the queue, nothing from the queue is playing.
+    pub fn start_item(&mut self, item: &Item) {
+        let started = self.entries.iter().position(|e| e.item.same(item)).map(|i| self.entries.remove(i));
+        if let Some(prev) = std::mem::replace(&mut self.now, started) {
+            self.recent.push_front(prev.item);
+            self.recent.truncate(RECENT);
+        }
+        self.changed();
+    }
+
     /// What plays now came from outside the queue (the DJ, Auto DJ's own pick): nothing from it.
     pub fn clear_now(&mut self) {
         if let Some(prev) = self.now.take() {
@@ -332,6 +348,22 @@ mod tests {
         assert_eq!(q.add("dan", "Dan", song(2)).map(|_| ()), Err(Refusal::JustPlayed), "not again right away");
         assert_eq!(q.next().map(|e| e.id), Some(a));
         assert!(q.next().is_none());
+    }
+
+    #[test]
+    fn auto_dj_loads_the_top_early_and_starts_it_when_it_plays() {
+        let mut q = Queue::default();
+        let a = q.add("ann", "Ann", song(1)).unwrap();
+        let b = q.add("bob", "Bob", song(2)).unwrap();
+        assert_eq!(q.peek().map(|e| e.id), Some(a), "the top, still in the queue");
+        assert_eq!(q.ordered().len(), 2);
+        q.vote("cat", b, true);
+        q.start_item(&song(1));
+        assert_eq!(q.now().map(|e| e.id), Some(a), "the loaded song plays even if votes moved");
+        assert_eq!(q.ordered().iter().map(|e| e.id).collect::<Vec<_>>(), vec![b]);
+        q.start_item(&song(7));
+        assert!(q.now().is_none(), "a song from outside the queue: nothing from it on now");
+        assert_eq!(q.ordered().len(), 1);
     }
 
     #[test]

@@ -1,0 +1,54 @@
+/* Miu Party guest page: dark like the DJ booth, big touch targets, works on any phone. */
+:root {
+  --bg: #111115;
+  --panel: #1b1b21;
+  --panel-2: #24242c;
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #ededf2;
+  --muted: #9a9aa8;
+  --accent: #f2c12e;
+  --teal: #39c6c0;
+  --hot: #ff5d4f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+  max-width: 640px; margin-inline: auto;
+}
+button, input { font: inherit; color: inherit; }
+.top { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
+.brand { font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.who { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+.now { background: linear-gradient(135deg, #2a2410, var(--panel)); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.now-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.now-title { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.now-artist { color: var(--muted); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 14px 0; }
+.tabs button { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-weight: 600; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: #111; border-color: transparent; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.list li.mine { border-color: rgba(242, 193, 46, 0.45); }
+.t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag { display: inline-block; font-size: 10px; font-weight: 700; color: #111; background: var(--hot); border-radius: 4px; padding: 1px 5px; margin-right: 6px; vertical-align: 2px; }
+.vote { min-width: 64px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; }
+.vote svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+.vote[aria-pressed="true"] { color: var(--hot); border-color: var(--hot); }
+.vote[aria-pressed="true"] svg { fill: currentColor; }
+.add { width: 44px; height: 40px; border-radius: 10px; border: none; background: var(--teal); color: #111; font-size: 22px; font-weight: 700; }
+.field { display: grid; gap: 6px; margin: 12px 0 6px; font-size: 13px; color: var(--muted); }
+.field input { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 16px; width: 100%; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.primary { background: var(--accent); color: #111; border: none; border-radius: 10px; padding: 0 16px; min-height: 44px; font-weight: 700; }
+.note { color: var(--muted); font-size: 13px; margin: 6px 2px 10px; }
+.note:empty { display: none; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); max-width: 608px; margin: auto; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; text-align: center; }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px; width: min(420px, calc(100% - 32px)); padding: 20px; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+dialog h1 { margin: 0 0 6px; font-size: 20px; }
+dialog .primary { width: 100%; margin-top: 10px; }

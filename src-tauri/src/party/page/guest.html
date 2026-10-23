@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111115">
+  <title>Miu Party</title>
+  <link rel="stylesheet" href="guest.css">
+  <script src="guest.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <span class="brand"><span class="dot" aria-hidden="true"></span>Miu Party</span>
+    <button class="who" id="who" type="button"></button>
+  </header>
+
+  <section class="now" id="now" aria-live="polite">
+    <div class="now-label" data-t="nowPlaying"></div>
+    <div class="now-title" id="now-title"></div>
+    <div class="now-artist" id="now-artist"></div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" id="tab-queue" aria-selected="true" data-t="queue"></button>
+    <button type="button" role="tab" id="tab-add" aria-selected="false" data-t="add"></button>
+  </nav>
+
+  <main>
+    <section id="panel-queue" role="tabpanel">
+      <p class="note" id="queue-note"></p>
+      <ol class="list" id="queue"></ol>
+    </section>
+
+    <section id="panel-add" role="tabpanel" hidden>
+      <label class="field"><span data-t="searchLabel"></span>
+        <input type="search" id="search" autocomplete="off" enterkeyhint="search">
+      </label>
+      <ul class="list" id="results"></ul>
+      <label class="field"><span data-t="linkLabel"></span>
+        <div class="row">
+          <input type="url" id="link" autocomplete="off" inputmode="url" placeholder="https://youtu.be/...">
+          <button type="button" class="primary" id="link-add" data-t="addLink"></button>
+        </div>
+      </label>
+      <p class="note" data-t="linkHint"></p>
+    </section>
+  </main>
+
+  <p class="toast" id="toast" role="status" hidden></p>
+
+  <dialog id="name-dialog">
+    <form method="dialog" id="name-form">
+      <h1 data-t="welcome"></h1>
+      <label class="field"><span data-t="yourName"></span><input id="name" maxlength="40" autocomplete="nickname" required></label>
+      <button class="primary" type="submit" data-t="join"></button>
+    </form>
+  </dialog>
+</body>
+</html>
