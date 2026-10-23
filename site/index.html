@@ -26,7 +26,7 @@
     --violet: #7d5bd6;
     --ring: linear-gradient(135deg, #ffd23f 0%, #ff7a45 50%, #e2337a 100%);
     --radius: 20px;
-    --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans", sans-serif;
+    --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", "Nirmala UI", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Naskh Arabic", "Noto Nastaliq Urdu", sans-serif;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -46,9 +46,11 @@
   .nav-links a { text-decoration: none; color: var(--muted); transition: color 0.2s; }
   .nav-links a:hover { color: var(--text); }
   .nav-cta { text-decoration: none; font-weight: 700; font-size: 14px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 8px 16px; }
-  .lang { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
-  .lang button { border: 0; background: none; color: var(--muted); font: 600 12px var(--font); padding: 5px 10px; border-radius: 999px; cursor: pointer; }
-  .lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .lang { position: relative; display: flex; align-items: center; }
+  .lang svg { position: absolute; inset-inline-start: 10px; width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 1.8; pointer-events: none; }
+  .lang select { appearance: none; border: 1px solid var(--line); background: var(--card); color: var(--text); font: 600 13px var(--font); border-radius: 999px; padding-block: 7px; padding-inline: 32px 14px; cursor: pointer; }
+  .lang select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [dir="rtl"] .nav-links { margin-left: 0; margin-right: auto; }
 
   /* Hero */
   .hero { position: relative; padding: 72px 0 24px; overflow: hidden; }
@@ -191,7 +193,12 @@
   .reveal.in { opacity: 1; transform: none; }
   .reveal.d1 { transition-delay: 0.08s; } .reveal.d2 { transition-delay: 0.16s; } .reveal.d3 { transition-delay: 0.24s; }
 
-  html[lang="en"] [data-lang="vi"], html[lang="vi"] [data-lang="en"] { display: none !important; }
+  .ticker-track { direction: ltr; }
+  /* Joined scripts (Arabic, Urdu) break with negative letter-spacing; Indic and Chinese need room. */
+  html:is([lang="ar"], [lang="ur"], [lang="hi"], [lang="bn"], [lang="zh-Hans"]) :is(h1, h2, h3, .tile .quote, .ticker span, .eyebrow) { letter-spacing: 0; }
+  html:is([lang="ar"], [lang="ur"], [lang="hi"], [lang="bn"]) h1 { line-height: 1.25; }
+  html:is([lang="ar"], [lang="ur"], [lang="hi"], [lang="bn"]) h2 { line-height: 1.3; }
+  html[lang="ur"] body { line-height: 1.9; }
 
   @media (max-width: 960px) {
     .bento { grid-template-columns: 1fr; }
@@ -222,134 +229,109 @@
   <div class="wrap">
     <a class="brand" href="#top"><img src="miu-cat.svg" alt="" width="32" height="32"><span>Miu <b>Music</b></span></a>
     <nav class="nav-links" aria-label="Sections">
-      <a href="#dj"><span data-lang="en">DJ mode</span><span data-lang="vi">Chế độ DJ</span></a>
-      <a href="#party"><span data-lang="en">Party</span><span data-lang="vi">Tiệc</span></a>
-      <a href="#player"><span data-lang="en">Player</span><span data-lang="vi">Trình phát</span></a>
+      <a href="#dj"><span data-i18n="nav.1">DJ mode</span></a>
+      <a href="#party"><span data-i18n="nav.2">Party</span></a>
+      <a href="#player"><span data-i18n="nav.3">Player</span></a>
       <a href="#iphone">iPhone</a>
-      <a href="#faq"><span data-lang="en">FAQ</span><span data-lang="vi">Hỏi đáp</span></a>
+      <a href="#faq"><span data-i18n="nav.4">FAQ</span></a>
     </nav>
-    <div class="lang" role="group" aria-label="Language">
-      <button type="button" data-set-lang="en" aria-pressed="true">EN</button>
-      <button type="button" data-set-lang="vi" aria-pressed="false">VI</button>
-    </div>
-    <a class="nav-cta" href="https://github.com/khangkhangg/Miu-Music-Player/releases/latest"><span data-lang="en">Get it free</span><span data-lang="vi">Tải miễn phí</span></a>
+    <label class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+      <select id="lang" aria-label="Language"></select>
+    </label>
+    <a class="nav-cta" href="https://github.com/khangkhangg/Miu-Music-Player/releases/latest"><span data-i18n="nav.5">Get it free</span></a>
   </div>
 </header>
 
 <main id="top">
-  <section class="hero">
+  <section class="hero" id="hero">
     <div class="blob a"></div><div class="blob b"></div><div class="blob c"></div>
     <div class="wrap">
       <div class="hero-copy">
-        <p class="kicker"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="new" data-lang="en">NEW</span><span class="new" data-lang="vi">MỚI</span>
-          <span data-lang="en">DJ mode and a party queue your friends control</span>
-          <span data-lang="vi">Chế độ DJ và danh sách nhạc cả hội cùng chọn</span></p>
-        <h1 data-lang="en">Be the DJ. Or let Miu do it <em>and go dance.</em></h1>
-        <h1 data-lang="vi">Tự làm DJ. Hoặc để Miu lo, <em>bạn cứ quẩy.</em></h1>
-        <p class="lead" data-lang="en">Miu mixes your songs like a real DJ: beats lined up, smooth handovers, zero skills needed. Your friends scan a QR code, <b>throw in their songs, vote for the bangers</b> and even queue up YouTube karaoke. You? Go grab a drink.</p>
-        <p class="lead" data-lang="vi">Miu trộn nhạc y như DJ thật: khớp nhịp, chuyển bài mượt, chẳng cần biết gì. Bạn bè quét mã QR là <b>tự thêm bài, thả tim bài hay</b>, còn gọi được cả karaoke trên YouTube. Còn bạn? Đi lấy đồ uống thôi.</p>
+        <p class="kicker"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="new" data-i18n="hero.4">NEW</span>
+          <span data-i18n="hero.5">DJ mode and a party queue your friends control</span></p>
+        <h1 data-i18n-html="hero.6">Be the DJ. Or let Miu do it <em>and go dance.</em></h1>
+        <p class="lead" data-i18n-html="hero.7">Miu mixes your songs like a real DJ: beats lined up, smooth handovers, zero skills needed. Your friends scan a QR code, <b>throw in their songs, vote for the bangers</b> and even queue up YouTube karaoke. You? Go grab a drink.</p>
         <div class="cta">
           <a class="btn btn-primary" href="https://github.com/khangkhangg/Miu-Music-Player/releases/latest">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.5v7H3zm8.5-1.1L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg>
-            <span data-lang="en">Download for Windows</span><span data-lang="vi">Tải cho Windows</span>
+            <span data-i18n="hero.8">Download for Windows</span>
           </a>
-          <a class="btn btn-ghost" href="#party"><span data-lang="en">How the party works</span><span data-lang="vi">Xem tiệc chạy thế nào</span></a>
+          <a class="btn btn-ghost" href="#party"><span data-i18n="hero.9">How the party works</span></a>
         </div>
-        <p class="fine" data-lang="en">Free forever · No account · Windows 10 and 11 · English and Tiếng Việt</p>
-        <p class="fine" data-lang="vi">Miễn phí · Không cần tài khoản · Windows 10 và 11 · Tiếng Việt và English</p>
+        <p class="fine" data-i18n="hero.10">Free forever · No account · Windows 10 and 11 · English and Tiếng Việt</p>
       </div>
 
       <div class="stage" id="stage">
         <div class="tilt" id="tilt">
           <div class="window">
-            <div class="bar"><i></i><i></i><i></i><span data-lang="en">Miu Music · DJ mode</span><span data-lang="vi">Miu Music · Chế độ DJ</span></div>
-            <img data-lang="en" src="shots/dj-en.webp" width="1600" height="1070" alt="Miu's DJ mode: two decks, colourful waveforms, Auto DJ on">
-            <img data-lang="vi" src="shots/dj-vi.webp" width="1600" height="1070" alt="Chế độ DJ của Miu: hai bàn xoay, dạng sóng nhiều màu, DJ tự động đang bật">
+            <div class="bar"><i></i><i></i><i></i><span data-i18n="hero.11">Miu Music · DJ mode</span></div>
+            <img data-shot="dj" src="shots/dj-en.webp" width="1600" height="1070" alt="Miu's DJ mode: two decks, colourful waveforms, Auto DJ on" data-i18n-alt="hero.1.alt">
           </div>
         </div>
         <div class="float party">
           <div class="window">
             <div class="bar"><i></i><i></i><i></i><span>Miu Party</span></div>
-            <img data-lang="en" src="shots/party-en.webp" width="1600" height="900" alt="The party screen on the TV: the song playing, a QR code and the guests' queue">
-            <img data-lang="vi" src="shots/party-vi.webp" width="1600" height="900" alt="Màn hình tiệc trên TV: bài đang phát, mã QR và danh sách của khách">
+            <img data-shot="party" src="shots/party-en.webp" width="1600" height="900" alt="The party screen on the TV: the song playing, a QR code and the guests' queue" data-i18n-alt="hero.2.alt">
           </div>
         </div>
         <div class="float phone">
           <div class="phone-frame">
-            <img data-lang="en" src="shots/phone-en.webp" width="540" height="1038" alt="A guest's phone: the queue with votes">
-            <img data-lang="vi" src="shots/phone-vi.webp" width="540" height="1038" alt="Điện thoại của khách: danh sách bài và lượt thả tim">
+            <img data-shot="phone" src="shots/phone-en.webp" width="540" height="1038" alt="A guest's phone: the queue with votes" data-i18n-alt="hero.3.alt">
             <div class="hearts" aria-hidden="true">
               <i><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></i>
               <i><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></i>
               <i><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></i>
             </div>
-            <div class="toast" aria-hidden="true"><span data-lang="en">Linh added a song</span><span data-lang="vi">Linh vừa thêm bài</span></div>
+            <div class="toast" aria-hidden="true"><span data-i18n="hero.12">Linh added a song</span></div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="ticker" aria-hidden="true">
-      <div class="ticker-track" data-lang="en">
-        <span>House parties</span><span>Weddings</span><span>Birthdays</span><span>Karaoke nights</span><span>Backyard BBQ</span><span>Tết get-togethers</span><span>Office parties</span><span>Dorm nights</span>
-        <span>House parties</span><span>Weddings</span><span>Birthdays</span><span>Karaoke nights</span><span>Backyard BBQ</span><span>Tết get-togethers</span><span>Office parties</span><span>Dorm nights</span>
-      </div>
-      <div class="ticker-track" data-lang="vi">
-        <span>Tiệc tại nhà</span><span>Đám cưới</span><span>Sinh nhật</span><span>Đêm karaoke</span><span>Nướng BBQ sân sau</span><span>Tụ tập ngày Tết</span><span>Tất niên công ty</span><span>Tiệc phòng trọ</span>
-        <span>Tiệc tại nhà</span><span>Đám cưới</span><span>Sinh nhật</span><span>Đêm karaoke</span><span>Nướng BBQ sân sau</span><span>Tụ tập ngày Tết</span><span>Tất niên công ty</span><span>Tiệc phòng trọ</span>
-      </div>
+      <div class="ticker-track" data-ticker="hero.ticker" data-default="House parties | Weddings | Birthdays | Karaoke nights | Backyard BBQ | Tết get-togethers | Office parties | Dorm nights"></div>
     </div>
   </section>
 
   <section id="dj">
     <div class="wrap">
       <div class="section-head reveal">
-        <p class="eyebrow" data-lang="en">DJ mode</p><p class="eyebrow" data-lang="vi">Chế độ DJ</p>
-        <h2 data-lang="en">A DJ booth that <em>actually knows</em> what it's doing.</h2>
-        <h2 data-lang="vi">Bàn DJ <em>biết tự làm</em> mọi thứ.</h2>
-        <p data-lang="en">Flip on Auto DJ and Miu runs the night. It listens to every song first (the tempo, the key, where the drop hits, where the singing is) and picks a next track that actually fits. Want to touch the decks? Go for it, they're yours.</p>
-        <p data-lang="vi">Bật DJ tự động là Miu lo cả buổi. Miu nghe trước từng bài (nhịp, tông, chỗ drop, đoạn có lời hát) rồi chọn bài tiếp theo thật sự hợp. Muốn tự tay chơi? Cứ thoải mái, bàn DJ là của bạn.</p>
+        <p class="eyebrow" data-i18n="dj.3">DJ mode</p>
+        <h2 data-i18n-html="dj.4">A DJ booth that <em>actually knows</em> what it's doing.</h2>
+        <p data-i18n="dj.5">Flip on Auto DJ and Miu runs the night. It listens to every song first (the tempo, the key, where the drop hits, where the singing is) and picks a next track that actually fits. Want to touch the decks? Go for it, they're yours.</p>
       </div>
 
       <div class="bento">
         <div class="tile span-4 reveal">
-          <h3 data-lang="en">15 ways to switch songs, picked by the vibe</h3>
-          <h3 data-lang="vi">15 kiểu chuyển bài, chọn theo không khí</h3>
-          <p data-lang="en">Beat blends, drop swaps, echo outs, reverb washes, even a cheeky spin-back. Slow songs get a gentle fade, bangers get the big moves. Tick the ones you love, or let Miu mix it up.</p>
-          <p data-lang="vi">Hòa nhịp, chuyển ngay vào đoạn drop, tắt dần có vang, tan vào tiếng vang, cả quay ngược đĩa. Bài chậm thì chuyển nhẹ nhàng, bài sôi động thì chơi lớn. Tích kiểu bạn thích, hoặc để Miu tự trộn ngẫu nhiên.</p>
+          <h3 data-i18n="dj.6">15 ways to switch songs, picked by the vibe</h3>
+          <p data-i18n="dj.7">Beat blends, drop swaps, echo outs, reverb washes, even a cheeky spin-back. Slow songs get a gentle fade, bangers get the big moves. Tick the ones you love, or let Miu mix it up.</p>
           <div class="pic">
-            <img data-lang="en" src="shots/transitions-en.webp" width="860" height="640" loading="lazy" alt="Choosing which transitions Auto DJ may use">
-            <img data-lang="vi" src="shots/transitions-vi.webp" width="860" height="640" loading="lazy" alt="Chọn các kiểu chuyển bài DJ tự động được dùng">
+            <img data-shot="transitions" src="shots/transitions-en.webp" width="860" height="640" loading="lazy" alt="Choosing which transitions Auto DJ may use" data-i18n-alt="dj.1.alt">
           </div>
         </div>
         <div class="tile span-2 reveal d1">
-          <h3 data-lang="en">Hands on, whenever</h3>
-          <h3 data-lang="vi">Muốn chơi thì cứ chơi</h3>
-          <p data-lang="en">Two decks, EQ, filters, echo, loops, hot cues and sound pads (yes, there's an air horn). Plug in a DJ controller and it just works, or teach Miu any knob with MIDI learn.</p>
-          <p data-lang="vi">Hai bàn xoay, EQ, bộ lọc, vang, lặp đoạn, điểm nhớ và pad âm thanh (có cả còi hơi nhé). Cắm bàn DJ vào là chạy, nút nào lạ thì dạy Miu bằng MIDI learn.</p>
+          <h3 data-i18n="dj.8">Hands on, whenever</h3>
+          <p data-i18n="dj.9">Two decks, EQ, filters, echo, loops, hot cues and sound pads (yes, there's an air horn). Plug in a DJ controller and it just works, or teach Miu any knob with MIDI learn.</p>
           <div class="tags">
-            <span class="tag" data-lang="en">Key lock</span><span class="tag" data-lang="vi">Giữ tông</span>
-            <span class="tag" data-lang="en">Vocal out</span><span class="tag" data-lang="vi">Tách giọng hát</span>
-            <span class="tag" data-lang="en">Headphone cue</span><span class="tag" data-lang="vi">Nghe thử tai nghe</span>
+            <span class="tag" data-i18n="dj.10">Key lock</span>
+            <span class="tag" data-i18n="dj.11">Vocal out</span>
+            <span class="tag" data-i18n="dj.12">Headphone cue</span>
             <span class="tag">MIDI</span>
-            <span class="tag" data-lang="en">Keyboard shortcuts</span><span class="tag" data-lang="vi">Phím tắt</span>
+            <span class="tag" data-i18n="dj.13">Keyboard shortcuts</span>
           </div>
         </div>
         <div class="tile span-6 reveal">
-          <h3 data-lang="en">See the music, not just a squiggle</h3>
-          <h3 data-lang="vi">Nhìn thấy cả bài nhạc, không chỉ là một đường gợn sóng</h3>
-          <p data-lang="en">Waveforms coloured by what you hear: blue for the kick and bass, warm for voices and synths, white for the hi-hats. The intro, the build, the drop and the breakdown are labelled, and you can see exactly where the next mix lands.</p>
-          <p data-lang="vi">Dạng sóng tô màu theo âm thanh: xanh là trống và bass, màu ấm là giọng hát và synth, trắng là hi-hat. Mở đầu, đoạn dồn, drop, đoạn lắng đều có nhãn, và bạn thấy rõ bài tiếp theo sẽ vào ở đâu.</p>
+          <h3 data-i18n="dj.14">See the music, not just a squiggle</h3>
+          <p data-i18n="dj.15">Waveforms coloured by what you hear: blue for the kick and bass, warm for voices and synths, white for the hi-hats. The intro, the build, the drop and the breakdown are labelled, and you can see exactly where the next mix lands.</p>
           <div class="waves">
-            <img data-lang="en" src="shots/waves-en.webp" width="1600" height="259" loading="lazy" alt="Waveforms coloured by sound, with sections and the mix zone">
-            <img data-lang="vi" src="shots/waves-vi.webp" width="1600" height="259" loading="lazy" alt="Dạng sóng tô màu theo âm thanh, có các đoạn và vùng chuyển bài">
+            <img data-shot="waves" src="shots/waves-en.webp" width="1600" height="259" loading="lazy" alt="Waveforms coloured by sound, with sections and the mix zone" data-i18n-alt="dj.2.alt">
           </div>
           <div class="legend">
-            <span><i style="background:#3b6fe0"></i><span data-lang="en">Bass and kick</span><span data-lang="vi">Bass và trống</span></span>
-            <span><i style="background:#e0a93b"></i><span data-lang="en">Voices and synths</span><span data-lang="vi">Giọng hát và synth</span></span>
-            <span><i style="background:#f2f2f2"></i><span data-lang="en">Hi-hats</span><span data-lang="vi">Hi-hat</span></span>
+            <span><i style="background:#3b6fe0"></i><span data-i18n="dj.16">Bass and kick</span></span>
+            <span><i style="background:#e0a93b"></i><span data-i18n="dj.17">Voices and synths</span></span>
+            <span><i style="background:#f2f2f2"></i><span data-i18n="dj.18">Hi-hats</span></span>
             <span><i style="background:#d64f6b"></i>Drop</span>
-            <span><i style="background:#2bb3a8"></i><span data-lang="en">Next mix</span><span data-lang="vi">Chỗ chuyển bài</span></span>
+            <span><i style="background:#2bb3a8"></i><span data-i18n="dj.19">Next mix</span></span>
           </div>
         </div>
       </div>
@@ -359,23 +341,19 @@
   <section id="party" class="alt">
     <div class="wrap">
       <div class="section-head center reveal">
-        <p class="eyebrow" data-lang="en">Party mode</p><p class="eyebrow" data-lang="vi">Chế độ tiệc</p>
-        <h2 data-lang="en">Everyone's the DJ. <em>Nobody fights over the aux.</em></h2>
-        <h2 data-lang="vi">Ai cũng là DJ. <em>Khỏi giành nhau cái loa.</em></h2>
-        <p data-lang="en">Put the party screen on the TV. Friends scan, add, vote. The crowd's favourites play first and Auto DJ mixes them in like they were always the plan.</p>
-        <p data-lang="vi">Đưa màn hình tiệc lên TV. Bạn bè quét mã, thêm bài, thả tim. Bài được thích nhất phát trước, DJ tự động trộn vào mượt như đã lên kế hoạch từ đầu.</p>
+        <p class="eyebrow" data-i18n="party.3">Party mode</p>
+        <h2 data-i18n-html="party.4">Everyone's the DJ. <em>Nobody fights over the aux.</em></h2>
+        <p data-i18n="party.5">Put the party screen on the TV. Friends scan, add, vote. The crowd's favourites play first and Auto DJ mixes them in like they were always the plan.</p>
       </div>
 
       <div class="party-grid">
         <div class="window reveal">
-          <div class="bar"><i></i><i></i><i></i><span data-lang="en">Party screen · on the TV</span><span data-lang="vi">Màn hình tiệc · trên TV</span></div>
-          <img data-lang="en" src="shots/party-en.webp" width="1600" height="900" loading="lazy" alt="The party screen: cover, song, up next, QR code and the queue">
-          <img data-lang="vi" src="shots/party-vi.webp" width="1600" height="900" loading="lazy" alt="Màn hình tiệc: ảnh bìa, bài đang phát, bài tiếp theo, mã QR và danh sách">
+          <div class="bar"><i></i><i></i><i></i><span data-i18n="party.6">Party screen · on the TV</span></div>
+          <img data-shot="party" src="shots/party-en.webp" width="1600" height="900" loading="lazy" alt="The party screen: cover, song, up next, QR code and the queue" data-i18n-alt="party.1.alt">
         </div>
         <div class="party-phone reveal d2">
           <div class="phone-frame">
-            <img data-lang="en" src="shots/phone-en.webp" width="540" height="1038" loading="lazy" alt="What guests see on their phone">
-            <img data-lang="vi" src="shots/phone-vi.webp" width="540" height="1038" loading="lazy" alt="Khách nhìn thấy gì trên điện thoại">
+            <img data-shot="phone" src="shots/phone-en.webp" width="540" height="1038" loading="lazy" alt="What guests see on their phone" data-i18n-alt="party.2.alt">
             <div class="hearts" aria-hidden="true">
               <i><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></i>
               <i><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></i>
@@ -387,45 +365,37 @@
 
       <div class="steps">
         <div class="step reveal">
-          <h3 data-lang="en">TV on, QR up</h3><h3 data-lang="vi">Mở TV, hiện mã QR</h3>
-          <p data-lang="en">The party screen opens in its own window. Drag it to the TV, go full screen, and keep the decks on your laptop.</p>
-          <p data-lang="vi">Màn hình tiệc mở trong cửa sổ riêng. Kéo sang TV, bật toàn màn hình, còn bàn DJ vẫn nằm trên laptop của bạn.</p>
+          <h3 data-i18n="party.7">TV on, QR up</h3>
+          <p data-i18n="party.8">The party screen opens in its own window. Drag it to the TV, go full screen, and keep the decks on your laptop.</p>
         </div>
         <div class="step reveal d1">
-          <h3 data-lang="en">Scan, add, done</h3><h3 data-lang="vi">Quét, thêm, xong</h3>
-          <p data-lang="en">No app, no sign-up. Pick from your songs or paste a YouTube, Spotify or Apple Music link.</p>
-          <p data-lang="vi">Không cần cài app, không cần đăng ký. Chọn từ kho nhạc của bạn, hoặc dán link YouTube, Spotify, Apple Music.</p>
+          <h3 data-i18n="party.9">Scan, add, done</h3>
+          <p data-i18n="party.10">No app, no sign-up. Pick from your songs or paste a YouTube, Spotify or Apple Music link.</p>
         </div>
         <div class="step reveal d2">
-          <h3 data-lang="en">Hearts decide</h3><h3 data-lang="vi">Tim nhiều thì phát trước</h3>
-          <p data-lang="en">Most votes jump to the top. When the queue runs dry, Auto DJ keeps the music going with picks that fit.</p>
-          <p data-lang="vi">Bài nhiều tim nhảy lên đầu. Hết bài trong danh sách thì DJ tự động tự chọn tiếp bài hợp, nhạc không bao giờ tắt.</p>
+          <h3 data-i18n="party.11">Hearts decide</h3>
+          <p data-i18n="party.12">Most votes jump to the top. When the queue runs dry, Auto DJ keeps the music going with picks that fit.</p>
         </div>
       </div>
 
       <div class="bento" style="margin-top:16px">
         <div class="tile span-3 karaoke reveal">
           <div class="mic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
-          <h3 data-lang="en">Karaoke night? Say less.</h3>
-          <h3 data-lang="vi">Karaoke hả? Chiến luôn.</h3>
-          <p data-lang="en">Paste any YouTube karaoke video and it plays right on the big screen in YouTube's own player, with the QR code still in the corner. Nothing gets downloaded. When the song ends, the music picks back up by itself.</p>
-          <p data-lang="vi">Dán link karaoke bất kỳ trên YouTube là phát ngay trên màn hình lớn bằng trình phát của chính YouTube, mã QR vẫn nằm ở góc. Không tải gì về máy. Hát xong, nhạc tự chạy tiếp.</p>
+          <h3 data-i18n="party.13">Karaoke night? Say less.</h3>
+          <p data-i18n="party.14">Paste any YouTube karaoke video and it plays right on the big screen in YouTube's own player, with the QR code still in the corner. Nothing gets downloaded. When the song ends, the music picks back up by itself.</p>
         </div>
         <div class="tile span-3 reveal d1">
-          <p class="quote"><span data-lang="en">Weddings, birthdays, Tết. Let the guests build the playlist while you actually enjoy your own party.</span><span data-lang="vi">Đám cưới, sinh nhật, Tết. Để khách tự lên danh sách nhạc, còn bạn thì tận hưởng bữa tiệc của chính mình.</span>
-            <small data-lang="en">You're still the boss: approve songs first if you like, remove anything, and set how many songs each guest can queue.</small>
-            <small data-lang="vi">Bạn vẫn là người quyết: duyệt bài trước nếu muốn, xoá bài bất kỳ, và giới hạn mỗi khách được thêm bao nhiêu bài.</small></p>
+          <p class="quote"><span data-i18n="party.15">Weddings, birthdays, Tết. Let the guests build the playlist while you actually enjoy your own party.</span>
+            <small data-i18n="party.16">You're still the boss: approve songs first if you like, remove anything, and set how many songs each guest can queue.</small></p>
         </div>
         <div class="tile span-6 reveal">
-          <h3 data-lang="en">On your Wi-Fi, or from anywhere</h3>
-          <h3 data-lang="vi">Qua Wi-Fi, hoặc từ bất cứ đâu</h3>
-          <p data-lang="en">Guests on your Wi-Fi connect straight to your PC. Friends on mobile data? Flip on the party link and they join through musicplayer.vietnamcos.com. Every party gets its own random link, and it's gone the moment you switch it off.</p>
-          <p data-lang="vi">Khách dùng Wi-Fi nhà bạn thì vào thẳng máy tính của bạn. Bạn bè dùng 4G? Bật đường dẫn tiệc là vào được qua musicplayer.vietnamcos.com. Mỗi bữa tiệc có một đường dẫn ngẫu nhiên riêng, tắt là mất.</p>
+          <h3 data-i18n="party.17">On your Wi-Fi, or from anywhere</h3>
+          <p data-i18n="party.18">Guests on your Wi-Fi connect straight to your PC. Friends on mobile data? Flip on the party link and they join through musicplayer.vietnamcos.com. Every party gets its own random link, and it's gone the moment you switch it off.</p>
           <div class="tags">
             <span class="tag">YouTube</span><span class="tag">Spotify</span><span class="tag">Apple Music</span>
-            <span class="tag" data-lang="en">Approve first</span><span class="tag" data-lang="vi">Duyệt trước</span>
-            <span class="tag" data-lang="en">Per-guest limit</span><span class="tag" data-lang="vi">Giới hạn mỗi khách</span>
-            <span class="tag" data-lang="en">English and Tiếng Việt</span><span class="tag" data-lang="vi">Tiếng Việt và English</span>
+            <span class="tag" data-i18n="party.19">Approve first</span>
+            <span class="tag" data-i18n="party.20">Per-guest limit</span>
+            <span class="tag" data-i18n="party.21">English and Tiếng Việt</span>
           </div>
         </div>
       </div>
@@ -435,66 +405,55 @@
   <section id="player">
     <div class="wrap">
       <div class="section-head reveal">
-        <p class="eyebrow" data-lang="en">And the everyday player</p><p class="eyebrow" data-lang="vi">Và trình phát mỗi ngày</p>
-        <h2 data-lang="en">Tiny. Fast. <em>Sounds unreal.</em></h2>
-        <h2 data-lang="vi">Nhỏ. Nhanh. <em>Nghe phê.</em></h2>
-        <p data-lang="en">When the party's over, Miu is just a really good music player that barely touches your RAM.</p>
-        <p data-lang="vi">Hết tiệc rồi thì Miu vẫn là một trình phát nhạc cực xịn mà gần như chẳng tốn RAM.</p>
+        <p class="eyebrow" data-i18n="player.1">And the everyday player</p>
+        <h2 data-i18n-html="player.2">Tiny. Fast. <em>Sounds unreal.</em></h2>
+        <p data-i18n="player.3">When the party's over, Miu is just a really good music player that barely touches your RAM.</p>
       </div>
       <div class="grid">
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></div>
-          <h3 data-lang="en">Bit-perfect sound</h3><h3 data-lang="vi">Âm thanh nguyên bản</h3>
-          <p data-lang="en">Its own audio engine with WASAPI exclusive mode. FLAC, ALAC and hi-res play exactly as recorded. Audiophiles, you're welcome.</p>
-          <p data-lang="vi">Bộ máy âm thanh riêng, có chế độ WASAPI độc quyền. FLAC, ALAC, hi-res phát đúng như bản gốc. Dân mê âm thanh sẽ thích.</p>
+          <h3 data-i18n="player.4">Bit-perfect sound</h3>
+          <p data-i18n="player.5">Its own audio engine with WASAPI exclusive mode. FLAC, ALAC and hi-res play exactly as recorded. Audiophiles, you're welcome.</p>
         </div>
         <div class="card reveal d1">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/></svg></div>
-          <h3 data-lang="en">Like it, it's on your iPhone</h3><h3 data-lang="vi">Thả tim là có trên iPhone</h3>
-          <p data-lang="en">Thumbs up while you listen and the song lands in your iPhone's own Music app (or a USB music player). No iTunes drama.</p>
-          <p data-lang="vi">Bấm thích khi đang nghe là bài vào thẳng ứng dụng Nhạc của iPhone (hoặc máy nghe nhạc USB). Không phải vật lộn với iTunes.</p>
+          <h3 data-i18n="player.6">Like it, it's on your iPhone</h3>
+          <p data-i18n="player.7">Thumbs up while you listen and the song lands in your iPhone's own Music app (or a USB music player). No iTunes drama.</p>
         </div>
         <div class="card reveal d2">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 6h10M4 10h10M4 14h6"/><path d="M17 18V6l4-1"/><circle cx="15" cy="18" r="2"/></svg></div>
-          <h3 data-lang="en">Lyrics that sing along</h3><h3 data-lang="vi">Lời bài hát chạy theo nhạc</h3>
-          <p data-lang="en">The line being sung lights up as the song plays. Tap any line to jump there. Lyrics come from your files or free from LRCLIB.</p>
-          <p data-lang="vi">Dòng đang hát sáng lên theo nhạc. Bấm dòng nào thì nhảy tới đó. Lời lấy từ tệp nhạc hoặc miễn phí từ LRCLIB.</p>
+          <h3 data-i18n="player.8">Lyrics that sing along</h3>
+          <p data-i18n="player.9">The line being sung lights up as the song plays. Tap any line to jump there. Lyrics come from your files or free from LRCLIB.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="7" height="14" rx="2"/><rect x="15" y="5" width="7" height="14" rx="2"/><circle cx="5.5" cy="14" r="2"/><circle cx="18.5" cy="14" r="2"/><path d="M10.5 9.5h3"/></svg></div>
-          <h3 data-lang="en">Two speakers, perfectly in sync</h3><h3 data-lang="vi">Hai loa, khớp từng nhịp</h3>
-          <p data-lang="en">Play through two Bluetooth speakers at once, even different brands. Miu listens through a mic and lines them up for you.</p>
-          <p data-lang="vi">Phát cùng lúc trên hai loa Bluetooth, khác hãng cũng được. Miu nghe qua micrô rồi tự căn cho hai loa khớp nhau.</p>
+          <h3 data-i18n="player.10">Two speakers, perfectly in sync</h3>
+          <p data-i18n="player.11">Play through two Bluetooth speakers at once, even different brands. Miu listens through a mic and lines them up for you.</p>
         </div>
         <div class="card reveal d1">
           <div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></div>
-          <h3 data-lang="en">Control it from anywhere</h3><h3 data-lang="vi">Điều khiển từ đâu cũng được</h3>
-          <p data-lang="en">Lock screen, media keys, headphone buttons and shortcuts that work even when another app is in front.</p>
-          <p data-lang="vi">Màn hình khóa, phím đa phương tiện, nút tai nghe, và phím tắt dùng được cả khi đang mở ứng dụng khác.</p>
+          <h3 data-i18n="player.12">Control it from anywhere</h3>
+          <p data-i18n="player.13">Lock screen, media keys, headphone buttons and shortcuts that work even when another app is in front.</p>
         </div>
         <div class="card reveal d2">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 5v2a7 7 0 0 1-4.5 6.5M6 9.5a7 7 0 0 0 5 4M13 20l4-9 4 9M14.5 17h5"/></svg></div>
-          <h3 data-lang="en">Made for Vietnamese music</h3><h3 data-lang="vi">Sinh ra cho nhạc Việt</h3>
-          <p data-lang="en">Broken accents in old files get fixed. Search "diem xua" and find Diễm Xưa. Proper Vietnamese sorting, full Tiếng Việt UI.</p>
-          <p data-lang="vi">File cũ lỗi dấu được tự sửa. Gõ "diem xua" vẫn ra Diễm Xưa. Sắp xếp đúng thứ tự tiếng Việt, giao diện tiếng Việt đầy đủ.</p>
+          <h3 data-i18n="player.14">Made for Vietnamese music</h3>
+          <p data-i18n="player.15">Broken accents in old files get fixed. Search "diem xua" and find Diễm Xưa. Proper Vietnamese sorting, full Tiếng Việt UI.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/></svg></div>
-          <h3 data-lang="en">10-band EQ</h3><h3 data-lang="vi">EQ 10 dải</h3>
-          <p data-lang="en">Presets or your own curve, with a guard so nothing clips. Your iPhone still gets the original files.</p>
-          <p data-lang="vi">Có sẵn mẫu hoặc tự chỉnh, có chống méo tiếng. iPhone vẫn nhận tệp gốc.</p>
+          <h3 data-i18n="player.16">10-band EQ</h3>
+          <p data-i18n="player.17">Presets or your own curve, with a guard so nothing clips. Your iPhone still gets the original files.</p>
         </div>
         <div class="card reveal d1">
           <div class="ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
-          <h3 data-lang="en">Podcasts, offline</h3><h3 data-lang="vi">Podcast, nghe offline</h3>
-          <p data-lang="en">Top charts, search, downloads for the commute, and it remembers where you stopped.</p>
-          <p data-lang="vi">Bảng xếp hạng, tìm kiếm, tải về nghe trên đường, và nhớ chỗ bạn đang nghe dở.</p>
+          <h3 data-i18n="player.18">Podcasts, offline</h3>
+          <p data-i18n="player.19">Top charts, search, downloads for the commute, and it remembers where you stopped.</p>
         </div>
         <div class="card reveal d2">
           <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M10 10l2-2 2 2"/></svg></div>
-          <h3 data-lang="en">Mini player</h3><h3 data-lang="vi">Trình phát mini</h3>
-          <p data-lang="en">A tiny always-on-top player with a visualizer, for when you're working and vibing at the same time.</p>
-          <p data-lang="vi">Trình phát tí hon luôn nổi trên cùng, có hiệu ứng sóng nhạc, vừa làm việc vừa nghe nhạc.</p>
+          <h3 data-i18n="player.20">Mini player</h3>
+          <p data-i18n="player.21">A tiny always-on-top player with a visualizer, for when you're working and vibing at the same time.</p>
         </div>
       </div>
     </div>
@@ -504,32 +463,26 @@
     <div class="wrap">
       <div class="section-head reveal">
         <p class="eyebrow">iPhone</p>
-        <h2 data-lang="en">One button. Your faves, in the Music app.</h2>
-        <h2 data-lang="vi">Một nút bấm. Bài yêu thích vào ứng dụng Nhạc.</h2>
-        <p data-lang="en">Miu talks to Apple's own software, so songs arrive the proper way: titles, artists and covers, right in the built-in Music app.</p>
-        <p data-lang="vi">Miu làm việc với phần mềm chính thức của Apple, nên bài hát vào đúng chuẩn: đủ tên, nghệ sĩ và ảnh bìa, ngay trong ứng dụng Nhạc có sẵn.</p>
+        <h2 data-i18n="iphone.1">One button. Your faves, in the Music app.</h2>
+        <p data-i18n="iphone.2">Miu talks to Apple's own software, so songs arrive the proper way: titles, artists and covers, right in the built-in Music app.</p>
       </div>
       <div class="steps">
         <div class="step reveal">
-          <h3 data-lang="en">Like what you hear</h3><h3 data-lang="vi">Thích bài nào, tim bài đó</h3>
-          <p data-lang="en">Add your music folders and tap thumbs up on the songs you want in your pocket.</p>
-          <p data-lang="vi">Thêm thư mục nhạc, bấm thích những bài bạn muốn mang theo.</p>
+          <h3 data-i18n="iphone.3">Like what you hear</h3>
+          <p data-i18n="iphone.4">Add your music folders and tap thumbs up on the songs you want in your pocket.</p>
         </div>
         <div class="step reveal d1">
-          <h3 data-lang="en">Plug in</h3><h3 data-lang="vi">Cắm iPhone</h3>
-          <p data-lang="en">Miu shows your phone, its free space and exactly what's about to change.</p>
-          <p data-lang="vi">Miu hiện iPhone, dung lượng trống và chính xác những gì sắp thay đổi.</p>
+          <h3 data-i18n="iphone.5">Plug in</h3>
+          <p data-i18n="iphone.6">Miu shows your phone, its free space and exactly what's about to change.</p>
         </div>
         <div class="step reveal d2">
-          <h3 data-lang="en">Hit Sync</h3><h3 data-lang="vi">Bấm Đồng bộ</h3>
-          <p data-lang="en">New faves go on, songs you unliked come off, everything else stays put.</p>
-          <p data-lang="vi">Bài mới thích được thêm, bài bỏ thích được gỡ, mọi thứ khác giữ nguyên.</p>
+          <h3 data-i18n="iphone.7">Hit Sync</h3>
+          <p data-i18n="iphone.8">New faves go on, songs you unliked come off, everything else stays put.</p>
         </div>
       </div>
       <div class="safe reveal">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
-        <p data-lang="en"><b>Your songs are safe.</b> Before every sync Miu backs up the phone's music library and keeps a copy of anything that only lives on the phone. Afterwards it double-checks nothing went missing.</p>
-        <p data-lang="vi"><b>Bài hát của bạn luôn an toàn.</b> Trước mỗi lần đồng bộ, Miu sao lưu thư viện nhạc của iPhone và giữ bản sao những bài chỉ có trên điện thoại. Xong rồi Miu kiểm tra lại để chắc không mất bài nào.</p>
+        <p data-i18n-html="iphone.9"><b>Your songs are safe.</b> Before every sync Miu backs up the phone's music library and keeps a copy of anything that only lives on the phone. Afterwards it double-checks nothing went missing.</p>
       </div>
     </div>
   </section>
@@ -537,80 +490,68 @@
   <section id="faq">
     <div class="wrap">
       <div class="section-head reveal">
-        <p class="eyebrow" data-lang="en">FAQ</p><p class="eyebrow" data-lang="vi">Hỏi đáp</p>
-        <h2 data-lang="en">You asked.</h2><h2 data-lang="vi">Bạn hỏi, Miu trả lời.</h2>
+        <p class="eyebrow" data-i18n="faq.1">FAQ</p>
+        <h2 data-i18n="faq.2">You asked.</h2>
       </div>
       <div class="faq">
         <details>
-          <summary><span data-lang="en">Is it really free?</span><span data-lang="vi">Miễn phí thật hả?</span></summary>
-          <p data-lang="en">Yep. No account, no ads, no subscription.</p>
-          <p data-lang="vi">Thật. Không tài khoản, không quảng cáo, không thuê bao.</p>
+          <summary><span data-i18n="faq.3">Is it really free?</span></summary>
+          <p data-i18n="faq.4">Yep. No account, no ads, no subscription.</p>
         </details>
         <details>
-          <summary><span data-lang="en">I've never DJ'd. Can I still use DJ mode?</span><span data-lang="vi">Chưa từng làm DJ, dùng được không?</span></summary>
-          <p data-lang="en">That's the whole point. Turn on Auto DJ and it does the mixing. Touch the decks only if you feel like it.</p>
-          <p data-lang="vi">Được chứ, Miu làm ra cho bạn mà. Bật DJ tự động là Miu tự trộn nhạc. Thích thì mới đụng vào bàn DJ.</p>
+          <summary><span data-i18n="faq.5">I've never DJ'd. Can I still use DJ mode?</span></summary>
+          <p data-i18n="faq.6">That's the whole point. Turn on Auto DJ and it does the mixing. Touch the decks only if you feel like it.</p>
         </details>
         <details>
-          <summary><span data-lang="en">Do my friends need to install anything?</span><span data-lang="vi">Bạn bè có phải cài gì không?</span></summary>
-          <p data-lang="en">Nope. They scan the QR code and the queue opens in their phone's browser.</p>
-          <p data-lang="vi">Không. Quét mã QR là danh sách mở ngay trên trình duyệt điện thoại.</p>
+          <summary><span data-i18n="faq.7">Do my friends need to install anything?</span></summary>
+          <p data-i18n="faq.8">Nope. They scan the QR code and the queue opens in their phone's browser.</p>
         </details>
         <details>
-          <summary><span data-lang="en">Does YouTube karaoke download the videos?</span><span data-lang="vi">Karaoke YouTube có tải video về không?</span></summary>
-          <p data-lang="en">No. Videos play in YouTube's own embedded player, straight from YouTube. Nothing is saved on your PC.</p>
-          <p data-lang="vi">Không. Video phát bằng trình phát nhúng của YouTube, lấy thẳng từ YouTube. Không lưu gì vào máy.</p>
+          <summary><span data-i18n="faq.9">Does YouTube karaoke download the videos?</span></summary>
+          <p data-i18n="faq.10">No. Videos play in YouTube's own embedded player, straight from YouTube. Nothing is saved on your PC.</p>
         </details>
         <details>
-          <summary><span data-lang="en">What if nobody adds songs?</span><span data-lang="vi">Không ai thêm bài thì sao?</span></summary>
-          <p data-lang="en">Auto DJ keeps going with songs from your library that fit what's playing. The music never just stops.</p>
-          <p data-lang="vi">DJ tự động cứ thế chọn tiếp bài hợp trong kho nhạc của bạn. Nhạc không bao giờ tự dưng tắt.</p>
+          <summary><span data-i18n="faq.11">What if nobody adds songs?</span></summary>
+          <p data-i18n="faq.12">Auto DJ keeps going with songs from your library that fit what's playing. The music never just stops.</p>
         </details>
         <details>
-          <summary><span data-lang="en">Can someone hijack the queue?</span><span data-lang="vi">Có ai phá danh sách được không?</span></summary>
-          <p data-lang="en">You can turn on approval, remove any song, limit how many songs each guest has waiting, or close the queue. Each party link is random and dies when you switch it off.</p>
-          <p data-lang="vi">Bạn bật duyệt bài, xoá bài bất kỳ, giới hạn số bài mỗi khách, hoặc đóng danh sách. Mỗi đường dẫn tiệc là ngẫu nhiên và mất ngay khi bạn tắt.</p>
+          <summary><span data-i18n="faq.13">Can someone hijack the queue?</span></summary>
+          <p data-i18n="faq.14">You can turn on approval, remove any song, limit how many songs each guest has waiting, or close the queue. Each party link is random and dies when you switch it off.</p>
         </details>
         <details>
-          <summary><span data-lang="en">What do I need for iPhone sync?</span><span data-lang="vi">Đồng bộ iPhone cần gì?</span></summary>
-          <p data-lang="en">Windows 10 or 11 with iTunes installed, a cable, and "Manually manage music and videos" turned on in iTunes. Miu walks you through it the first time.</p>
-          <p data-lang="vi">Windows 10 hoặc 11 có cài iTunes, dây cáp, và bật "Quản lý nhạc và video thủ công" trong iTunes. Lần đầu Miu sẽ hướng dẫn.</p>
+          <summary><span data-i18n="faq.15">What do I need for iPhone sync?</span></summary>
+          <p data-i18n="faq.16">Windows 10 or 11 with iTunes installed, a cable, and "Manually manage music and videos" turned on in iTunes. Miu walks you through it the first time.</p>
         </details>
         <details>
-          <summary><span data-lang="en">Will it delete songs I added with 3uTools or iTunes?</span><span data-lang="vi">Có xoá bài đã chép bằng 3uTools hay iTunes không?</span></summary>
-          <p data-lang="en">Never. Miu only removes songs it put there itself.</p>
-          <p data-lang="vi">Không bao giờ. Miu chỉ gỡ những bài do chính Miu chép vào.</p>
+          <summary><span data-i18n="faq.17">Will it delete songs I added with 3uTools or iTunes?</span></summary>
+          <p data-i18n="faq.18">Never. Miu only removes songs it put there itself.</p>
         </details>
         <details>
-          <summary><span data-lang="en">Windows says the download is unrecognised.</span><span data-lang="vi">Windows báo tệp tải về không rõ nguồn.</span></summary>
-          <p data-lang="en">The installer isn't code-signed yet, so SmartScreen may complain. Hit "More info", then "Run anyway".</p>
-          <p data-lang="vi">Bộ cài chưa được ký số nên SmartScreen có thể cảnh báo. Bấm "Thông tin thêm", rồi "Vẫn chạy".</p>
+          <summary><span data-i18n="faq.19">Windows says the download is unrecognised.</span></summary>
+          <p data-i18n="faq.20">The installer isn't code-signed yet, so SmartScreen may complain. Hit "More info", then "Run anyway".</p>
         </details>
         <details>
-          <summary><span data-lang="en">How do I get updates?</span><span data-lang="vi">Cập nhật bản mới thế nào?</span></summary>
-          <p data-lang="en">Miu checks once a day and shows a little card when there's something new. One click and it updates itself.</p>
-          <p data-lang="vi">Miu kiểm tra mỗi ngày một lần và hiện thông báo khi có bản mới. Bấm một cái là tự cập nhật.</p>
+          <summary><span data-i18n="faq.21">How do I get updates?</span></summary>
+          <p data-i18n="faq.22">Miu checks once a day and shows a little card when there's something new. One click and it updates itself.</p>
         </details>
       </div>
     </div>
   </section>
 
-  <section class="final alt">
+  <section class="final alt" id="get">
     <div class="blob b" style="top:-120px;right:20%"></div>
     <div class="wrap">
       <img class="cat" src="miu-cat.svg" alt="" width="104" height="104">
-      <h2 data-lang="en">Your next party <em>just got easier.</em></h2>
-      <h2 data-lang="vi">Bữa tiệc tới <em>nhẹ tênh rồi.</em></h2>
-      <p class="lead" data-lang="en">Download Miu, plug in the speakers, put the QR on the TV. That's it.</p>
-      <p class="lead" data-lang="vi">Tải Miu, cắm loa, đưa mã QR lên TV. Vậy thôi.</p>
+      <h2 data-i18n-html="get.1">Your next party <em>just got easier.</em></h2>
+      <p class="lead" data-i18n="get.2">Download Miu, plug in the speakers, put the QR on the TV. That's it.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/khangkhangg/Miu-Music-Player/releases/latest">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.5v7H3zm8.5-1.1L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg>
-          <span data-lang="en">Download for Windows</span><span data-lang="vi">Tải cho Windows</span>
+          <span data-i18n="get.3">Download for Windows</span>
         </a>
         <a class="btn btn-ghost" href="https://github.com/khangkhangg/Miu-Music-Player">GitHub</a>
       </div>
-      <p class="fine" data-lang="en">Free · Windows 10 and 11</p><p class="fine" data-lang="vi">Miễn phí · Windows 10 và 11</p>
+      <p class="fine" data-i18n="get.4">Free · Windows 10 and 11</p>
     </div>
   </section>
 </main>
@@ -618,24 +559,57 @@
 <footer>
   <div class="wrap">
     <span>© 2026 Miu Music</span>
-    <span data-lang="en">Not affiliated with Apple, YouTube or Spotify. Their names are trademarks of their owners.</span>
-    <span data-lang="vi">Không liên kết với Apple, YouTube hay Spotify. Tên của họ là thương hiệu của chủ sở hữu.</span>
+    <span data-i18n="footer.1">Not affiliated with Apple, YouTube or Spotify. Their names are trademarks of their owners.</span>
   </div>
 </footer>
 
+<script src="lang.js"></script>
 <script>
   (function () {
     var root = document.documentElement;
-    function set(lang) {
-      root.lang = lang;
-      document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.setLang === lang)); });
-      try { localStorage.setItem('miu-lang', lang); } catch (e) {}
+    var L = window.MiuLang;
+
+    // English is the page itself: keep it to fall back on for anything a language lacks.
+    var english = { 'meta.title': document.title, 'meta.description': document.querySelector('meta[name="description"]').content };
+    document.querySelectorAll('[data-i18n]').forEach(function (el) { english[el.dataset.i18n] = el.textContent; });
+    document.querySelectorAll('[data-i18n-html]').forEach(function (el) { english[el.dataset.i18nHtml] = el.innerHTML; });
+    document.querySelectorAll('[data-i18n-alt]').forEach(function (el) { english[el.dataset.i18nAlt] = el.alt; });
+    document.querySelectorAll('[data-ticker]').forEach(function (el) { english[el.dataset.ticker] = el.dataset.default; });
+
+    function show(code, dict) {
+      var t = function (k) { return dict[k] || english[k]; };
+      var lang = L.LANGUAGES.filter(function (l) { return l.code === code; })[0];
+      root.lang = lang.html || code;
+      root.dir = lang.rtl ? 'rtl' : 'ltr';
+      document.title = t('meta.title');
+      document.querySelector('meta[name="description"]').content = t('meta.description');
+      document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = t(el.dataset.i18n); });
+      // Our own translations, with only <em> and <b> in them.
+      document.querySelectorAll('[data-i18n-html]').forEach(function (el) { el.innerHTML = t(el.dataset.i18nHtml); });
+      document.querySelectorAll('[data-i18n-alt]').forEach(function (el) { el.alt = t(el.dataset.i18nAlt); });
+      document.querySelectorAll('[data-ticker]').forEach(function (el) {
+        var words = L.tickerWords(t(el.dataset.ticker));
+        el.replaceChildren();
+        words.concat(words).forEach(function (w) { var s = document.createElement('span'); s.textContent = w; el.append(s); });
+      });
+      var shots = L.shotLanguage(code);
+      document.querySelectorAll('[data-shot]').forEach(function (img) { img.src = 'shots/' + img.dataset.shot + '-' + shots + '.webp'; });
+      picker.value = code;
     }
+
+    var loaded = { en: {} };
+    function set(code) {
+      try { localStorage.setItem('miu-lang', code); } catch (e) {}
+      if (loaded[code]) { show(code, loaded[code]); return; }
+      fetch('i18n/' + code + '.json').then(function (r) { return r.json(); }).then(function (d) { loaded[code] = d; show(code, d); }).catch(function () { show('en', {}); });
+    }
+
+    var picker = document.getElementById('lang');
+    L.LANGUAGES.forEach(function (l) { picker.append(new Option(l.name, l.code)); });
+    picker.addEventListener('change', function () { set(picker.value); });
     var saved = null;
     try { saved = localStorage.getItem('miu-lang'); } catch (e) {}
-    var guess = (navigator.language || '').toLowerCase().indexOf('vi') === 0 ? 'vi' : 'en';
-    set(saved === 'vi' || saved === 'en' ? saved : guess);
-    document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.addEventListener('click', function () { set(b.dataset.setLang); }); });
+    set(L.pickLanguage(saved, navigator.languages || [navigator.language]));
 
     var calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
