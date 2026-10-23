@@ -497,6 +497,15 @@ function showFolders(folders) {
       invoke('set_folder_encoding', { id: item.id, encoding: pick.value || null }).then(showFolders).catch(showFolderError);
     });
     li.append(name, count, enc, remove, pick);
+    // Unplugged drive: songs stay in the library and come back on the next rescan.
+    if (item.offline) {
+      li.classList.add('offline');
+      li.title = t('folders.offlineTitle', { path: item.title });
+      const note = document.createElement('span');
+      note.className = 'folder-offline muted';
+      note.textContent = t('folders.offline');
+      li.insertBefore(note, pick);
+    }
     return li;
   }));
   const summary = librarySummary(folders);

@@ -4,7 +4,7 @@ import { folderItems, librarySummary, encodingOptions } from '../../src/js/folde
 
 test('folder items show the last path part, the full path as tooltip and the song count', () => {
   assert.deepEqual(folderItems([{ id: 1, path: 'E:\\Nhạc Trịnh', songCount: 36 }]), [
-    { id: 1, name: 'Nhạc Trịnh', title: 'E:\\Nhạc Trịnh', count: 36, encoding: '' },
+    { id: 1, name: 'Nhạc Trịnh', title: 'E:\\Nhạc Trịnh', count: 36, encoding: '', offline: false },
   ]);
 });
 
@@ -32,4 +32,9 @@ test('encoding choices start with automatic detection and mark the current one',
   assert.deepEqual(opts.map((o) => o.value), ['', 'windows-1258', 'gbk', 'big5', 'shift_jis', 'euc-kr', 'windows-1251', 'windows-1252']);
   assert.equal(opts.find((o) => o.selected).label, 'Chinese, simplified (GBK)');
   assert.equal(encodingOptions('').find((o) => o.selected).value, '');
+});
+
+test('a folder whose drive is not connected is marked offline, and only then', () => {
+  assert.equal(folderItems([{ id: 1, path: 'D:\Music', songCount: 940, online: false }])[0].offline, true);
+  assert.equal(folderItems([{ id: 1, path: 'D:\Music', songCount: 940, online: true }])[0].offline, false);
 });

@@ -5,7 +5,7 @@ export function folderItems(folders) {
   return (folders ?? []).map(f => {
     const parts = f.path.split('\\').filter(Boolean);
     const name = /^[A-Za-z]:\\?$/.test(f.path) ? f.path : parts[parts.length - 1] ?? f.path;
-    return { id: f.id, name, title: f.path, count: f.songCount, encoding: f.tagEncoding ?? '' };
+    return { id: f.id, name, title: f.path, count: f.songCount, encoding: f.tagEncoding ?? '', offline: f.online === false };
   });
 }
 
