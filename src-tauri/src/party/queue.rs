@@ -210,10 +210,17 @@ impl Queue {
         self.ordered().into_iter().next()
     }
 
-    /// `item` went on air: if it is queued it leaves the queue and becomes what plays now; if it
-    /// came from outside the queue, nothing from the queue is playing.
+    /// `item` went on air and becomes what plays now: if it is queued it leaves the queue; if it
+    /// came from outside (the DJ, Auto DJ's own pick) guests see it playing all the same.
     pub fn start_item(&mut self, item: &Item) {
-        let started = self.entries.iter().position(|e| e.item.same(item)).map(|i| self.entries.remove(i));
+        let started = match self.entries.iter().position(|e| e.item.same(item)) {
+            Some(i) => self.entries.remove(i),
+            None => {
+                self.next_id += 1;
+                Entry { id: self.next_id, item: item.clone(), added_by: HOST.into(), added_name: String::new(), seq: self.next_id, votes: BTreeSet::new(), approved: true }
+            }
+        };
+        let started = Some(started);
         if let Some(prev) = std::mem::replace(&mut self.now, started) {
             self.recent.push_front(prev.item);
             self.recent.truncate(RECENT);
@@ -404,8 +411,10 @@ mod tests {
         assert_eq!(q.now().map(|e| e.id), Some(a), "the loaded song plays even if votes moved");
         assert_eq!(q.ordered().iter().map(|e| e.id).collect::<Vec<_>>(), vec![b]);
         q.start_item(&song(7));
-        assert!(q.now().is_none(), "a song from outside the queue: nothing from it on now");
-        assert_eq!(q.ordered().len(), 1);
+        let now = q.now().expect("a song from outside the queue (Auto DJ's own pick) still shows as playing");
+        assert_eq!((now.item.clone(), now.added_by.as_str(), now.votes.len()), (song(7), HOST, 0));
+        assert_eq!(q.ordered().len(), 1, "and the queue is left alone");
+        assert_eq!(q.add("ann", "Ann", song(7)), Err(Refusal::JustPlayed), "it is playing: not again yet");
     }
 
     #[test]

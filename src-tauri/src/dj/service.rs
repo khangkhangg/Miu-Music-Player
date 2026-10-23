@@ -227,7 +227,14 @@ fn auto_controller(app: tauri::AppHandle, dj: SharedDj, db: SharedDb, party: cra
             if on_air_song != last_on_air {
                 last_on_air = on_air_song;
                 if let Some(id) = on_air_song {
-                    party.party.change(|q| q.start_item(&Item::Song { song_id: id, title: String::new(), artist: String::new() }));
+                    // With its title, so guests see what plays even when Auto DJ picked it.
+                    let item = party.party.library_song(id).or_else(|| {
+                        let rows = db.lock().ok().and_then(|d| crate::library::songs::list_songs(&d).ok())?;
+                        let r = rows.into_iter().find(|r| r.id == id)?;
+                        Some(Item::Song { song_id: id, title: r.title, artist: r.artist.unwrap_or_default() })
+                    });
+                    let item = item.unwrap_or(Item::Song { song_id: id, title: String::new(), artist: String::new() });
+                    party.party.change(|q| q.start_item(&item));
                 }
             }
             let top = party.party.queue().peek().map(|e| e.item.clone());

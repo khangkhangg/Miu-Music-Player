@@ -103,7 +103,8 @@ impl Party {
         *self.wait.lock().unwrap() = d;
     }
 
-    fn library_song(&self, id: i64) -> Option<Item> {
+    /// A song guests may pick, as a queue item.
+    pub fn library_song(&self, id: i64) -> Option<Item> {
         let lib = self.library.read().ok()?;
         lib.iter().find(|(i, ..)| *i == id).map(|(i, t, a)| Item::Song { song_id: *i, title: t.clone(), artist: a.clone() })
     }

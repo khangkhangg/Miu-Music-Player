@@ -4,7 +4,8 @@
   "description": "Permissions for the main window, the mini player and the party screen",
   "windows": [
     "main",
-    "mini"
+    "mini",
+    "party"
   ],
   "permissions": [
     "core:default",
