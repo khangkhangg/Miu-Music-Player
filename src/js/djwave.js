@@ -1,14 +1,12 @@
 // DJ waveforms: the whole song coloured by sound (bass blue, mids amber, highs white) with its
-// sections, phrases, hot cues, loop and the coming mix, and a zoomed view where both decks scroll
-// past one centre line on their beat grids. The engine sends band levels (`dj_overview`); drawing
-// is plain canvas.
+// sections, phrases, hot cues, loop and the coming mix. The engine sends band levels
+// (`dj_overview`); drawing is plain canvas.
 
 const BASS = [59, 111, 224];
 const MIDS = [224, 169, 59];
 const HIGHS = [242, 242, 242];
 const SILENCE = [90, 90, 100];
 const PHRASE_BARS = 8;
-const TEMPO_RANGE = 0.08;
 
 export const SECTION_COLOURS = {
   intro: '#4a4a58',
@@ -58,18 +56,6 @@ export function phraseTimes(analysis, durationS) {
   return out;
 }
 
-/** The beats between two times (seconds), with the first beat of each bar marked. */
-export function beatGrid(analysis, fromS, toS) {
-  if (!analysis?.bpm) return [];
-  const beat = 60 / analysis.bpm;
-  const down = analysis.downbeatS ?? analysis.firstBeatS ?? 0;
-  const out = [];
-  for (let k = Math.ceil((fromS - down) / beat - 1e-9); down + k * beat < toS; k++) {
-    out.push({ t: round(down + k * beat), bar: ((k % 4) + 4) % 4 === 0 });
-  }
-  return out;
-}
-
 /** Where Auto DJ's coming mix sits on the song on air (0..1). */
 export function mixZone(next, durationS) {
   if (!next || !durationS) return null;
@@ -82,19 +68,6 @@ export function cueMarks(d) {
   const f = (s) => round(s / d.durationS);
   const cues = (d.hotCues ?? []).flatMap((c, slot) => (c == null ? [] : [{ slot, at: f(c) }]));
   return { cues, loop: d.loopS ? { from: f(d.loopS[0]), to: f(d.loopS[1]) } : null };
-}
-
-/** The [bass, mids, highs] levels at `t` seconds in the flattened detail, or null outside it. */
-export function levelsAt(detail, rate, t) {
-  const i = Math.floor(t * rate);
-  if (i < 0 || (i + 1) * 3 > detail.length) return null;
-  return [detail[3 * i], detail[3 * i + 1], detail[3 * i + 2]];
-}
-
-/** How fast a deck plays its song (1 = as recorded). */
-export function deckSpeed(d, analysis) {
-  if (d?.bpm && analysis?.bpm) return round(d.bpm / analysis.bpm);
-  return round(1 + (d?.tempo ?? 0) * TEMPO_RANGE);
 }
 
 function fit(canvas) {
@@ -171,54 +144,4 @@ export function drawOverview(canvas, { bands, sections, phrases, durationS, mix,
     g.fillStyle = '#111';
     g.fillText(String(c.slot + 1), x + 3, top + 6);
   }
-}
-
-/**
- * Both decks around their play position, one lane each, scrolling past a fixed centre line.
- * Each lane spans the same stretch of real time, so beats in step line up across the lanes.
- */
-export function drawZoom(canvas, lanes, spanS) {
-  const { g, w, h } = fit(canvas);
-  const laneH = h / Math.max(1, lanes.length);
-  lanes.forEach((lane, li) => {
-    const top = li * laneH + 1;
-    const lh = laneH - 2;
-    const mid = top + lh / 2;
-    if (!lane) return;
-    const songSpan = spanS * lane.speed;
-    const t0 = lane.positionS - songSpan / 2;
-    const at = (t) => ((t - t0) / songSpan) * w;
-    if (lane.loop) {
-      g.fillStyle = 'rgba(255, 255, 255, 0.14)';
-      g.fillRect(at(lane.loop[0]), top, at(lane.loop[1]) - at(lane.loop[0]), lh);
-    }
-    for (const b of beatGrid(lane.analysis, t0, t0 + songSpan)) {
-      g.fillStyle = b.bar ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.16)';
-      g.fillRect(Math.round(at(b.t)), top, 1, lh);
-    }
-    if (lane.detail) {
-      for (let x = 0; x < w; x += 2) {
-        const lv = levelsAt(lane.detail, lane.rate, t0 + (x / w) * songSpan);
-        if (!lv) continue;
-        const a = bandHeight(lv) * (lh / 2 - 1);
-        if (a < 0.3) continue;
-        g.fillStyle = bandColour(lv);
-        g.globalAlpha = t0 + (x / w) * songSpan < lane.positionS ? 0.55 : 1;
-        g.fillRect(x, mid - a, 2, a * 2);
-      }
-      g.globalAlpha = 1;
-    }
-    (lane.hotCues ?? []).forEach((c, slot) => {
-      if (c == null) return;
-      const x = at(c);
-      if (x < -2 || x > w + 2) return;
-      g.fillStyle = CUE_COLOURS[slot % CUE_COLOURS.length];
-      g.fillRect(x, top, 2, lh);
-      g.fillRect(x, top, 9, 9);
-    });
-    g.fillStyle = lane.colour;
-    g.fillRect(0, top, 3, lh);
-  });
-  g.fillStyle = '#fff';
-  g.fillRect(Math.round(w / 2) - 1, 0, 2, h);
 }

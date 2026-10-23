@@ -382,10 +382,10 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   all fifteen transitions rendered from real songs to listen to. **Not yet listened to by a person.**
 - [x] **D.9 Waveforms** — *Test first:* three bands (a bass tone, a voice-range tone and a hi-hat-range tone each land
   in their own band, silence is silent) squeezed into the overview; where the coming mix sits in the old song; colours
-  by band power, heights, sections, phrase lines (also before the first phrase found), beats with bars marked, mix
-  zone, hot cues and loop, detail levels at a time, deck speed. Screen: the whole song coloured by sound (bass blue,
-  mids amber, highs white) with the section strip, phrase lines, hot cues, loop, Auto DJ's mix zone and time left;
-  a zoomed view where both decks scroll past one centre line on their beat grids. Checked in the app 2026-10-23.
+  by band power, heights, sections, phrase lines (also before the first phrase found), mix zone, hot
+  cues and loop. Screen: the whole song coloured by sound (bass blue,
+  mids amber, highs white) with the section strip, phrase lines, hot cues, loop, Auto DJ's mix zone and time left.
+  Checked in the app 2026-10-23 (the zoomed two-deck view was removed 2026-10-24).
 - [x] **PL.1 Playlists** — *Test first:* create (needs a name), add at the end once each, list by name with counts,
   reorder (same songs only), remove, rename, delete, songs deleted from the library leave their playlists; the view
   keeps the playlist order and skips missing songs, moving the selection up/down together, drag-and-drop before a song,

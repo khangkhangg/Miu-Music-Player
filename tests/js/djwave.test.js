@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bandColour, bandHeight, sectionSpans, phraseTimes, beatGrid, mixZone, cueMarks, levelsAt, deckSpeed, SECTION_COLOURS } from '../../src/js/djwave.js';
+import { bandColour, bandHeight, sectionSpans, phraseTimes, mixZone, cueMarks, SECTION_COLOURS } from '../../src/js/djwave.js';
 
 const rgb = (s) => s.match(/\d+/g).map(Number);
 
@@ -49,13 +49,6 @@ test('a line every phrase (8 bars) from the phrase grid', () => {
   assert.deepEqual(phraseTimes({ bpm: 0, structure: {} }, 40), []);
 });
 
-test('beats in a window, bars marked', () => {
-  const g = beatGrid(analysis, 0.25, 3);
-  assert.deepEqual(g.map((b) => b.t), [0.5, 1, 1.5, 2, 2.5]);
-  assert.deepEqual(g.map((b) => b.bar), [true, false, false, false, true]);
-  assert.deepEqual(beatGrid({ bpm: 0 }, 0, 3), []);
-});
-
 test('the mix zone on the song on air', () => {
   assert.deepEqual(mixZone({ atS: 60, lengthS: 16 }, 100), { from: 0.6, to: 0.76 });
   assert.deepEqual(mixZone({ atS: 95, lengthS: 16 }, 100), { from: 0.95, to: 1 });
@@ -69,17 +62,4 @@ test('hot cues and the loop as places in the song', () => {
     loop: { from: 0.2, to: 0.22 },
   });
   assert.deepEqual(cueMarks({ durationS: 0 }), { cues: [], loop: null });
-});
-
-test('the band levels at a time in the zoomed view', () => {
-  const detail = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-  assert.deepEqual(levelsAt(detail, 100, 0.015), [4, 5, 6]);
-  assert.equal(levelsAt(detail, 100, -0.01), null);
-  assert.equal(levelsAt(detail, 100, 0.05), null);
-});
-
-test('how fast a deck plays its song, to scroll the zoomed view', () => {
-  assert.equal(deckSpeed({ bpm: 126, tempo: 0.5 }, { bpm: 120 }), 1.05);
-  assert.equal(deckSpeed({ tempo: 0.5 }, null), 1.04);
-  assert.equal(deckSpeed({ tempo: 0 }, { bpm: 0 }), 1);
 });

@@ -6,13 +6,11 @@ import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, fits, songMeta,
   nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary, sourceOptions, vibeLabel,
 } from './dj.js';
-import { drawOverview, drawZoom, sectionSpans, phraseTimes, mixZone, cueMarks, deckSpeed } from './djwave.js';
+import { drawOverview, sectionSpans, phraseTimes, mixZone, cueMarks } from './djwave.js';
 
 const POLL_MS = 50;
 const LIST_MAX = 300;
 const SIDES = ['A', 'B'];
-/** Seconds of music across the zoomed waveform. */
-const ZOOM_S = 6;
 
 export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   const $ = (id) => document.getElementById(id);
@@ -28,9 +26,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   let overviewIds = [undefined, undefined];
   let overviewData = [null, null];
   let overviewDrawn = ['', ''];
-  let stateAt = 0;
-  let zoomFrame = 0;
-  let deckColours = [];
   const played = new Set();
   let queue = [];
   let listKey = '';
@@ -407,32 +402,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     }, { label: (kind) => t(`dj.section.${kind}`), mixLabel: t('dj.mixZone') });
   }
 
-  /** The zoomed waveform, every frame while the booth is open: positions run on between polls. */
-  function renderZoom() {
-    zoomFrame = 0;
-    if (root.hidden || !state) return;
-    if (!deckColours.length) deckColours = SIDES.map((side) => getComputedStyle(deckEl(side)).getPropertyValue('--deck').trim() || '#fff'); // i18n-ignore
-    const since = (performance.now() - stateAt) / 1000;
-    const lanes = state.decks.map((d, i) => {
-      const o = overviewData[i];
-      if (d.songId == null) return null;
-      const a = analyses.get(d.songId);
-      const speed = deckSpeed(d, a);
-      return {
-        positionS: d.positionS + (d.playing ? Math.min(since, 0.25) * speed : 0),
-        speed,
-        analysis: a,
-        detail: o?.songId === d.songId ? o.detail : null,
-        rate: o?.detailRate ?? 100,
-        hotCues: d.hotCues,
-        loop: d.loopS,
-        colour: deckColours[i],
-      };
-    });
-    drawZoom($('dj-zoom'), lanes, ZOOM_S);
-    zoomFrame = requestAnimationFrame(renderZoom);
-  }
-
   function onAirAnalysis() {
     const i = state?.onAir ? SIDES.indexOf(state.onAir) : state?.decks.findIndex((d) => d.playing);
     const d = state?.decks[i];
@@ -558,8 +527,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     const s = await invoke('dj_state').catch(() => null);
     if (!s || root.hidden) return;
     state = s;
-    stateAt = performance.now();
-    if (!zoomFrame) zoomFrame = requestAnimationFrame(renderZoom);
     for (const d of s.decks) if (d.songId != null) played.add(d.songId);
     if (queue.length && queue.some((id) => played.has(id))) { queue = queue.filter((id) => !played.has(id)); sendAuto(); }
     SIDES.forEach((side, i) => renderDeck(side, i));
@@ -641,8 +608,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     setPanel(false);
     clearInterval(timer);
     timer = null;
-    cancelAnimationFrame(zoomFrame);
-    zoomFrame = 0;
     root.hidden = true;
     await invoke('dj_leave').catch(() => {});
     onClose?.();
