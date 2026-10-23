@@ -132,7 +132,15 @@
 .dj-hands button svg { width: 14px; height: 14px; }
 .dj-hotpad.set { background: var(--deck); color: #111; border-color: transparent; }
 .dj-loops button.on, .dj-fx button[aria-pressed="true"] { border-color: var(--deck); color: var(--deck); }
-.dj-fx { margin-left: auto; }
+.dj-platter-row { display: flex; align-items: center; justify-content: center; gap: 18px; min-width: 0; }
+.dj-deck[data-deck="B"] .dj-platter-row { flex-direction: row-reverse; }
+.dj-platter-row .dj-platter { justify-self: auto; flex: 0 1 auto; }
+.dj-platter-row .dj-fx { display: flex; flex-direction: column; gap: 8px; }
+.dj-platter-row .dj-fx button {
+  height: 36px; min-width: 96px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--dj-line);
+  background: var(--dj-panel-2); color: var(--dj-muted); font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.dj-platter-row .dj-fx button[aria-pressed="true"] { border-color: var(--deck); color: var(--deck); }
 .dj-pads { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
 .dj-pads button { font-size: 11px; padding: 0 6px; color: var(--dj-text); }
 .dj-pads button:active { background: var(--dj-a); color: #111; }
