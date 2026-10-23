@@ -5,7 +5,7 @@ import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, keysCompatible, fits,
-  songMeta, nextText, crossfaderFor, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel, kindChoices, transitionsSummary, outputNote, sourceOptions, vibeLabel,
+  songMeta, nextText, crossfaderFor, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel, kindChoices, transitionsSummary, sourceOptions, vibeLabel,
 } from '../../src/js/dj.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
@@ -208,14 +208,6 @@ test('the transition checklist: every kind with a name, and a short summary', ()
   assert.equal(transitionsSummary({ allowed: [], mixItUp: false }), 'Transitions: best fit');
   assert.equal(transitionsSummary({ allowed: ['echoOut', 'cut', 'brake', 'beatBlend'], mixItUp: false }), 'Transitions: 4 chosen');
   assert.equal(transitionsSummary({ allowed: ['echoOut', 'cut'], mixItUp: true }), 'Transitions: 2 chosen, mixed up');
-});
-
-test('when the chosen speakers are not there, the DJ hears where the music plays instead', () => {
-  assert.equal(outputNote({ master: 'Speakers (Realtek)', masterMissing: null }), '');
-  assert.equal(
-    outputNote({ master: 'Speakers (Realtek)', masterMissing: 'Speakers (Bose Flex SoundLink)' }),
-    'Speakers (Bose Flex SoundLink) is not connected: playing on Speakers (Realtek) (the Windows default).',
-  );
 });
 
 test('Auto DJ plays from the whole library or a playlist', () => {

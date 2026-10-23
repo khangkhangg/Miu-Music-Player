@@ -257,11 +257,6 @@ export function transitionsSummary(choice) {
   return t(choice.mixItUp ? 'dj.tr.summaryMixed' : 'dj.tr.summary', { n: choice.allowed.length });
 }
 
-/** The chosen speakers were not there and the Windows default plays: say so (else nothing). */
-export function outputNote(status) {
-  return status?.masterMissing ? t('dj.outputFallback', { name: status.masterMissing, now: status.master }) : '';
-}
-
 /** The "Play from" menu: the whole library, then every playlist that has songs. */
 export function sourceOptions(playlists) {
   return [

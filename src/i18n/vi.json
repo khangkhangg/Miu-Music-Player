@@ -708,7 +708,6 @@
   "party.fullScreen": "Toàn màn hình",
   "party.fullScreenHint": "Toàn màn hình (F11 hoặc nhấp đúp)",
   "party.screenHint": "Mở trong cửa sổ riêng: kéo sang TV rồi bật toàn màn hình.",
-  "dj.outputFallback": "{name} chưa được kết nối: đang phát trên {now} (mặc định của Windows).",
   "playlists.title": "Danh sách phát",
   "playlists.new": "Danh sách phát mới",
   "playlists.hint": "Tạo danh sách phát bằng nút +, rồi kéo bài hát vào.",

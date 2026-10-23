@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, fits, songMeta,
-  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary, outputNote, sourceOptions, vibeLabel,
+  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary, sourceOptions, vibeLabel,
 } from './dj.js';
 import { drawOverview, drawZoom, sectionSpans, phraseTimes, mixZone, cueMarks, deckSpeed } from './djwave.js';
 
@@ -375,7 +375,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     clearTimeout(problemTimer);
     problemTimer = setTimeout(() => { el.hidden = true; }, info ? 10000 : 6000);
   }
-  let notedMissing = null;
 
   async function loadOverview(side, i, songId) {
     overviewIds[i] = songId;
@@ -576,11 +575,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
-    // The chosen speakers were not there: the music plays on the Windows default, say so once.
-    if ((s.masterMissing ?? null) !== notedMissing) {
-      notedMissing = s.masterMissing ?? null;
-      if (notedMissing) showProblem(outputNote(s), true);
-    }
     renderList();
   }
 
@@ -622,7 +616,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];
     overviewDrawn = ['', ''];
-    notedMissing = null;
     await Promise.all([refreshLibrary(), refreshOutputs()]);
     onOpen?.();
     refreshControllers();
