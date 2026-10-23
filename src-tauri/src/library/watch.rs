@@ -45,8 +45,11 @@ impl FolderWatcher {
                 }
             }
         })?;
+        // A folder that is not connected (unplugged drive) is skipped; the others are still watched.
         for (_, root) in &folders {
-            watcher.watch(Path::new(root), RecursiveMode::Recursive)?;
+            if let Err(e) = watcher.watch(Path::new(root), RecursiveMode::Recursive) {
+                log::info!("not watching {root} (not connected?): {e}");
+            }
         }
         std::thread::Builder::new()
             .name("folder-watch".into())
@@ -100,6 +103,21 @@ mod tests {
             let _ = tx.send(ids);
         })
         .unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(d.path().join("new song.mp3"), b"x").unwrap();
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).expect("no change reported"), vec![7]);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_connected_does_not_stop_watching_the_others() {
+        let d = tempfile::tempdir().unwrap();
+        let gone = d.path().join("unplugged drive").to_string_lossy().into_owned();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let folders = vec![(3, gone), (7, d.path().to_string_lossy().into_owned())];
+        let _watcher = FolderWatcher::start(folders, Duration::from_millis(300), move |ids| {
+            let _ = tx.send(ids);
+        })
+        .expect("a missing folder must not fail the watcher");
         std::thread::sleep(Duration::from_millis(200));
         std::fs::write(d.path().join("new song.mp3"), b"x").unwrap();
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).expect("no change reported"), vec![7]);

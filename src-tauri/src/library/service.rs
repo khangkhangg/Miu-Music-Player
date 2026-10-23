@@ -2,7 +2,7 @@
 //! `library-changed` event carrying the folder list. The logic lives in `folders`, `scan`, `watch`.
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -44,7 +44,11 @@ fn rescan(app: &AppHandle, db: &SharedDb, ids: &[i64]) {
         progress(app, "scan", i, total);
         // Walk the disk first, without the database: a sleeping hard disk can take half a minute
         // to answer, and the window needs the database meanwhile to show the library.
-        let found = crate::library::scan::scan_folder(std::path::Path::new(&f.path));
+        // A folder that is not connected (unplugged drive) keeps its songs, ratings and playlists.
+        let Some(found) = crate::library::scan::scan_root(Path::new(&f.path)) else {
+            log::info!("skipped {}: not connected", f.path);
+            continue;
+        };
         let Ok(d) = db.lock() else { return };
         match crate::library::scan::reconcile(&d, f.id, &found, now_unix()) {
             Ok(diff) => log::info!("rescanned {}: +{} ~{} -{}", f.path, diff.added, diff.updated, diff.removed),
@@ -98,9 +102,16 @@ fn hash_in_background(app: &AppHandle, db: &SharedDb) {
     });
 }
 
+/// Bumped by every `restart_watch`, so an older wait for unplugged folders stops.
+static WATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+
 /// (Re)start watching every folder; changes trigger a rescan and a `library-changed` event.
-fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &LibraryWatch) {
-    let folders: Vec<(i64, String)> = folder_list(db).into_iter().map(|f| (f.id, f.path)).collect();
+/// Folders that are not connected are checked every few seconds; when one comes back it is
+/// rescanned and watched.
+fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &Arc<LibraryWatch>) {
+    let list = folder_list(db);
+    let offline: Vec<(i64, String)> = list.iter().filter(|f| !f.online).map(|f| (f.id, f.path.clone())).collect();
+    let folders: Vec<(i64, String)> = list.into_iter().map(|f| (f.id, f.path)).collect();
     let (app2, db2) = (app.clone(), db.clone());
     let watcher = FolderWatcher::start(folders, Duration::from_millis(800), move |ids| {
         rescan(&app2, &db2, &ids);
@@ -111,6 +122,26 @@ fn restart_watch(app: &AppHandle, db: &SharedDb, watch: &LibraryWatch) {
         Ok(w) => *watch.0.lock().unwrap() = Some(w),
         Err(e) => log::warn!("watching folders failed: {e}"),
     }
+    let generation = WATCH_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    if offline.is_empty() {
+        return;
+    }
+    let (app, db, watch) = (app.clone(), db.clone(), watch.clone());
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(10));
+        if WATCH_GENERATION.load(Ordering::Acquire) != generation {
+            return;
+        }
+        let back: Vec<i64> = offline.iter().filter(|(_, p)| crate::library::scan::is_reachable(Path::new(p))).map(|(id, _)| *id).collect();
+        if !back.is_empty() {
+            log::info!("{} watched folder(s) connected again", back.len());
+            rescan(&app, &db, &back);
+            restart_watch(&app, &db, &watch);
+            let _ = app.emit("library-changed", folder_list(&db));
+            hash_in_background(&app, &db);
+            return;
+        }
+    });
 }
 
 /// At startup: catch up with changes made while Miu was closed, then watch.
