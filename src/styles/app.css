@@ -448,3 +448,10 @@ div.tile { cursor: default; }
 .editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; background: var(--text); color: var(--surface); padding: 9px 14px; font-size: 13px; z-index: 10; box-shadow: var(--shadow); }
 .toast .eq-btn { color: var(--surface); border-color: currentColor; }
+/* DJ mode: a small deck beside the name; its label shows on hover or focus */
+.brand-dj { position: relative; margin-left: auto; width: 28px; height: 28px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer; display: grid; place-items: center; }
+.brand-dj svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; transition: transform 0.4s ease; }
+.brand-dj:hover, .brand-dj:focus-visible { color: var(--accent-ink); background: var(--surface-muted); }
+.brand-dj:hover svg, .brand-dj:focus-visible svg { transform: rotate(120deg); }
+.brand-dj-tip { position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; padding: 3px 8px; border-radius: var(--radius); background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 5; }
+.brand-dj:hover .brand-dj-tip, .brand-dj:focus-visible .brand-dj-tip { opacity: 1; }

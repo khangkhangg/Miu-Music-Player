@@ -1435,7 +1435,7 @@ function setupSettings(languageSetting) {
   go('nav-audiobooks', () => showView('books'));
   setupBooks();
   const dj = setupDj({ invoke, listen: window.__TAURI__.event.listen, songs: () => rawSongs, artUrl });
-  go('nav-dj', () => dj.open());
+  document.getElementById('nav-dj').addEventListener('click', () => dj.open());
   setupSync();
   go('nav-settings', () => showView('settings'));
   $('album-back').addEventListener('click', () => showView(page?.kind === 'artist' ? 'artists' : 'albums'));
