@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
-import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr } from '../../src/js/party.js';
+import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr, nowAndNext } from '../../src/js/party.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
 useDictionary('en', en);
@@ -50,4 +50,21 @@ test('the party screen shows the link that works for everyone', () => {
   assert.equal(partyQr({ localOn: true, localQr: '<svg>wifi</svg>', relayOn: false }), '<svg>wifi</svg>');
   assert.equal(partyQr({ localOn: true, localQr: '<svg>wifi</svg>', relayOn: true, relayQr: '<svg>relay</svg>' }), '<svg>relay</svg>');
   assert.equal(partyQr({ localOn: true, localQr: '<svg>wifi</svg>', relayOn: true, relayError: 'offline' }), '<svg>wifi</svg>', 'the Wi-Fi one while the relay is not working');
+});
+
+test('the party screen shows the song on air and the one coming', () => {
+  const songs = new Map([[1, { id: 1, title: 'Faded' }], [2, { id: 2, title: 'Love Yourself' }]]);
+  const byId = (id) => songs.get(id);
+  const deck = (songId, extra = {}) => ({ songId, playing: false, positionS: 30, durationS: 120, level: 0.5, ...extra });
+  let r = nowAndNext({ onAir: 'B', decks: [deck(2), deck(1, { playing: true })] }, byId);
+  assert.equal(r.now.title, 'Faded');
+  assert.equal(r.next.title, 'Love Yourself');
+  assert.equal(r.progress, 0.25);
+  assert.equal(r.level, 0.5);
+  r = nowAndNext({ onAir: null, decks: [deck(1, { playing: true }), deck(null)] }, byId);
+  assert.equal(r.now.title, 'Faded', 'no deck on air: the one playing');
+  assert.equal(r.next, null);
+  r = nowAndNext({ onAir: null, decks: [deck(null), deck(null)] }, byId);
+  assert.deepEqual(r, { now: null, next: null, progress: 0, level: 0 });
+  assert.deepEqual(nowAndNext(null, byId), { now: null, next: null, progress: 0, level: 0 });
 });

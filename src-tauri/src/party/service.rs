@@ -184,6 +184,31 @@ pub fn party_dj_add(song_id: i64, host: State<'_, SharedParty>, db: State<'_, Sh
     host.party.change(|q| q.add(HOST, "DJ", item)).map(|_| ()).map_err(|e| format!("{e:?}"))
 }
 
+/// Opens the party screen in its own window (or brings it to the front): the DJ drags it to the
+/// TV or projector while the DJ screen stays usable. Async: building a window from a sync command
+/// deadlocks on Windows.
+#[tauri::command]
+pub async fn party_screen_open(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("party") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let config = app.config().app.windows.iter().find(|w| w.label == "party").ok_or("party screen not configured")?.clone();
+    tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(|e| e.to_string())?.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Full screen on or off for the window that asks (the party screen); the new state.
+#[tauri::command]
+pub fn party_screen_fullscreen(window: tauri::WebviewWindow) -> Result<bool, String> {
+    let on = !window.is_fullscreen().map_err(|e| e.to_string())?;
+    window.set_fullscreen(on).map_err(|e| e.to_string())?;
+    Ok(on)
+}
+
 /// The video on the party screen now, if any (the screen asks when it opens).
 #[tauri::command]
 pub fn party_video_now(host: State<'_, SharedParty>) -> Option<serde_json::Value> {

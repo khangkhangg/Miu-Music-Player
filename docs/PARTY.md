@@ -18,5 +18,9 @@ the music comes back when the video ends. Nothing is downloaded.
   (`/party/admin.php`) turns party links off, caps parties and requests, shows the load and ends parties.
   See `relay/README.md` for the server side.
 - **The DJ's screen** (`src/js/partyscreen.js`): Guests panel (both links, approval, limit, waiting
-  and queued songs), QR code and up next on the party screen (the relay's link when it works, else the
-  Wi-Fi one), the video player.
+  and queued songs), the video now playing with Skip.
+- **The party screen** (`src/party.html`, `src/js/partywindow.js`): its own window, so the DJ screen
+  stays usable. Drag it to the TV, full screen with F11, a double-click or its button (the pointer
+  hides when the mouse rests). It follows the DJ by itself: cover, song on air, progress, up next, the
+  QR code (the relay's link when it works, else the Wi-Fi one) and the top of the queue. YouTube videos
+  play there full screen with the QR code in a corner; it opens by itself when a guest's video comes up.

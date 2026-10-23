@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, fits, songMeta,
-  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary,
+  nextText, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary,
 } from './dj.js';
 import { drawOverview, drawZoom, sectionSpans, phraseTimes, mixZone, cueMarks, deckSpeed } from './djwave.js';
 
@@ -17,7 +17,6 @@ const ZOOM_S = 6;
 export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   const $ = (id) => document.getElementById(id);
   const root = $('dj-mode');
-  const party = $('dj-party-screen');
   const deckEl = (side) => root.querySelector(`.dj-deck[data-deck="${side}"]`);
   const stripEl = (side) => root.querySelector(`.dj-strip[data-deck="${side}"]`);
   const waveEl = (side) => root.querySelector(`.dj-wave[data-deck="${side}"]`);
@@ -351,32 +350,9 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     }
   });
 
-  // ---- Party screen and guest lock ----
+  // ---- Party screen: its own window (drag it to the TV) ----
 
-  let locked = false;
-  $('dj-party').addEventListener('click', () => { party.hidden = false; });
-  $('dj-party-lock').addEventListener('click', (e) => {
-    locked = !locked;
-    e.currentTarget.setAttribute('aria-pressed', String(locked));
-    party.classList.toggle('locked', locked);
-  });
-  const back = $('dj-party-back');
-  let holdStart = null;
-  let holdFrame = null;
-  const hold = () => {
-    const p = holdProgress(performance.now() - holdStart);
-    back.querySelector('.dj-hold').style.width = `${p * 100}%`;
-    if (p >= 1) { endHold(); party.hidden = true; locked = false; party.classList.remove('locked'); $('dj-party-lock').setAttribute('aria-pressed', 'false'); return; }
-    holdFrame = requestAnimationFrame(hold);
-  };
-  const endHold = () => { cancelAnimationFrame(holdFrame); holdStart = null; back.querySelector('.dj-hold').style.width = '0'; };
-  back.addEventListener('pointerdown', () => {
-    if (!locked) { party.hidden = true; return; }
-    holdStart = performance.now();
-    hold();
-  });
-  for (const ev of ['pointerup', 'pointerleave']) back.addEventListener(ev, () => { if (holdStart != null) endHold(); });
-  back.title = t('dj.unlockHold');
+  $('dj-party').addEventListener('click', () => invoke('party_screen_open').catch(showProblem));
 
   // ---- State ----
 
@@ -511,23 +487,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     renderOverview(side, i, d);
   }
 
-  function renderParty() {
-    if (party.hidden) return;
-    const i = state.onAir ? SIDES.indexOf(state.onAir) : state.decks.findIndex((d) => d.playing);
-    const d = state.decks[i];
-    const song = d?.songId != null ? songById(d.songId) : null;
-    $('dj-party-title').textContent = song?.title ?? t('dj.nothingOnAir');
-    $('dj-party-artist').textContent = song?.artist ?? '';
-    const img = $('dj-party-img');
-    if (song && img.dataset.id !== String(song.id)) { img.dataset.id = String(song.id); img.hidden = false; img.onerror = () => { img.hidden = true; }; img.src = artUrl(song.id, 600); }
-    if (!song) img.hidden = true;
-    $('dj-party-progress').style.width = `${d?.durationS ? (d.positionS / d.durationS) * 100 : 0}%`;
-    const other = state.decks[1 - i];
-    const next = other?.songId != null ? songById(other.songId) : null;
-    $('dj-party-next').textContent = next ? t('dj.upNext', { title: [next.title, next.artist].filter(Boolean).join(' · ') }) : '';
-    $('dj-party-pulse').style.opacity = String(0.15 + meterHeight(d?.level ?? 0) * 0.85);
-  }
-
   function renderList(force = false) {
     const air = $('dj-fits').checked ? onAirAnalysis() : null;
     const key = [$('dj-search').value, air?.songId, air?.bpm?.toFixed(0), played.size, queue.join(','), analyses.size].join('|');
@@ -603,7 +562,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
-    renderParty();
     renderList();
   }
 
@@ -664,7 +622,6 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     timer = null;
     cancelAnimationFrame(zoomFrame);
     zoomFrame = 0;
-    party.hidden = true;
     root.hidden = true;
     await invoke('dj_leave').catch(() => {});
     onClose?.();

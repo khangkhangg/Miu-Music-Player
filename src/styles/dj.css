@@ -1,6 +1,6 @@
 /* DJ mode (D.4): a dark booth in both themes (decks are read in dim light), deck A in the app's
    yellow, deck B in teal. Everything is a variable so the look can change in one place. */
-.dj, .dj-party {
+.dj {
   --dj-bg: #111115;
   --dj-panel: #1b1b21;
   --dj-panel-2: #24242c;
@@ -19,7 +19,7 @@
   color: var(--dj-text);
   font-family: var(--font);
 }
-.dj[hidden], .dj-party[hidden] { display: none; }
+.dj[hidden] { display: none; }
 .dj { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 10px; padding: 10px 14px 14px; }
 .dj svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dj [data-deck="A"] { --deck: var(--dj-a); }
@@ -201,22 +201,6 @@
 .dj-row button.queued { background: var(--dj-a); color: #111; }
 .dj-problem { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--dj-hot); color: #111; padding: 8px 14px; border-radius: 8px; font-weight: 600; margin: 0; }
 
-/* Party screen */
-.dj-party { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; gap: 5vw; padding: 6vh 6vw; overflow: hidden; }
-.dj-party-art { aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: linear-gradient(135deg, #2b2b35, #15151b); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); z-index: 1; }
-.dj-party-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.dj-party-now { z-index: 1; display: grid; gap: 14px; }
-.dj-party-title { font-size: clamp(28px, 5vw, 72px); font-weight: 700; line-height: 1.05; }
-.dj-party-artist { font-size: clamp(18px, 2.4vw, 34px); color: var(--dj-muted); }
-.dj-party-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.dj-party-bar div { height: 100%; width: 0; background: var(--dj-a); }
-.dj-party-next { font-size: clamp(14px, 1.5vw, 20px); color: var(--dj-muted); }
-.dj-party-pulse { position: absolute; inset: -20%; background: radial-gradient(circle at 30% 50%, rgba(242, 193, 46, 0.22), transparent 55%); opacity: 0.3; transition: opacity 0.08s linear; pointer-events: none; }
-.dj-party-controls { position: absolute; right: 18px; bottom: 16px; display: flex; gap: 8px; z-index: 2; }
-.dj-party.locked .dj-party-controls { opacity: 0.25; }
-.dj-party #dj-party-lock[aria-pressed="true"] { background: var(--dj-a); color: #111; }
-.dj-hold { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(242, 193, 46, 0.35); }
-
 @media (max-width: 1100px) {
   .dj-desk { grid-template-columns: 1fr 1fr; }
   .dj-mixer { grid-column: 1 / -1; grid-row: 2; }
@@ -270,7 +254,7 @@
 .dj-tr-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
 .dj-tr-list label { display: flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
 
-/* Party mode: the DJ's Guests panel, the QR and queue on the party screen, videos */
+/* Party mode: the DJ's Guests panel and the video now on the party screen */
 .dj-badge { margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--dj-hot); color: #111; font-size: 11px; font-weight: 700; }
 .dj-guests-panel { max-height: calc(100vh - 80px); overflow-y: auto; }
 .dj-guests-panel h3 { margin: 6px 0 0; font-size: 12px; color: var(--dj-muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -280,18 +264,3 @@
 .dj-ctl-list .acts { display: flex; gap: 4px; }
 .dj-ctl-list .acts button { border: 1px solid var(--dj-line); background: var(--dj-panel-2); color: var(--dj-text); border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
 .dj-ctl-list .vtag { font-size: 10px; font-weight: 700; color: #111; background: var(--dj-hot); border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
-.dj-party { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; }
-.dj-party-guests { z-index: 1; width: clamp(200px, 22vw, 320px); display: grid; gap: 10px; align-content: center; }
-.dj-party-guests[hidden] { display: none; }
-.dj-party-qr { background: #fff; border-radius: 14px; padding: 10px; aspect-ratio: 1; }
-.dj-party-qr svg { width: 100%; height: 100%; display: block; }
-.dj-party-guests p { margin: 0; text-align: center; color: var(--dj-text); font-weight: 600; font-size: clamp(13px, 1.2vw, 18px); }
-.dj-party-guests h3 { margin: 6px 0 0; color: var(--dj-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
-.dj-party-queue { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: clamp(13px, 1.1vw, 17px); }
-.dj-party-queue small { color: var(--dj-muted); margin-left: 6px; }
-.dj-party-video { position: absolute; inset: 0; z-index: 3; background: #000; }
-.dj-party-video[hidden] { display: none; }
-.dj-party-video iframe { width: 100%; height: 100%; border: 0; display: block; }
-.dj-party.video .dj-party-controls { z-index: 4; }
-.dj-party.video .dj-party-guests { position: absolute; right: 18px; top: 18px; width: 150px; z-index: 4; background: rgba(0, 0, 0, 0.6); padding: 8px; border-radius: 12px; }
-.dj-party.video .dj-party-guests h3, .dj-party.video .dj-party-queue { display: none; }

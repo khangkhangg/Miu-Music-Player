@@ -5,7 +5,7 @@ import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, keysCompatible, fits,
-  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel, kindChoices, transitionsSummary,
+  songMeta, nextText, crossfaderFor, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel, kindChoices, transitionsSummary,
 } from '../../src/js/dj.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
@@ -86,12 +86,6 @@ test('the coming transition is described', () => {
 test('the crossfader button sends a deck fully on air', () => {
   assert.equal(crossfaderFor('A'), -1);
   assert.equal(crossfaderFor('B'), 1);
-});
-
-test('the guest lock opens after holding for two seconds', () => {
-  assert.equal(holdProgress(0), 0);
-  assert.equal(holdProgress(1000), 0.5);
-  assert.equal(holdProgress(2500), 1);
 });
 
 test('the DJ song list: search, fits, played last', () => {

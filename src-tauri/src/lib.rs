@@ -209,6 +209,8 @@ pub fn run() {
             party::service::party_info,
             party::service::party_set_local,
             party::service::party_set_relay,
+            party::service::party_screen_open,
+            party::service::party_screen_fullscreen,
             party::service::party_host_state,
             party::service::party_set_settings,
             party::service::party_remove,

@@ -144,13 +144,6 @@ export function crossfaderFor(deck) {
   return deck === 'A' ? -1 : 1;
 }
 
-const HOLD_MS = 2000;
-
-/** How far a hold on the guest lock has got (1 = unlocked). */
-export function holdProgress(ms) {
-  return Math.min(1, Math.max(0, ms / HOLD_MS));
-}
-
 /**
  * Songs for the DJ list: matching the search, only those that fit the song on air when asked,
  * songs already played this session at the end.

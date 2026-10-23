@@ -1,19 +1,18 @@
-// Party mode on screen (P.5): the DJ's Guests panel (Wi-Fi page, approval, the queue), the QR
-// code and queue on the party screen, and YouTube videos in YouTube's own player.
+// Party mode on the DJ screen (P.5): the Guests panel (Wi-Fi page, party link, approval, the
+// queue) and the video now playing on the party screen, with Skip. The party screen itself is its
+// own window (partywindow.js).
 
 import { t } from './i18n.js';
-import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr } from './party.js';
+import { entryLines, partyLimitOptions, relayNote } from './party.js';
 
 const POLL_MS = 1000;
 
 export function setupParty({ invoke, listen }) {
   const $ = (id) => document.getElementById(id);
   const dj = $('dj-mode');
-  const screen = $('dj-party-screen');
   const panel = $('dj-guests-panel');
   let info = { localOn: false };
   let view = null;
-  let openedForVideo = false;
 
   const setPanel = (open) => { panel.hidden = !open; $('dj-guests-btn').setAttribute('aria-expanded', String(open)); };
   $('dj-guests-btn').addEventListener('click', () => setPanel(panel.hidden));
@@ -26,14 +25,7 @@ export function setupParty({ invoke, listen }) {
     $('party-url').textContent = i.localUrl ?? (i.localOn ? '' : t('party.wifiOff'));
     $('party-relay').checked = i.relayOn;
     $('party-relay-url').textContent = relayNote(i);
-    const qr = partyQr(i);
-    if (qr !== shownQr) {
-      $('dj-party-qr').innerHTML = qr ?? '';
-      shownQr = qr;
-    }
-    $('dj-party-guests').hidden = !qr;
   }
-  let shownQr = null;
 
   $('party-wifi').addEventListener('change', (e) => {
     invoke('party_set_local', { on: e.target.checked }).then(showInfo).catch((err) => {
@@ -99,73 +91,32 @@ export function setupParty({ invoke, listen }) {
     empty.className = 'muted';
     empty.textContent = t('party.empty');
     $('party-queue').replaceChildren(...(v.queue.length ? v.queue.map((e) => entryRow(e, [['party.remove', 'party_remove']])) : [empty]));
-    // The party screen shows the top of the queue under the QR code.
-    $('dj-party-queue').replaceChildren(...v.queue.slice(0, 5).map((e) => {
-      const li = document.createElement('li');
-      li.textContent = e.title;
-      const s = document.createElement('small');
-      s.textContent = t('party.votes', { n: e.votes });
-      li.append(s);
-      return li;
-    }));
   }
 
   async function poll() {
     if (dj.hidden) return;
     const [v, s] = await Promise.all([invoke('party_host_state').catch(() => null), invoke('dj_state').catch(() => null)]);
     if (v) render(v, !!s?.autoDj);
+    showVideoRow(await invoke('party_video_now').catch(() => null));
     // The relay opens its room in the background: follow its link and errors.
     if (info.relayOn) invoke('party_info').then(showInfo).catch(() => {});
   }
   setInterval(poll, POLL_MS);
 
-  // ---- Videos: YouTube's player full-screen on the party screen ----
+  // ---- Videos play on the party screen (its own window); here: which one, and Skip ----
 
-  const box = $('dj-party-video');
-  function showVideo(videoId, title) {
-    if (screen.hidden) {
-      screen.hidden = false;
-      openedForVideo = true;
-    }
-    screen.classList.add('video');
-    const frame = document.createElement('iframe');
-    frame.src = videoUrl(videoId, location.origin);
-    frame.title = title;
-    frame.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
-    frame.allowFullscreen = true;
-    // Ask the player to report its state, so the end of the video hands back to Auto DJ.
-    frame.addEventListener('load', () => {
-      for (const delay of [500, 1500, 3000]) setTimeout(() => frame.contentWindow?.postMessage(listenMessage(), 'https://www.youtube.com'), delay);
-    });
-    box.replaceChildren(frame);
-    box.hidden = false;
-    $('party-video-title').textContent = title;
-    $('party-video-row').hidden = false;
+  function showVideoRow(v) {
+    $('party-video-row').hidden = !v;
+    $('party-video-title').textContent = v?.title ?? '';
   }
-
-  function endVideo() {
-    if (box.hidden) return;
-    box.replaceChildren();
-    box.hidden = true;
-    screen.classList.remove('video');
-    $('party-video-row').hidden = true;
-    if (openedForVideo) {
-      screen.hidden = true;
-      openedForVideo = false;
-    }
-    invoke('party_video_done').catch(() => {});
-  }
-
-  window.addEventListener('message', (m) => { if (videoEnded(m)) endVideo(); });
-  $('party-skip').addEventListener('click', endVideo);
-  listen('party-video', (e) => showVideo(e.payload.videoId, e.payload.title));
+  $('party-skip').addEventListener('click', () => invoke('party_video_done').then(() => showVideoRow(null)).catch(() => {}));
+  // A guest's video came up: the party screen must be open to show it.
+  listen('party-video', () => invoke('party_screen_open').catch(() => {}));
 
   return {
     /** DJ mode opened: catch up with the party (a video may be playing already). */
     async opened() {
       showInfo(await invoke('party_info').catch(() => ({ localOn: false })));
-      const v = await invoke('party_video_now').catch(() => null);
-      if (v && box.hidden) showVideo(v.videoId, v.title);
       poll();
     },
     get info() {

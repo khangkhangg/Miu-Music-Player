@@ -393,7 +393,8 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   actions like the Wi-Fi page and answers them, says when the site is off); relay/lib.php (relay/tests/test.php, run
   on the server). Screen: Guests panel (Wi-Fi page, link through musicplayer.vietnamcos.com, approval, limit), QR and
   up next on the party screen, YouTube videos in YouTube's own player with Auto DJ waiting for them; admin page
-  (relay/admin.php). Wi-Fi party checked in the app 2026-10-23. Relay deployed to spo2x 2026-10-23 (PHP tests
+  (relay/admin.php). The party screen is its own window (drag it to the TV, full screen; the DJ screen stays
+  usable; opens by itself for a guest's video). Wi-Fi party checked in the app 2026-10-23. Relay deployed to spo2x 2026-10-23 (PHP tests
   pass there; Miu opened a room, a guest added a song and a video and voted from outside, the phone page showed it,
   turning it off ended the room). **Admin password not set yet** (see relay/README.md).
 

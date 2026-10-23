@@ -60,3 +60,19 @@ export function partyQr(info) {
   if (info.relayOn && info.relayQr && !info.relayError) return info.relayQr;
   return info.localOn ? info.localQr ?? null : null;
 }
+
+/** What the party screen shows from the DJ's state: the song on air, the one on the other deck. */
+export function nowAndNext(state, songById) {
+  const decks = state?.decks ?? [];
+  const i = state?.onAir ? ['A', 'B'].indexOf(state.onAir) : decks.findIndex((d) => d.playing);
+  const d = decks[i];
+  const now = d?.songId != null ? songById(d.songId) ?? null : null;
+  if (!now) return { now: null, next: null, progress: 0, level: 0 };
+  const other = decks[1 - i];
+  return {
+    now,
+    next: other?.songId != null ? songById(other.songId) ?? null : null,
+    progress: d.durationS ? Math.min(1, d.positionS / d.durationS) : 0,
+    level: d.level ?? 0,
+  };
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="dj.party">Party screen</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/partywindow.css">
+  <script type="module" src="js/partywindow.js"></script>
+</head>
+<body>
+  <main class="party" id="party">
+    <div class="party-pulse" id="party-pulse" aria-hidden="true"></div>
+    <div class="party-art"><img id="party-img" alt="" hidden></div>
+    <div class="party-now">
+      <div class="party-title" id="party-title" dir="auto"></div>
+      <div class="party-artist" id="party-artist" dir="auto"></div>
+      <div class="party-bar"><div id="party-progress"></div></div>
+      <div class="party-next" id="party-next" dir="auto"></div>
+    </div>
+    <aside class="party-guests" id="party-guests" hidden>
+      <div class="party-qr" id="party-qr" aria-hidden="true"></div>
+      <p data-i18n="party.scan">Scan to add songs and vote</p>
+      <h3 data-i18n="party.upNext">Up next</h3>
+      <ol class="party-queue" id="party-queue"></ol>
+    </aside>
+    <div class="party-video" id="party-video" hidden></div>
+    <button class="party-full" id="party-full" type="button" aria-label="Full screen" title="Full screen (F11, double-click)" data-i18n-attr="aria-label:party.fullScreen;title:party.fullScreenHint"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </main>
+</body>
+</html>

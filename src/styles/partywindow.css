@@ -1,0 +1,51 @@
+/* The party screen window (P.5): big cover, now and next, the guests' QR code and queue, videos.
+   Dark in both themes: it is shown on a TV in a dim room. */
+:root {
+  --party-bg: #111115;
+  --party-text: #ededf2;
+  --party-muted: #9a9aa8;
+  --party-accent: #f2c12e;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--party-bg); color: var(--party-text); font-family: var(--font); overflow: hidden; user-select: none; }
+body.idle, body.idle * { cursor: none; }
+[hidden] { display: none !important; }
+
+.party { position: relative; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; align-items: center; gap: 5vw; padding: 6vh 6vw; overflow: hidden; }
+.party-pulse { position: absolute; inset: -20%; background: radial-gradient(circle at 30% 50%, rgba(242, 193, 46, 0.22), transparent 55%); opacity: 0.3; transition: opacity 0.08s linear; pointer-events: none; }
+.party-art { aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: linear-gradient(135deg, #2b2b35, #15151b); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); z-index: 1; }
+.party-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.party-now { z-index: 1; display: grid; gap: 14px; min-width: 0; }
+.party-title { font-size: clamp(28px, 5vw, 72px); font-weight: 700; line-height: 1.05; overflow-wrap: anywhere; }
+.party-artist { font-size: clamp(18px, 2.4vw, 34px); color: var(--party-muted); }
+.party-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.party-bar div { height: 100%; width: 0; background: var(--party-accent); }
+.party-next { font-size: clamp(14px, 1.5vw, 20px); color: var(--party-muted); }
+
+.party-guests { z-index: 1; width: clamp(180px, 22vw, 320px); display: grid; gap: 10px; align-content: center; }
+.party-qr { background: #fff; border-radius: 14px; padding: 10px; aspect-ratio: 1; }
+.party-qr svg { width: 100%; height: 100%; display: block; }
+.party-guests p { margin: 0; text-align: center; font-weight: 600; font-size: clamp(13px, 1.2vw, 18px); }
+.party-guests h3 { margin: 6px 0 0; color: var(--party-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+.party-queue { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: clamp(13px, 1.1vw, 17px); }
+.party-queue li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.party-queue small { color: var(--party-muted); margin-left: 6px; }
+
+/* A video fills the screen; the QR code stays in a corner so guests can keep adding. */
+.party-video { position: absolute; inset: 0; z-index: 3; background: #000; }
+.party-video iframe { width: 100%; height: 100%; border: 0; display: block; }
+.party.video .party-guests { position: absolute; right: 18px; top: 18px; width: clamp(110px, 12vw, 170px); z-index: 4; background: rgba(0, 0, 0, 0.6); padding: 8px; border-radius: 12px; }
+.party.video .party-guests h3, .party.video .party-queue { display: none; }
+.party.video .party-guests p { font-size: 12px; }
+
+.party-full { position: absolute; right: 14px; bottom: 14px; z-index: 5; width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.15); background: rgba(0, 0, 0, 0.45); color: var(--party-text); display: grid; place-items: center; cursor: pointer; transition: opacity 0.3s; }
+.party-full svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+body.idle .party-full { opacity: 0; }
+
+/* A narrow or portrait window: stack, smaller cover. */
+@media (max-aspect-ratio: 1/1) {
+  .party { grid-template-columns: 1fr; grid-auto-rows: min-content; align-content: center; gap: 4vh; }
+  .party-art { width: min(60vw, 40vh); justify-self: center; }
+  .party-guests { width: min(60vw, 260px); justify-self: center; }
+}
