@@ -126,6 +126,11 @@ impl Mixer {
         (ch.echo.is_on(), ch.sweep.is_some())
     }
 
+    /// The master volume control, 0..1.
+    pub fn master_volume(&self) -> f32 {
+        self.master_volume
+    }
+
     /// A deck's channel fader, 0..1.
     pub fn volume(&self, side: Side) -> f32 {
         self.channels[index(side)].volume

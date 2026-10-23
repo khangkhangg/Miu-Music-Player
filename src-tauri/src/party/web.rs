@@ -210,7 +210,8 @@ pub fn handle(p: &Party, req: &Request, title_of: &dyn Fn(&str) -> Option<String
                 (Some(id), _) => p.library_song(id),
                 (None, Some(url)) => match links::parse(url) {
                     Some(Link::YouTube { video_id }) => {
-                        let title = title_of(&format!("https://www.youtube.com/watch?v={video_id}")).map(|t| links::clean_title(&t)).unwrap_or_else(|| video_id.clone());
+                        // Videos keep their whole title (karaoke versions say so in it).
+                        let title = title_of(&format!("https://www.youtube.com/watch?v={video_id}")).map(|t| t.trim().to_string()).unwrap_or_else(|| video_id.clone());
                         Some(Item::Video { video_id, title })
                     }
                     Some(Link::Spotify { url }) => title_of(&url).and_then(|t| p.library_match(&t)),
@@ -304,7 +305,7 @@ mod tests {
         assert_eq!(q.len(), 2);
         assert_eq!(q[0]["title"], "Đi Về Nhà");
         assert_eq!(q[1]["kind"], "video");
-        assert_eq!(q[1]["title"], "Never Gonna Give You Up", "the video title without its extras");
+        assert_eq!(q[1]["title"], "Rick Astley - Never Gonna Give You Up (Official Video)", "a video keeps its whole title");
         assert_eq!(q[1]["mine"], true);
         let id = q[1]["id"].as_u64().unwrap();
         assert_eq!(post(&p, "/api/vote", serde_json::json!({ "guest": "g3", "id": id, "on": true })).status, 200);

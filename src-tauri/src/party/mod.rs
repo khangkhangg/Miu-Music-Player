@@ -5,3 +5,4 @@ pub mod queue;
 pub mod links;
 pub mod web;
 pub mod server;
+pub mod service;

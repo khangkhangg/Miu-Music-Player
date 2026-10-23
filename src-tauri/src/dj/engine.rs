@@ -96,6 +96,8 @@ pub struct EngineStatus {
     pub on_air: Option<Side>,
     pub next: Option<Next>,
     pub mixing: bool,
+    /// Holding for a party video.
+    pub holding: bool,
     pub style: super::autodj::Style,
     pub transitions: crate::settings::DjTransitions,
 }
@@ -106,6 +108,7 @@ enum Cmd {
     Phones(Option<String>),
     Style(super::autodj::Style),
     Choose(Option<super::autodj::Transition>),
+    Hold(bool),
     Transitions(crate::settings::DjTransitions),
     Stop,
 }
@@ -255,6 +258,11 @@ impl DjEngine {
         self.overviews.lock().ok()?[side as usize].clone()
     }
 
+    /// Hold for a party video (the song on air fades out, nothing starts) or let go.
+    pub fn set_hold(&self, on: bool) {
+        let _ = self.tx.send(Cmd::Hold(on));
+    }
+
     /// Only the checked kinds of transition from now on.
     pub fn set_transitions(&self, t: crate::settings::DjTransitions) {
         let _ = self.tx.send(Cmd::Transitions(t));
@@ -325,6 +333,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 }
             }
             Ok(Cmd::Choose(t)) => auto.set_next_transition(t),
+            Ok(Cmd::Hold(on)) => auto.set_hold(on),
             Ok(Cmd::Transitions(t)) => {
                 auto.set_transitions(t.allowed.clone(), t.mix_it_up);
                 if let Ok(mut s) = status.lock() {
@@ -414,6 +423,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 s.on_air = auto.live().filter(|_| auto.is_on());
                 s.next = auto.next();
                 s.mixing = auto.is_mixing();
+                s.holding = auto.is_holding();
                 s.master = out.name.clone();
                 s.phones = phones_out.as_ref().map(|p| p.name.clone());
                 if problem.is_some() {

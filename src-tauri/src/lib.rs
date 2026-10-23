@@ -101,6 +101,7 @@ pub fn run() {
         .manage(library::service::LastEdit::default())
         .manage(podcast_downloads.clone())
         .manage(dj::service::SharedDj::default())
+        .manage(party::service::SharedParty::default())
         .manage(std::sync::Arc::new(podcast::service::DiscoverCache::default()))
         .manage(std::sync::Arc::new(audiobook::service::RecentCache::default()))
         .register_uri_scheme_protocol("miuart", {
@@ -205,6 +206,15 @@ pub fn run() {
             dj::service::dj_controllers,
             dj::service::dj_midi_learn,
             dj::service::dj_midi_forget,
+            party::service::party_info,
+            party::service::party_set_local,
+            party::service::party_host_state,
+            party::service::party_set_settings,
+            party::service::party_remove,
+            party::service::party_approve,
+            party::service::party_dj_add,
+            party::service::party_video_now,
+            party::service::party_video_done,
             dj::service::dj_outputs,
             dj::service::dj_set_phones,
             audio::service::player_shuffle,

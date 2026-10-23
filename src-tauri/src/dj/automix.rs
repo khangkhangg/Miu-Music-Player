@@ -53,6 +53,12 @@ pub struct AutoMix {
     /// The kinds the DJ checked (none: any) and whether to pick among them at random.
     allowed: Vec<autodj::Kind>,
     mix_it_up: bool,
+    /// Holding for a party video: the song on air fades out and nothing starts until it is over.
+    hold: bool,
+    /// Fade-out progress (seconds) and the master volume to come back to.
+    fade_s: Option<f64>,
+    master_before: Option<f32>,
+    restore_master: bool,
 }
 
 fn other(s: Side) -> Side {
@@ -63,6 +69,8 @@ fn other(s: Side) -> Side {
 }
 
 const SIDES: [Side; 2] = [Side::A, Side::B];
+/// How long the song on air takes to fade out for a party video.
+const HOLD_FADE_S: f64 = 4.0;
 
 /// The deck's song analysis; a song not analysed yet is mixed by its length alone.
 fn analysis_of(deck: &Deck) -> Option<Analysis> {
@@ -163,6 +171,24 @@ impl AutoMix {
         self.chosen = t;
     }
 
+    /// Hold for a party video (the song on air fades out over a few seconds and comes off its deck;
+    /// nothing starts) or let go (the master volume comes back and the next song starts).
+    pub fn set_hold(&mut self, on: bool) {
+        if on && !self.hold {
+            self.mixing = None;
+            self.next = None;
+            self.fade_s = Some(0.0);
+        }
+        if !on && self.hold {
+            self.restore_master = true;
+        }
+        self.hold = on;
+    }
+
+    pub fn is_holding(&self) -> bool {
+        self.hold
+    }
+
     /// The deck on air.
     pub fn live(&self) -> Option<Side> {
         self.live
@@ -187,6 +213,14 @@ impl AutoMix {
 
     /// Called before each block of `frames` the engine renders.
     pub fn tick(&mut self, m: &mut Mixer, frames: usize) -> Option<Event> {
+        if self.hold {
+            self.fade_out(m, frames);
+            return None;
+        }
+        if self.restore_master {
+            self.restore_master = false;
+            m.apply(&Action::MasterVolume { value: self.master_before.take().unwrap_or(1.0) });
+        }
         if !self.on {
             return None;
         }
@@ -237,6 +271,24 @@ impl AutoMix {
             self.mixing = Some(Mixing { script, elapsed_s: 0.0, duration_s, incoming, prev_p: -1.0, speed_from: speed, speed_to });
         }
         self.step(m, live, frames)
+    }
+
+    /// Fades the song on air out over `HOLD_FADE_S`, then takes it off its deck.
+    fn fade_out(&mut self, m: &mut Mixer, frames: usize) {
+        let Some(t) = self.fade_s.as_mut() else { return };
+        let from = *self.master_before.get_or_insert(m.master_volume());
+        *t += frames as f64 / m.rate() as f64;
+        let p = (*t / HOLD_FADE_S).min(1.0) as f32;
+        m.apply(&Action::MasterVolume { value: from * (1.0 - p) });
+        if p >= 1.0 {
+            self.fade_s = None;
+            for s in SIDES {
+                if m.deck(s).is_playing() {
+                    m.deck_mut(s).eject();
+                    flatten(m, s);
+                }
+            }
+        }
     }
 
     /// Nothing plays: start a loaded song that has not been played to its end.
@@ -421,6 +473,24 @@ mod tests {
         let events = run(&mut m, &mut auto, 89.0);
         assert!(events.contains(&Event::OnAir { deck: Side::B, song_id: 2 }), "the mix still happens");
         assert_eq!(m.deck(Side::B).stem_mode(), StemMode::Full);
+    }
+
+    #[test]
+    fn holding_for_a_video_fades_the_song_out_then_starts_the_next_one_after() {
+        let (mut m, mut auto) = ready(song(1, 60.0, 50.0, None), song(2, 60.0, 50.0, None), Transition::Cut);
+        auto.set_next_transition(None);
+        run(&mut m, &mut auto, 1.0);
+        assert!(m.deck(Side::A).is_playing());
+        auto.set_hold(true);
+        run(&mut m, &mut auto, 2.0);
+        assert!(m.master_volume() < 0.6 && m.deck(Side::A).is_playing(), "fading: {}", m.master_volume());
+        run(&mut m, &mut auto, 3.0);
+        assert!(!m.deck(Side::A).is_playing() && m.deck(Side::A).track().is_none(), "faded out and taken off");
+        assert!(!m.deck(Side::B).is_playing(), "nothing starts during the video");
+        auto.set_hold(false);
+        let events = run(&mut m, &mut auto, 0.2);
+        assert_eq!(events, vec![Event::OnAir { deck: Side::B, song_id: 2 }], "after the video: the next song");
+        assert_eq!(m.master_volume(), 1.0);
     }
 
     #[test]

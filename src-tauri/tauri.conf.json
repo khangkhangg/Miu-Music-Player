@@ -16,7 +16,8 @@
         "height": 800,
         "minWidth": 1000,
         "minHeight": 600,
-        "backgroundColor": "#1c1c22"
+        "backgroundColor": "#1c1c22",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
       },
       {
         "label": "mini",
@@ -37,7 +38,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: data: miuart: http://miuart.localhost https:; style-src 'self'; script-src 'self'"
+      "csp": "default-src 'self'; img-src 'self' asset: data: miuart: http://miuart.localhost https:; style-src 'self'; script-src 'self'; frame-src https://www.youtube.com"
     }
   },
   "bundle": {

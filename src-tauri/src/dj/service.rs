@@ -165,14 +165,56 @@ pub fn needs_song(s: &EngineStatus) -> Option<(Side, Option<i64>)> {
     }
 }
 
+/// What Auto DJ does about the party queue's top entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PartyStep {
+    /// Put this library song on this (free) deck; it is mixed in like any other.
+    Load(Side, i64),
+    /// The song on air is (nearly) over: hand over to this video on the party screen.
+    Video(String, String),
+    /// Nothing queued: Auto DJ picks the next song itself.
+    Pick,
+    Wait,
+}
+
+/// A queued video takes over when the song on air has this little left (or nothing plays).
+const VIDEO_LEAD_S: f64 = 8.0;
+
+pub fn party_step(s: &EngineStatus, top: Option<&crate::party::queue::Item>, video_playing: bool) -> PartyStep {
+    use crate::party::queue::Item;
+    if video_playing || !s.auto_dj {
+        return PartyStep::Wait;
+    }
+    match top {
+        None => PartyStep::Pick,
+        Some(Item::Video { video_id, title }) => {
+            let on_air = s.on_air.map(|d| &s.decks[d as usize]).or_else(|| s.decks.iter().find(|d| d.playing));
+            let over = on_air.is_none_or(|d| !d.playing || d.ended || d.duration_s - d.position_s <= VIDEO_LEAD_S);
+            if over { PartyStep::Video(video_id.clone(), title.clone()) } else { PartyStep::Wait }
+        }
+        Some(Item::Song { song_id, .. }) => {
+            if s.decks.iter().any(|d| d.song_id == Some(*song_id)) {
+                return PartyStep::Wait;
+            }
+            match needs_song(s) {
+                Some((deck, _)) => PartyStep::Load(deck, *song_id),
+                None => PartyStep::Wait,
+            }
+        }
+    }
+}
+
 fn song_path(db: &SharedDb, song_id: i64) -> Option<std::path::PathBuf> {
     let d = db.lock().ok()?;
     crate::library::songs::paths_for(&d, &[song_id]).ok()?.pop().map(|(_, p)| p)
 }
 
 /// Keeps Auto DJ supplied: whenever a deck is free, picks the next song and loads it there.
-fn auto_controller(dj: SharedDj, db: SharedDb, alive: Arc<AtomicBool>) {
+fn auto_controller(app: tauri::AppHandle, dj: SharedDj, db: SharedDb, party: crate::party::service::SharedParty, alive: Arc<AtomicBool>) {
+    use crate::party::queue::Item;
+    use tauri::Emitter;
     std::thread::spawn(move || {
+        let mut last_on_air: Option<i64> = None;
         while alive.load(Ordering::Acquire) {
             std::thread::sleep(std::time::Duration::from_millis(250));
             let (status, curve, queue, mut played, seed) = {
@@ -180,6 +222,40 @@ fn auto_controller(dj: SharedDj, db: SharedDb, alive: Arc<AtomicBool>) {
                 let Some(s) = g.as_ref() else { return };
                 (s.engine.status(), s.auto.curve, s.auto.queue.clone(), s.auto.played.clone(), s.auto.seed)
             };
+            // The party queue: what went on air leaves it; its top entry comes before Auto DJ's own pick.
+            let on_air_song = status.on_air.and_then(|d| status.decks[d as usize].song_id);
+            if on_air_song != last_on_air {
+                last_on_air = on_air_song;
+                if let Some(id) = on_air_song {
+                    party.party.change(|q| q.start_item(&Item::Song { song_id: id, title: String::new(), artist: String::new() }));
+                }
+            }
+            let top = party.party.queue().peek().map(|e| e.item.clone());
+            match party_step(&status, top.as_ref(), party.video().is_some()) {
+                PartyStep::Load(deck, id) => {
+                    let analysis = db.lock().ok().and_then(|d| store::get(&d, id).ok().flatten());
+                    if let (Some(path), Ok(g)) = (song_path(&db, id), dj.lock()) {
+                        if let Some(s) = g.as_ref() {
+                            s.engine.load(deck, path, id, analysis);
+                        }
+                    }
+                    continue;
+                }
+                PartyStep::Video(video_id, title) => {
+                    let item = Item::Video { video_id: video_id.clone(), title: title.clone() };
+                    party.party.change(|q| q.start_item(&item));
+                    party.set_video(Some((video_id.clone(), title.clone())));
+                    if let Ok(g) = dj.lock() {
+                        if let Some(s) = g.as_ref() {
+                            s.engine.set_hold(true);
+                        }
+                    }
+                    let _ = app.emit("party-video", serde_json::json!({ "videoId": video_id, "title": title }));
+                    continue;
+                }
+                PartyStep::Wait if top.is_some() || party.video().is_some() => continue,
+                PartyStep::Wait | PartyStep::Pick => {}
+            }
             // Whatever has been on a deck counts as played, by hand or by Auto DJ.
             played.extend(status.decks.iter().filter_map(|d| d.song_id));
             let pick = needs_song(&status).and_then(|(deck, current)| {
@@ -283,7 +359,7 @@ pub fn dj_set_auto(curve: EnergyCurve, queue: Vec<i64>, dj: State<'_, SharedDj>)
 /// Opens DJ mode: the normal player pauses and the DJ engine takes the speakers (the player's
 /// output) and the chosen headphones.
 #[tauri::command]
-pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: State<'_, SharedDj>) -> Result<EngineStatus, String> {
+pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>, dj: State<'_, SharedDj>, party: State<'_, crate::party::service::SharedParty>) -> Result<EngineStatus, String> {
     let mut g = dj.lock().map_err(|e| e.to_string())?;
     if let Some(s) = g.as_ref() {
         return Ok(s.engine.status());
@@ -303,7 +379,7 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
     let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
     let midi = Arc::new(super::controllers::MidiShared::default());
     *g = Some(DjSession { engine, auto: AutoPrefs { seed, ..Default::default() }, midi: midi.clone(), alive: alive.clone() });
-    auto_controller(dj.inner().clone(), db.inner().clone(), alive.clone());
+    auto_controller(app.clone(), dj.inner().clone(), db.inner().clone(), party.inner().clone(), alive.clone());
     let (to_engine, from_engine) = (dj.inner().clone(), dj.inner().clone());
     super::controllers::start(
         app,
@@ -385,6 +461,30 @@ mod tests {
 
     fn status(a: DeckStatus, b: DeckStatus, on_air: Option<Side>) -> EngineStatus {
         EngineStatus { decks: [a, b], auto_dj: true, on_air, ..Default::default() }
+    }
+
+    #[test]
+    fn the_party_queue_comes_first() {
+        use crate::party::queue::Item;
+        let song = |id: i64| Item::Song { song_id: id, title: String::new(), artist: String::new() };
+        let video = Item::Video { video_id: "abc".into(), title: "Sing".into() };
+        let mut playing = deck(Some(4), false);
+        playing.playing = true;
+        playing.duration_s = 200.0;
+        playing.position_s = 100.0;
+        let s = status(playing.clone(), deck(None, false), Some(Side::A));
+        assert_eq!(party_step(&s, Some(&song(9)), false), PartyStep::Load(Side::B, 9), "the top of the queue on the free deck");
+        assert_eq!(party_step(&s, None, false), PartyStep::Pick, "nothing queued: Auto DJ picks");
+        let loaded = status(playing.clone(), deck(Some(9), false), Some(Side::A));
+        assert_eq!(party_step(&loaded, Some(&song(9)), false), PartyStep::Wait, "already on a deck");
+        assert_eq!(party_step(&s, Some(&video), false), PartyStep::Wait, "a video waits for the song to end");
+        let mut ending = playing.clone();
+        ending.position_s = 195.0;
+        let s2 = status(ending, deck(None, false), Some(Side::A));
+        assert_eq!(party_step(&s2, Some(&video), false), PartyStep::Video("abc".into(), "Sing".into()), "near the end: over to the video");
+        let quiet = status(deck(None, false), deck(None, false), None);
+        assert_eq!(party_step(&quiet, Some(&video), false), PartyStep::Video("abc".into(), "Sing".into()), "nothing playing: at once");
+        assert_eq!(party_step(&quiet, Some(&song(9)), true), PartyStep::Wait, "a video is playing");
     }
 
     #[test]

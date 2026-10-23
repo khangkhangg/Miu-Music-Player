@@ -697,6 +697,7 @@
         <select id="dj-phones"></select>
       </label>
       <button class="dj-top-btn dj-ctl-btn" id="dj-ctl-btn" type="button" aria-expanded="false" aria-controls="dj-ctl-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="8" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/></svg><span id="dj-ctl-label" data-i18n="dj.ctl.title">Controller</span><span class="dj-ctl-dot" id="dj-ctl-dot" aria-hidden="true"></span></button>
+      <button class="dj-top-btn" id="dj-guests-btn" type="button" aria-expanded="false" aria-controls="dj-guests-panel"><span data-i18n="party.guests">Guests</span><span class="dj-badge" id="dj-guests-badge" hidden></span></button>
       <button class="dj-top-btn" id="dj-party" type="button" data-i18n="dj.party">Party screen</button>
       <button class="dj-top-btn dj-exit" id="dj-exit" type="button" data-i18n="dj.exit">Exit DJ mode</button>
       </div>
@@ -873,6 +874,21 @@
         <p id="dj-learn-hint" role="status" data-i18n="dj.ctl.learnHint">Click a control here, then move the matching control on your controller.</p>
       </div>
     </section>
+    <section class="dj-ctl-panel dj-guests-panel" id="dj-guests-panel" aria-labelledby="dj-guests-heading" hidden>
+      <header><h2 id="dj-guests-heading" data-i18n="party.guests">Guests</h2><button class="icon-btn" id="dj-guests-close" type="button" aria-label="Close" title="Close" data-i18n-attr="aria-label:dj.ctl.close;title:dj.ctl.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+      <label class="dj-check"><input type="checkbox" id="party-wifi"><span data-i18n="party.guestsWifi">Guests on the Wi-Fi</span></label>
+      <p class="dj-tr-hint" id="party-url"></p>
+      <p class="dj-tr-hint" data-i18n="party.guestsWifiHint">Guests scan the QR code.</p>
+      <label class="dj-check"><input type="checkbox" id="party-open"><span data-i18n="party.open">Guests can add songs</span></label>
+      <label class="dj-check"><input type="checkbox" id="party-approval"><span data-i18n="party.approval">Approve songs before they play</span></label>
+      <label class="dj-tr-next"><span data-i18n="party.limit">Songs each guest may have waiting</span><select id="party-limit"></select></label>
+      <p class="dj-tr-hint" id="party-autodj" data-i18n="party.autoDjNeeded" hidden>Turn Auto DJ on.</p>
+      <div id="party-video-row" class="dj-party-video-row" hidden><span id="party-video-title"></span><button class="dj-top-btn" type="button" id="party-skip" data-i18n="party.skipVideo">Skip the video</button></div>
+      <h3 data-i18n="party.waiting">Waiting for you</h3>
+      <ul class="dj-ctl-list" id="party-waiting"></ul>
+      <h3 data-i18n="party.queue">Queue (most votes first)</h3>
+      <ul class="dj-ctl-list" id="party-queue"></ul>
+    </section>
     <section class="dj-ctl-panel dj-tr-panel" id="dj-tr-panel" aria-labelledby="dj-tr-heading" hidden>
       <header><h2 id="dj-tr-heading" data-i18n="dj.tr.title">Transitions</h2><button class="icon-btn" id="dj-tr-close" type="button" aria-label="Close" title="Close" data-i18n-attr="aria-label:dj.ctl.close;title:dj.ctl.close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
       <label class="dj-tr-next"><span data-i18n="dj.choose">Next transition</span><select id="dj-choose"></select></label>
@@ -893,6 +909,13 @@
       <div class="dj-party-next" id="dj-party-next"></div>
     </div>
     <div class="dj-party-pulse" id="dj-party-pulse" aria-hidden="true"></div>
+    <aside class="dj-party-guests" id="dj-party-guests" hidden>
+      <div class="dj-party-qr" id="dj-party-qr" aria-hidden="true"></div>
+      <p data-i18n="party.scan">Scan to add songs and vote</p>
+      <h3 data-i18n="party.upNext">Up next</h3>
+      <ol class="dj-party-queue" id="dj-party-queue"></ol>
+    </aside>
+    <div class="dj-party-video" id="dj-party-video" hidden></div>
     <div class="dj-party-controls">
       <button class="dj-top-btn" id="dj-party-lock" type="button" aria-pressed="false" data-i18n="dj.lock">Guest lock</button>
       <button class="dj-top-btn" id="dj-party-back" type="button"><span class="dj-hold" aria-hidden="true"></span><span data-i18n="dj.backToDecks">Back to the decks</span></button>

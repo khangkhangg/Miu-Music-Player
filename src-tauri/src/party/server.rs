@@ -87,7 +87,11 @@ pub fn lan_ip() -> Option<IpAddr> {
 /// The link as a QR code (SVG) for the party screen.
 pub fn qr_svg(text: &str) -> String {
     match qrcode::QrCode::new(text.as_bytes()) {
-        Ok(code) => code.render::<qrcode::render::svg::Color>().min_dimensions(240, 240).quiet_zone(true).build(),
+        // Just the <svg> element (the XML declaration is no use inside a page).
+        Ok(code) => {
+            let svg = code.render::<qrcode::render::svg::Color>().min_dimensions(240, 240).quiet_zone(true).build();
+            svg.find("<svg").map_or(svg.clone(), |i| svg[i..].to_string())
+        }
         Err(_) => String::new(),
     }
 }
@@ -151,7 +155,7 @@ mod tests {
     #[test]
     fn a_qr_code_for_the_link() {
         let svg = qr_svg("http://192.168.1.20:8765/p/abc/");
-        assert!(svg.starts_with("<svg") || svg.contains("<svg"), "{}", &svg[..60.min(svg.len())]);
+        assert!(svg.starts_with("<svg"), "{}", &svg[..60.min(svg.len())]);
         assert!(svg.len() > 500);
     }
 

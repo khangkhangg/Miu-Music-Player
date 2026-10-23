@@ -11,7 +11,7 @@ const POLL_MS = 50;
 const LIST_MAX = 300;
 const SIDES = ['A', 'B'];
 
-export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
+export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   const $ = (id) => document.getElementById(id);
   const root = $('dj-mode');
   const party = $('dj-party-screen');
@@ -223,8 +223,9 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     if (b.dataset.load) {
       invoke('dj_load', { deck: b.dataset.load, songId: id }).catch(showProblem);
     } else {
-      queue = queue.includes(id) ? queue.filter((q) => q !== id) : [...queue, id];
-      sendAuto();
+      // Into the party queue (the one Auto DJ plays first), next to what guests add.
+      queue = queue.includes(id) ? queue : [...queue, id];
+      invoke('party_dj_add', { songId: id }).catch(showProblem);
       renderList(true);
     }
   });
@@ -583,6 +584,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];
     await Promise.all([refreshLibrary(), refreshOutputs()]);
+    onOpen?.();
     refreshControllers();
     invoke('dj_analysis_progress').then((p) => { $('dj-analysis').textContent = analysisText(p); }).catch(() => {});
     clearInterval(timer);
