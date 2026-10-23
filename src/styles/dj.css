@@ -132,10 +132,12 @@
 .dj-hands button svg { width: 14px; height: 14px; }
 .dj-hotpad.set { background: var(--deck); color: #111; border-color: transparent; }
 .dj-loops button.on, .dj-fx button[aria-pressed="true"] { border-color: var(--deck); color: var(--deck); }
-.dj-platter-row { display: flex; align-items: center; justify-content: center; gap: 18px; min-width: 0; }
-.dj-deck[data-deck="B"] .dj-platter-row { flex-direction: row-reverse; }
-.dj-platter-row .dj-platter { justify-self: auto; flex: 0 1 auto; }
-.dj-platter-row .dj-fx { display: flex; flex-direction: column; gap: 8px; }
+/* The platter stays centred in the deck; the effects sit against the deck's outer edge (A right, B left). */
+.dj-platter-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; }
+.dj-platter-row .dj-platter { grid-column: 2; grid-row: 1; justify-self: center; width: clamp(150px, 22vh, 230px); }
+.dj-platter-row .dj-fx { display: flex; flex-direction: column; gap: 8px; grid-row: 1; }
+.dj-deck[data-deck="A"] .dj-platter-row .dj-fx { grid-column: 3; justify-self: end; }
+.dj-deck[data-deck="B"] .dj-platter-row .dj-fx { grid-column: 1; justify-self: start; }
 .dj-platter-row .dj-fx button {
   height: 36px; min-width: 96px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--dj-line);
   background: var(--dj-panel-2); color: var(--dj-muted); font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap;
