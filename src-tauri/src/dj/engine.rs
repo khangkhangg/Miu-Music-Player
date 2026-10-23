@@ -97,6 +97,12 @@ pub struct EngineStatus {
     pub vibe: Option<super::autodj::Vibe>,
     /// How much Auto DJ does inside songs.
     pub hype: super::hype::Hype,
+    /// The level playing now (Auto resolved).
+    pub hype_now: super::hype::Hype,
+    /// How much of each song plays now (Auto resolved from the guests' queue).
+    pub length: super::hype::SongLength,
+    /// The DJ's choice of song length (filled in by the service).
+    pub length_choice: super::hype::SongLength,
     /// The beat and the coming drop of the song on air, for the party screen.
     pub show: Option<super::hype::Show>,
     pub auto_dj: bool,
@@ -114,6 +120,8 @@ enum Cmd {
     Action(Action),
     Vibe(Option<super::autodj::Vibe>),
     Hype(super::hype::Hype),
+    Length(super::hype::SongLength),
+    Crowd(f32),
     Loaded(Side, Arc<Track>),
     Phones(Option<String>),
     Style(super::autodj::Style),
@@ -347,6 +355,16 @@ impl DjEngine {
         let _ = self.tx.send(Cmd::Hype(hype));
     }
 
+    /// How much of each song Auto DJ plays (already resolved from Auto).
+    pub fn set_length(&self, length: super::hype::SongLength) {
+        let _ = self.tx.send(Cmd::Length(length));
+    }
+
+    /// How busy the guests are (0 to 1), for Auto Hype.
+    pub fn set_crowd(&self, heat: f32) {
+        let _ = self.tx.send(Cmd::Crowd(heat));
+    }
+
     /// The kind of music Auto DJ is playing from (a playlist's), for the Auto style.
     pub fn set_vibe(&self, vibe: Option<super::autodj::Vibe>) {
         let _ = self.tx.send(Cmd::Vibe(vibe));
@@ -425,6 +443,14 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                     s.hype = hype;
                 }
             }
+            Ok(Cmd::Length(length)) => {
+                auto.set_length(length);
+                performer.set_length(length);
+                if let Ok(mut s) = status.lock() {
+                    s.length = length;
+                }
+            }
+            Ok(Cmd::Crowd(heat)) => performer.set_crowd(heat),
             Ok(Cmd::Vibe(vibe)) => {
                 auto.set_vibe(vibe);
                 if let Ok(mut s) = status.lock() {
@@ -530,6 +556,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                 s.mixing = auto.is_mixing();
                 s.holding = auto.is_holding();
                 s.show = performer.show(&mixer);
+                s.hype_now = performer.hype_now();
                 s.master = out.name.clone();
                 s.phones = phones_out.as_ref().map(|p| p.name.clone());
                 if problem.is_some() {

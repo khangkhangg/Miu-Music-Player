@@ -129,6 +129,8 @@ pub struct AutoPrefs {
     pub source: Option<i64>,
     pub smart: bool,
     pub setlist: Vec<i64>,
+    /// How much of each song plays, as the DJ chose it (Auto: by the guests' queue).
+    pub length: super::hype::SongLength,
 }
 
 /// What Auto DJ plays next, in order: songs queued by hand, then the playlist. When every song of
@@ -231,9 +233,19 @@ fn auto_controller(app: tauri::AppHandle, dj: SharedDj, db: SharedDb, party: cra
         let mut last_on_air: Option<i64> = None;
         while alive.load(Ordering::Acquire) {
             std::thread::sleep(std::time::Duration::from_millis(250));
+            // Party edits get shorter as the guests' queue grows; Auto Hype hears the crowd.
+            let (waiting, heat) = {
+                let q = party.party.queue();
+                (q.ordered().len(), q.heat(std::time::Instant::now()))
+            };
             let (status, curve, hand, setlist, mut played, seed) = {
                 let Ok(g) = dj.lock() else { return };
                 let Some(s) = g.as_ref() else { return };
+                let length = super::hype::auto_length(s.auto.length, waiting);
+                if s.engine.status().length != length {
+                    s.engine.set_length(length);
+                }
+                s.engine.set_crowd(heat);
                 (s.engine.status(), s.auto.curve, s.auto.queue.clone(), s.auto.setlist.clone(), s.auto.played.clone(), s.auto.seed)
             };
             // The party queue: what went on air leaves it; its top entry comes before Auto DJ's own pick.
@@ -342,6 +354,17 @@ pub fn dj_set_hype(hype: super::hype::Hype, db: State<'_, SharedDb>, dj: State<'
     engine_do(&dj, |e| e.set_hype(hype)).or(Ok(()))
 }
 
+/// How much of each song Auto DJ plays: full, short, quick or auto (kept for next time).
+#[tauri::command]
+pub fn dj_set_song_length(length: super::hype::SongLength, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    settings::set_dj_song_length(&*db.lock().map_err(|e| e.to_string())?, length).map_err(|e| e.to_string())?;
+    let mut g = dj.lock().map_err(|e| e.to_string())?;
+    if let Some(s) = g.as_mut() {
+        s.auto.length = length; // the Auto DJ loop sends it on, resolved
+    }
+    Ok(())
+}
+
 /// How Auto DJ mixes: smooth, party or chill (kept for next time).
 #[tauri::command]
 pub fn dj_set_style(style: super::autodj::Style, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {
@@ -436,9 +459,9 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
     if let Err(e) = crate::audio::service::reopen_output(&db, &player, true) {
         log::warn!("DJ mode: could not move the player to shared mode: {e}");
     }
-    let (master, phones, exclusive, style, transitions, hype) = {
+    let (master, phones, exclusive, style, transitions, hype, length) = {
         let d = db.lock().map_err(|e| e.to_string())?;
-        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d), settings::dj_transitions(&d), settings::dj_hype(&d))
+        (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d), settings::dj_transitions(&d), settings::dj_hype(&d), settings::dj_song_length(&d))
     };
     let engine = DjEngine::start(master, phones).map_err(|e| {
         if exclusive { format!("{e} (another app may be holding the speakers in exclusive mode)") } else { e }
@@ -446,11 +469,11 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
     engine.set_style(style);
     engine.set_hype(hype);
     engine.set_transitions(transitions);
-    let status = engine.status();
+    let status = EngineStatus { length_choice: length, ..engine.status() };
     let alive = Arc::new(AtomicBool::new(true));
     let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
     let midi = Arc::new(super::controllers::MidiShared::default());
-    *g = Some(DjSession { engine, auto: AutoPrefs { seed, ..Default::default() }, midi: midi.clone(), alive: alive.clone() });
+    *g = Some(DjSession { engine, auto: AutoPrefs { seed, length, ..Default::default() }, midi: midi.clone(), alive: alive.clone() });
     auto_controller(app.clone(), dj.inner().clone(), db.inner().clone(), party.inner().clone(), alive.clone());
     let (to_engine, from_engine) = (dj.inner().clone(), dj.inner().clone());
     super::controllers::start(
@@ -500,7 +523,7 @@ pub fn dj_load(deck: Side, song_id: i64, db: State<'_, SharedDb>, dj: State<'_, 
 /// Decks, meters and devices for the DJ screen (`None` when DJ mode is closed).
 #[tauri::command]
 pub fn dj_state(dj: State<'_, SharedDj>) -> Result<Option<EngineStatus>, String> {
-    Ok(dj.lock().map_err(|e| e.to_string())?.as_ref().map(|s| s.engine.status()))
+    Ok(dj.lock().map_err(|e| e.to_string())?.as_ref().map(|s| EngineStatus { length_choice: s.auto.length, ..s.engine.status() }))
 }
 
 #[derive(serde::Serialize)]

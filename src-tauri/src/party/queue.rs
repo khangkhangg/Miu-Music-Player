@@ -3,6 +3,7 @@
 //! (Miu) holds the one true queue; guests (on the Wi-Fi page or through the relay) send actions.
 
 use std::collections::{BTreeSet, VecDeque};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +77,8 @@ pub struct Queue {
     next_id: u64,
     version: u64,
     pub settings: Settings,
+    /// When guests added or voted lately (for the crowd's heat).
+    activity: VecDeque<Instant>,
 }
 
 /// One queue entry as a guest sees it.
@@ -113,6 +116,21 @@ impl Queue {
         self.version
     }
 
+    /// How busy the guests are: adds and votes in the last ten minutes, 20 of them is full heat.
+    pub fn heat(&self, now: Instant) -> f32 {
+        let recent = self.activity.iter().filter(|&&t| now.saturating_duration_since(t) < Duration::from_secs(600)).count();
+        (recent as f32 / 20.0).min(1.0)
+    }
+
+    fn stir(&mut self, guest: &str) {
+        if guest != HOST {
+            if self.activity.len() >= 64 {
+                self.activity.pop_front();
+            }
+            self.activity.push_back(Instant::now());
+        }
+    }
+
     pub fn get(&self, id: u64) -> Option<&Entry> {
         self.entries.iter().find(|e| e.id == id)
     }
@@ -126,6 +144,7 @@ impl Queue {
         if let Some(e) = self.entries.iter_mut().find(|e| e.item.same(&item)) {
             e.votes.insert(guest.to_string());
             let id = e.id;
+            self.stir(guest);
             self.changed();
             return Ok(id);
         }
@@ -146,6 +165,7 @@ impl Queue {
             votes: BTreeSet::from([guest.to_string()]),
             approved: host || !self.settings.approval,
         });
+        self.stir(guest);
         self.changed();
         Ok(id)
     }
@@ -155,6 +175,9 @@ impl Queue {
         if let Some(e) = self.entries.iter_mut().find(|e| e.id == id) {
             let changed = if on { e.votes.insert(guest.to_string()) } else { e.votes.remove(guest) };
             if changed {
+                if on {
+                    self.stir(guest);
+                }
                 self.changed();
             }
         }
@@ -316,6 +339,23 @@ mod tests {
 
     fn ids(q: &Queue) -> Vec<u64> {
         q.ordered().iter().map(|e| e.id).collect()
+    }
+
+    #[test]
+    fn the_crowd_heats_up_as_guests_add_and_vote() {
+        let mut q = Queue::default();
+        let now = std::time::Instant::now();
+        assert_eq!(q.heat(now), 0.0);
+        let a = q.add("ann", "Ann", song(1)).unwrap();
+        q.add("bob", "Bob", song(2)).unwrap();
+        q.vote("cat", a, true);
+        q.add(HOST, "", song(3)).unwrap();
+        assert!((q.heat(now) - 3.0 / 20.0).abs() < 1e-6, "guests only: {}", q.heat(now));
+        for i in 0..30 {
+            q.vote(&format!("g{i}"), a, true);
+        }
+        assert_eq!(q.heat(now), 1.0, "capped");
+        assert_eq!(q.heat(now + std::time::Duration::from_secs(11 * 60)), 0.0, "cools after ten minutes");
     }
 
     #[test]

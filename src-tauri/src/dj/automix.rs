@@ -48,6 +48,8 @@ pub struct AutoMix {
     style: autodj::Style,
     /// The kind of music of the playlist being played (Auto style), if any.
     vibe: Option<autodj::Vibe>,
+    /// How much of each song plays (party edits).
+    length: super::hype::SongLength,
     /// Mixes done this session (varies the party tricks).
     mixes: u64,
     live: Option<Side>,
@@ -169,6 +171,11 @@ impl AutoMix {
         self.vibe = vibe;
     }
 
+    /// Party edits: mix out after a chorus instead of at the end (already resolved from Auto).
+    pub fn set_length(&mut self, length: super::hype::SongLength) {
+        self.length = length;
+    }
+
     /// Only these kinds of transition (none: any); `mix_it_up` picks among them at random.
     pub fn set_transitions(&mut self, allowed: Vec<autodj::Kind>, mix_it_up: bool) {
         self.allowed = allowed;
@@ -246,6 +253,7 @@ impl AutoMix {
             self.next = None;
             let waiting = m.deck(incoming).track().is_some() && !m.deck(incoming).is_playing() && !m.deck(incoming).ended();
             let (Some(from), Some(to)) = (analysis_of(m.deck(live)), analysis_of(m.deck(incoming))) else { return None };
+            let from = super::hype::edited(&from, self.length);
             if !waiting {
                 return None;
             }
@@ -422,6 +430,19 @@ mod tests {
         auto.set_next_transition(Some(t));
         auto.set_on(true);
         (m, auto)
+    }
+
+    #[test]
+    fn a_quick_party_edit_mixes_out_after_the_first_chorus() {
+        let base = song(1, 240.0, 200.0, None);
+        let mut an = base.analysis.clone().unwrap();
+        an.structure.choruses = vec![[48.0, 64.0], [112.0, 128.0]];
+        let a = Arc::new(Track { song_id: 1, rate: RATE, pcm: base.pcm.clone(), analysis: Some(an) });
+        let (mut m, mut auto) = ready(a, song(2, 240.0, 200.0, None), Transition::BeatBlend { bars: 8 });
+        auto.set_length(crate::dj::hype::SongLength::Quick);
+        run(&mut m, &mut auto, 0.05);
+        let next = auto.next().unwrap();
+        assert!(next.at_s < 64.0 && next.at_s > 40.0, "the mix ends near the first chorus end, not at 200 s: {next:?}");
     }
 
     #[test]

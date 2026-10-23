@@ -401,6 +401,12 @@ Added 2026-10-21. Code in `src-tauri/src/player/`; MTP assessment in `docs/MTP.m
   rise, roll, gate and mute; the performer silences the beat before the drop, lands it, and lets go when Auto DJ stops.
   Screen: Hype menu; party screen lights on the beat and the bar countdown into the drop. Checked in the app 2026-10-24
   (4, 3, 2, 1, DROP! on a real song). **Not yet heard by a person at full volume.**
+- [x] **D.12 Choruses, stage moves and the crowd** — *Test first:* the chorus is the part that comes back (none in a
+  song that never repeats); sing-along then key lift on the last chorus, held until the song leaves; rewind and
+  repeat once each; tape-stop and reverb throw into breakdowns; crashes and fills; Festival stutters; the crash and
+  fill pads; the vocal cut keeps the bass; party edits mix out after a chorus, Auto by the queue; Auto Hype by the
+  hour and the crowd's heat (guests' adds and votes); the party screen's sing-along lines and shout-out. Fix: DJ mode
+  opens while the player is in exclusive mode. **Not yet checked in the app on re-analysed real songs.**
 - [ ] **D.8 Party mode** — *Test first:* the queue (most votes first, ties in order, one vote each, per-guest limit,
   approval, the DJ removes and closes, just-played refused, Auto DJ loads the top early); links (YouTube, Spotify,
   Apple Music) and library matching; the guest page API on the Wi-Fi (adds, votes, search, refusals say why, long

@@ -125,6 +125,27 @@ party pads (short built-in sounds), keyboard map for DJ actions.
   the bars left before a built-up drop, then DROP!. With Windows set to reduce motion the lights stay
   subtle and nothing flashes.
 
+## Phase 6 — choruses, stage moves and the crowd (agreed 2026-10-24)
+
+- **Choruses** (`structure::choruses`, analysis version 3): the harmony of every bar (chroma); the
+  8-bar phrase that comes back most often (cosine 0.88 or more), loud and sung, is the chorus. Songs
+  are analysed again in the background.
+- **Sing-along and key lift**: on the last chorus (when the song has two or more) the singer drops
+  out for 4 bars (8 at Festival) — the instrumental stem when the deck is split, else a cut in the
+  voice range — and the party screen shows the lines big (synced lyrics, or "Sing it!"). Then the
+  song comes back a semitone up until it leaves the deck.
+- **Stage moves** (Party and up unless noted): a reverb throw on the last line into a breakdown; a
+  tape-stop into the first breakdown (all of them at Festival); crashes on each new phrase inside a
+  drop (with a snare fill at Festival); at Festival the big drop rewinds once to the build and hits
+  again, then its best 4 bars play once more, and every other line end stutters.
+- **Song length** (party edits): Full, Short (mix out after the second chorus, not before 90 s), Quick
+  (after the first, not before 45 s), Auto (the default: full, Short at 6 guest songs waiting, Quick
+  at 12).
+- **Auto Hype**: follows the night from when DJ mode starts performing — Chill for 20 minutes, Party
+  to the hour, Festival to two and a half hours, then Party; a level up while the guests are busy
+  (adds and votes in the last ten minutes, 12 or more of 20). The menu shows the level playing.
+- **Shout-outs**: when a guest's song starts the party screen says "Linh's pick!" for ten seconds.
+
 ## Testing
 
 Test-first as everywhere in Miu: analysis on synthetic clicks/tones with known tempo and key, the

@@ -3,7 +3,7 @@
 // and queue, and YouTube videos in YouTube's own player (the end of a video hands back to Auto DJ).
 
 import { t, startInLanguage, translatePage } from './i18n.js';
-import { videoUrl, videoEnded, listenMessage, partyQr, nowAndNext, beatLight, dropCountdown } from './party.js';
+import { videoUrl, videoEnded, listenMessage, partyQr, nowAndNext, beatLight, dropCountdown, singLines, shoutOut } from './party.js';
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -148,9 +148,50 @@ function frame() {
     void b.offsetWidth;
     b.style.animation = '';
   }
+  renderSing(show, since);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// ---- Sing-along: the lyrics of the song on air, fetched once per song ----
+
+const lyricsFor = { id: null, lyrics: null };
+let shownSing = '';
+
+function renderSing(show, since) {
+  if (show?.sing && lyricsFor.id !== show.songId) {
+    lyricsFor.id = show.songId;
+    lyricsFor.lyrics = null;
+    const id = show.songId;
+    invoke('song_lyrics', { id }).then((l) => { if (lyricsFor.id === id) lyricsFor.lyrics = l; }).catch(() => {});
+  }
+  const lines = videoId == null ? singLines(show, since, lyricsFor.lyrics) : null;
+  const key = lines ? JSON.stringify(lines) : '';
+  if (key === shownSing) return;
+  shownSing = key;
+  $('party-sing').hidden = !lines;
+  $('party-sing-now').textContent = lines?.singIt ? t('party.singIt') : lines?.now ?? '';
+  $('party-sing-next').textContent = lines?.next ?? '';
+}
+
+// ---- Shout-outs: "Linh's pick!" when a guest's song starts ----
+
+let shoutFor = null;
+let shoutTimer;
+
+function renderShout(view) {
+  const id = view?.now?.id ?? null;
+  if (id === shoutFor) return;
+  shoutFor = id;
+  const name = shoutOut(view);
+  const box = $('party-shout');
+  clearTimeout(shoutTimer);
+  box.hidden = !name;
+  if (name) {
+    box.textContent = t('party.pick', { name });
+    shoutTimer = setTimeout(() => { box.hidden = true; }, 10000);
+  }
+}
 
 async function pollGuests() {
   const [info, view, video] = await Promise.all([
@@ -159,6 +200,7 @@ async function pollGuests() {
     invoke('party_video_now').catch(() => null),
   ]);
   renderGuests(info, view);
+  renderShout(view);
   // The DJ skipped the video, or it started before this window opened.
   if (video) showVideo(video.videoId, video.title);
   else hideVideo();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
-import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr, nowAndNext, beatLight, dropCountdown } from '../../src/js/party.js';
+import { videoUrl, videoEnded, listenMessage, entryLines, partyLimitOptions, relayNote, partyQr, nowAndNext, beatLight, dropCountdown, singLines, shoutOut } from '../../src/js/party.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
 useDictionary('en', en);
@@ -89,4 +89,24 @@ test('the countdown shows the bars left before the drop, then the drop', () => {
   assert.equal(dropCountdown(show, 9000), null, 'over');
   assert.equal(dropCountdown({ beatS: 0.5, beatPos: 0, dropInS: 30 }, 0), null, 'too far away to count');
   assert.equal(dropCountdown({ beatS: 0.5, beatPos: 0, dropInS: null }, 0), null);
+});
+
+test('the sing-along shows the line to sing now and the next, big', () => {
+  const lyrics = { synced: [{ ms: 10000, text: 'first line' }, { ms: 14000, text: 'second line' }, { ms: 18000, text: 'third line' }] };
+  const show = { sing: true, posS: 13, speed: 1 };
+  assert.deepEqual(singLines(show, 0, lyrics), { now: 'first line', next: 'second line' });
+  assert.deepEqual(singLines(show, 1500, lyrics), { now: 'second line', next: 'third line' }, 'the song moved on since the report');
+  assert.deepEqual(singLines({ ...show, speed: 2 }, 2600, lyrics), { now: 'third line', next: '' }, 'played faster');
+  assert.deepEqual(singLines(show, 0, { synced: [] }), { singIt: true }, 'no timed lyrics: just "sing it"');
+  assert.deepEqual(singLines(show, 0, null), { singIt: true });
+  assert.equal(singLines({ ...show, sing: false }, 0, lyrics), null, 'not a sing-along');
+  assert.equal(singLines(null, 0, lyrics), null);
+});
+
+test('a guest gets a shout-out when their song plays', () => {
+  assert.equal(shoutOut({ now: { id: 4, addedName: 'Linh' } }), 'Linh');
+  assert.equal(shoutOut({ now: { id: 4, addedName: '  ' } }), null, 'no name given');
+  assert.equal(shoutOut({ now: { id: 4, addedName: '' } }), null, 'the DJ or Auto DJ picked it');
+  assert.equal(shoutOut({ now: null }), null);
+  assert.equal(shoutOut(null), null);
 });

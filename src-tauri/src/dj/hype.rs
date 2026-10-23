@@ -23,6 +23,64 @@ pub enum Hype {
     Party,
     /// Every drop, beat gates in breakdowns, more echo throws.
     Festival,
+    /// Follows the night: Chill while people arrive, Party, Festival at peak time, Party to wind
+    /// down; a level up while the guests keep adding and voting.
+    Auto,
+}
+
+/// The level Auto plays `minutes` into the night with the crowd's heat (0 to 1).
+pub fn auto_hype(minutes: f64, heat: f32) -> Hype {
+    let base = match minutes {
+        m if m < 20.0 => Hype::Chill,
+        m if m < 60.0 => Hype::Party,
+        m if m < 150.0 => Hype::Festival,
+        _ => Hype::Party,
+    };
+    match (base, heat >= 0.6) {
+        (Hype::Chill, true) => Hype::Party,
+        (Hype::Party, true) => Hype::Festival,
+        (h, _) => h,
+    }
+}
+
+/// How much of each song Auto DJ plays: DJs rarely play whole songs at a party.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SongLength {
+    Full,
+    /// Mix out after the second chorus (about three minutes).
+    Short,
+    /// Mix out after the first chorus: hit after hit for peak time.
+    Quick,
+    /// Full, shorter as the guests' queue grows so everyone's song gets played.
+    #[default]
+    Auto,
+}
+
+/// The length to play now: Auto follows how many guest songs wait.
+pub fn auto_length(length: SongLength, waiting: usize) -> SongLength {
+    match (length, waiting) {
+        (SongLength::Auto, w) if w >= 12 => SongLength::Quick,
+        (SongLength::Auto, w) if w >= 6 => SongLength::Short,
+        (SongLength::Auto, _) => SongLength::Full,
+        (other, _) => other,
+    }
+}
+
+/// The song as Auto DJ plays it at `length`: its mix-out moved to the end of a chorus (not too
+/// early in the song; the whole song when no chorus was found).
+pub fn edited(a: &Analysis, length: SongLength) -> Analysis {
+    let ch = &a.structure.choruses;
+    let cut = match length {
+        SongLength::Short => ch.get(1).map(|c| c[1]).filter(|&t| t >= 90.0),
+        SongLength::Quick => ch.first().map(|c| c[1]).filter(|&t| t >= 45.0),
+        _ => None,
+    };
+    let mut out = a.clone();
+    if let Some(cut) = cut {
+        out.mix_out_s = out.mix_out_s.min(cut);
+    }
+    out
 }
 
 /// A move on a song's timeline (seconds of the song).
@@ -100,12 +158,14 @@ fn echo_spacing(h: Hype) -> f64 {
         Hype::Chill => 64.0,
         Hype::Party => 32.0,
         Hype::Festival => 16.0,
+        Hype::Auto => 32.0,
     }
 }
 
 /// The moves for a song at a Hype level. Nothing without a steady beat, and nothing in the last
 /// 8 bars before the mix out (the transition has the stage then).
 pub fn plan(a: &Analysis, hype: Hype) -> Vec<Move> {
+    let hype = if hype == Hype::Auto { Hype::Party } else { hype };
     if a.bpm <= 0.0 || a.beat_confidence < super::autodj::MIN_BEAT_CONFIDENCE {
         return Vec::new();
     }
@@ -307,6 +367,12 @@ pub struct Performer {
     resume: Option<f64>,
     /// The deck and song lifted a semitone (back to normal when that song leaves the deck).
     lifted: Option<(Side, i64)>,
+    /// How much of each song plays (already resolved from Auto).
+    length: SongLength,
+    /// The guests' activity, 0 to 1 (for Auto Hype).
+    heat: f32,
+    /// When the performer first played (the night's start, for Auto Hype).
+    started: Option<std::time::Instant>,
 }
 
 impl Performer {
@@ -314,9 +380,29 @@ impl Performer {
         self.hype
     }
 
+    /// The level playing now (Auto resolved).
+    pub fn hype_now(&self) -> Hype {
+        match self.hype {
+            Hype::Auto => auto_hype(self.started.map_or(0.0, |t| t.elapsed().as_secs_f64() / 60.0), self.heat),
+            h => h,
+        }
+    }
+
     pub fn set_hype(&mut self, hype: Hype) {
         self.hype = hype;
         self.song = None; // planned again on the next block
+    }
+
+    pub fn set_length(&mut self, length: SongLength) {
+        if length != self.length {
+            self.length = length;
+            self.song = None;
+        }
+    }
+
+    /// Picked up from the next song.
+    pub fn set_crowd(&mut self, heat: f32) {
+        self.heat = heat.clamp(0.0, 1.0);
     }
 
     fn let_go(&mut self, m: &mut Mixer) {
@@ -364,9 +450,11 @@ impl Performer {
             return;
         };
         let (song_id, pos) = (track.song_id, deck.position_s());
+        self.started.get_or_insert_with(std::time::Instant::now);
         if self.song != Some((side, song_id)) {
             self.song = Some((side, song_id));
-            self.moves = track.analysis.as_ref().map(|a| plan(a, self.hype)).unwrap_or_default();
+            let hype = self.hype_now();
+            self.moves = track.analysis.as_ref().map(|a| plan(&edited(a, self.length), hype)).unwrap_or_default();
             self.prev = pos;
             self.fired.clear();
             self.resume = None;
@@ -726,6 +814,55 @@ mod tests {
         let show = p.show(&m).unwrap();
         assert!(show.sing && show.song_id == 7 && (show.pos_s - 151.0).abs() < 0.2, "{show:?}");
         assert_eq!(p.stems_wanted(&m), Some(Side::A), "split the song so the singer can drop out");
+    }
+
+    #[test]
+    fn party_edits_mix_out_after_a_chorus() {
+        let a = song(); // choruses 60–76 and 150–166, mix out 230
+        assert_eq!(edited(&a, SongLength::Full).mix_out_s, 230.0);
+        assert_eq!(edited(&a, SongLength::Short).mix_out_s, 166.0, "after the second chorus");
+        assert_eq!(edited(&a, SongLength::Quick).mix_out_s, 76.0, "after the first chorus");
+        let mut early = song();
+        early.structure.choruses = vec![[20.0, 36.0], [50.0, 66.0]];
+        assert_eq!(edited(&early, SongLength::Quick).mix_out_s, 230.0, "not before 45 s");
+        assert_eq!(edited(&early, SongLength::Short).mix_out_s, 230.0, "not before 90 s");
+        let mut none = song();
+        none.structure.choruses.clear();
+        assert_eq!(edited(&none, SongLength::Quick).mix_out_s, 230.0, "no chorus found: the whole song");
+    }
+
+    #[test]
+    fn the_queue_decides_the_auto_length() {
+        assert_eq!(auto_length(SongLength::Auto, 2), SongLength::Full);
+        assert_eq!(auto_length(SongLength::Auto, 6), SongLength::Short, "a long queue: everyone's song gets played");
+        assert_eq!(auto_length(SongLength::Auto, 12), SongLength::Quick);
+        assert_eq!(auto_length(SongLength::Full, 20), SongLength::Full, "the DJ's choice wins");
+    }
+
+    #[test]
+    fn auto_hype_follows_the_night_and_the_crowd() {
+        assert_eq!(auto_hype(0.0, 0.0), Hype::Chill, "people are still arriving");
+        assert_eq!(auto_hype(30.0, 0.0), Hype::Party);
+        assert_eq!(auto_hype(90.0, 0.0), Hype::Festival, "peak time");
+        assert_eq!(auto_hype(200.0, 0.0), Hype::Party, "winding down");
+        assert_eq!(auto_hype(30.0, 0.8), Hype::Festival, "a crowd adding and voting lifts it a level");
+        assert_eq!(auto_hype(5.0, 0.8), Hype::Party);
+        assert_eq!(auto_hype(90.0, 0.8), Hype::Festival, "never past Festival");
+    }
+
+    #[test]
+    fn the_performer_plays_party_edits_and_auto_hype() {
+        let mut p = Performer::default();
+        p.set_hype(Hype::Auto);
+        assert_eq!(p.hype_now(), Hype::Chill, "just started");
+        p.set_crowd(0.9);
+        assert_eq!(p.hype_now(), Hype::Party);
+        // A Quick edit ends the song at the first chorus (76 s): nothing planned after it.
+        let mut m = deck_at(40.0);
+        p.set_hype(Hype::Festival);
+        p.set_length(SongLength::Quick);
+        render(&mut m, &mut p, 0.05, true);
+        assert!(p.moves.iter().all(|x| !matches!(x, Move::SingAlong { .. })), "the song ends before its last chorus: {:?}", p.moves);
     }
 
     #[test]

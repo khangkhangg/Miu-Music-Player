@@ -169,6 +169,17 @@ pub fn set_dj_hype(db: &Db, hype: crate::dj::hype::Hype) -> Result<()> {
     db.set_setting_json(DJ_HYPE, &hype)
 }
 
+const DJ_SONG_LENGTH: &str = "dj_song_length";
+
+/// How much of each song Auto DJ plays (party edits).
+pub fn dj_song_length(db: &Db) -> crate::dj::hype::SongLength {
+    db.setting_json(DJ_SONG_LENGTH).ok().flatten().unwrap_or_default()
+}
+
+pub fn set_dj_song_length(db: &Db, length: crate::dj::hype::SongLength) -> Result<()> {
+    db.set_setting_json(DJ_SONG_LENGTH, &length)
+}
+
 const DJ_LEARNT: &str = "dj_midi_learnt";
 
 type Learnt = std::collections::BTreeMap<String, Vec<crate::dj::midi::Entry>>;
@@ -945,6 +956,14 @@ mod dj_tests {
         assert_eq!(dj_hype(&db), crate::dj::hype::Hype::Party);
         set_dj_hype(&db, crate::dj::hype::Hype::Festival).unwrap();
         assert_eq!(dj_hype(&db), crate::dj::hype::Hype::Festival);
+    }
+
+    #[test]
+    fn the_song_length_is_remembered() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(dj_song_length(&db), crate::dj::hype::SongLength::Auto);
+        set_dj_song_length(&db, crate::dj::hype::SongLength::Short).unwrap();
+        assert_eq!(dj_song_length(&db), crate::dj::hype::SongLength::Short);
     }
 
     #[test]

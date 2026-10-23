@@ -94,3 +94,21 @@ export function dropCountdown(show, sinceMs) {
   if (left <= 0 && left > -2 * show.beatS) return { drop: true };
   return null;
 }
+
+/** A sing-along `sinceMs` after the engine reported `show`: the line to sing now and the next one, or "sing it" without timed lyrics. */
+export function singLines(show, sinceMs, lyrics) {
+  if (!show?.sing) return null;
+  const lines = lyrics?.synced ?? [];
+  if (!lines.length) return { singIt: true };
+  const ms = (show.posS + (sinceMs / 1000) * (show.speed || 1)) * 1000;
+  let i = -1;
+  while (i + 1 < lines.length && lines[i + 1].ms <= ms) i += 1;
+  if (i < 0) return { now: '', next: lines[0].text };
+  return { now: lines[i].text, next: lines[i + 1]?.text ?? '' };
+}
+
+/** The guest whose song is playing, for a shout-out on the party screen (none when the DJ picked it). */
+export function shoutOut(view) {
+  const name = view?.now?.addedName?.trim();
+  return name || null;
+}

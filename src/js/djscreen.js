@@ -226,6 +226,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   };
   $('dj-source').addEventListener('change', sendSource);
   $('dj-hype').addEventListener('change', (e) => invoke('dj_set_hype', { hype: e.target.value }).catch(showProblem));
+  $('dj-length').addEventListener('change', (e) => invoke('dj_set_song_length', { length: e.target.value }).catch(showProblem));
   $('dj-smart').addEventListener('change', sendSource);
   $('dj-phones').addEventListener('change', (e) => invoke('dj_set_phones', { name: e.target.value || null }).catch(showProblem));
   $('dj-search').addEventListener('input', () => renderList(true));
@@ -572,6 +573,10 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     if (document.activeElement !== $('dj-style') && s.style) $('dj-style').value = s.style;
     $('dj-vibe').textContent = vibeLabel(s);
     if (document.activeElement !== $('dj-hype') && s.hype) $('dj-hype').value = s.hype;
+    // Auto says what it plays now.
+    $('dj-hype').querySelector('option[value="auto"]').textContent = s.hype === 'auto' && s.hypeNow ? t('dj.hype.autoNow', { level: t(`dj.hypeLevel.${s.hypeNow}`) }) : t('dj.hype.auto');
+    if (document.activeElement !== $('dj-length') && s.lengthChoice) $('dj-length').value = s.lengthChoice;
+    $('dj-length').querySelector('option[value="auto"]').textContent = s.lengthChoice === 'auto' && s.length ? t('dj.length.autoNow', { length: t(`dj.lengthLevel.${s.length}`) }) : t('dj.length.auto');
     $('dj-tr-btn').textContent = transitionsSummary(s.transitions);
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
