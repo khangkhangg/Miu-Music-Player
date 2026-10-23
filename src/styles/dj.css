@@ -27,11 +27,16 @@
 .dj-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* Top bar */
-.dj-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dj-top { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .dj-top > * { flex-shrink: 0; }
+.dj-top-right { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dj-top-right > * { flex-shrink: 0; }
+.dj-top-right .dj-analysis { flex-shrink: 1; }
 .dj-top .dj-analysis, .dj-top .dj-next { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dj-brand span, .dj-top-btn, .dj-switch { white-space: nowrap; }
-.dj-phones-pick select { width: 210px; text-overflow: ellipsis; }
+.dj-phones-pick select { width: 180px; text-overflow: ellipsis; }
+#dj-curve { max-width: 140px; }
+#dj-style { max-width: 120px; }
 .dj-brand { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; margin: 0; letter-spacing: 0.02em; }
 .dj-brand svg { width: 22px; height: 22px; color: var(--dj-a); }
 .dj-spacer { flex: 1; }
@@ -245,3 +250,14 @@
 .dj.learning .dj-desk .learn-target { outline: 2px solid var(--dj-a); animation: dj-learn 0.8s ease-in-out infinite alternate; }
 @keyframes dj-learn { from { outline-color: var(--dj-a); } to { outline-color: transparent; } }
 .dj-row.sel { background: rgba(242, 193, 46, 0.14); box-shadow: inset 3px 0 0 var(--dj-a); }
+
+/* Key lock and key shift beside the key */
+.dj-keybox { display: inline-flex; align-items: center; gap: 4px; }
+.dj-mini {
+  width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--dj-line); background: var(--dj-panel-2);
+  color: var(--dj-muted); font-weight: 700; cursor: pointer; display: grid; place-items: center; padding: 0;
+}
+.dj-mini svg { width: 14px; height: 14px; }
+.dj-lock[aria-pressed="true"] { background: var(--deck); color: #111; border-color: transparent; }
+.dj-key small { font-size: 11px; margin-left: 2px; color: var(--deck); }
+#dj-choose { max-width: 180px; }

@@ -654,5 +654,13 @@
   "dj.style": "Phong cách",
   "dj.style.smooth": "Mượt mà",
   "dj.style.party": "Tiệc tùng",
-  "dj.style.chill": "Thư giãn"
+  "dj.style.chill": "Thư giãn",
+  "dj.tr.tempoRamp": "Đổi nhịp dần",
+  "dj.tr.keyShiftBlend": "Hòa sau khi đổi tông ({semitones})",
+  "dj.tr.vocalOut": "Giữ giọng hát bài cũ",
+  "dj.choose": "Kiểu chuyển bài tiếp theo",
+  "dj.choose.auto": "Tự động (hợp nhất)",
+  "dj.keyLock": "Khóa tông: đổi nhịp độ mà không đổi cao độ",
+  "dj.keyUp": "Tăng tông nửa cung",
+  "dj.keyDown": "Giảm tông nửa cung"
 }

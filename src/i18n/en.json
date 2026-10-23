@@ -654,5 +654,13 @@
   "dj.style": "Style",
   "dj.style.smooth": "Smooth",
   "dj.style.party": "Party",
-  "dj.style.chill": "Chill"
+  "dj.style.chill": "Chill",
+  "dj.tr.tempoRamp": "Tempo ramp",
+  "dj.tr.keyShiftBlend": "Key shift blend ({semitones})",
+  "dj.tr.vocalOut": "Vocal out",
+  "dj.choose": "Next transition",
+  "dj.choose.auto": "Auto (best fit)",
+  "dj.keyLock": "Key lock: change the tempo without changing the pitch",
+  "dj.keyUp": "Key up a semitone",
+  "dj.keyDown": "Key down a semitone"
 }

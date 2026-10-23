@@ -104,6 +104,7 @@ enum Cmd {
     Loaded(Side, Arc<Track>),
     Phones(Option<String>),
     Style(super::autodj::Style),
+    Choose(Option<super::autodj::Transition>),
     Stop,
 }
 
@@ -252,6 +253,11 @@ impl DjEngine {
         self.overviews.lock().ok()?[side as usize].clone()
     }
 
+    /// Use this transition for the next mix (`None`: Auto DJ picks).
+    pub fn choose_transition(&self, t: Option<super::autodj::Transition>) {
+        let _ = self.tx.send(Cmd::Choose(t));
+    }
+
     /// How Auto DJ mixes from now on.
     pub fn set_style(&self, style: super::autodj::Style) {
         let _ = self.tx.send(Cmd::Style(style));
@@ -311,6 +317,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                     s.decks[side as usize].loading = false;
                 }
             }
+            Ok(Cmd::Choose(t)) => auto.set_next_transition(t),
             Ok(Cmd::Style(style)) => {
                 auto.set_style(style);
                 if let Ok(mut s) = status.lock() {

@@ -98,7 +98,7 @@ pub fn pick(now: &Analysis, candidates: &[Candidate], played: &HashSet<i64>, que
         .map(|(_, id)| id)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Transition {
     /// Tempo synced, downbeats lined up, a long crossfade with lows, mids and highs swapped in turn.

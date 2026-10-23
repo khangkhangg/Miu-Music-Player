@@ -5,7 +5,7 @@ import path from 'node:path';
 import { useDictionary } from '../../src/js/i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, keysCompatible, fits,
-  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection,
+  songMeta, nextText, crossfaderFor, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, transitionName, keyShiftLabel,
 } from '../../src/js/dj.js';
 
 const en = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/i18n/en.json'), 'utf8'));
@@ -186,4 +186,23 @@ test('every transition Auto DJ can play has a name', () => {
     assert.ok(text && !text.includes('dj.tr') && !text.startsWith('undefined'), `${transition.type}: ${text}`);
   }
   assert.equal(nextText({ transition: { type: 'dropSwap', bars: 8 }, startsInS: 10 }), 'Drop swap in 0:10');
+});
+
+test('transitions to pick by hand, each with a name', () => {
+  const choices = transitionChoices();
+  assert.ok(choices.length >= 14);
+  assert.equal(choices[0].value, 'auto');
+  for (const c of choices.slice(1)) {
+    assert.ok(c.label && !c.label.includes('dj.tr'), `${c.value}: ${c.label}`);
+    assert.deepEqual(JSON.parse(c.value).type.length > 0, true);
+  }
+  assert.ok(choices.some((c) => c.value !== 'auto' && JSON.parse(c.value).type === 'vocalOut'));
+  assert.equal(transitionName({ type: 'tempoRamp', bars: 32 }), 'Tempo ramp');
+  assert.equal(transitionName({ type: 'keyShiftBlend', bars: 16, semitones: -2 }), 'Key shift blend (-2)');
+});
+
+test('key shift reads as semitones', () => {
+  assert.equal(keyShiftLabel(0), '');
+  assert.equal(keyShiftLabel(2), '+2');
+  assert.equal(keyShiftLabel(-1), '-1');
 });

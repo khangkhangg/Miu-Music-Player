@@ -105,12 +105,37 @@ const TRANSITIONS = {
   beatBlend: 'dj.tr.beatBlend', filterBlend: 'dj.tr.filterBlend', breakdownBlend: 'dj.tr.breakdownBlend', loopOut: 'dj.tr.loopOut',
   dropSwap: 'dj.tr.dropSwap', echoOut: 'dj.tr.echoOut', reverbWash: 'dj.tr.reverbWash', spinBack: 'dj.tr.spinBack',
   brake: 'dj.tr.brake', crossfade: 'dj.tr.crossfade', balladGap: 'dj.tr.balladGap', cut: 'dj.tr.cut',
+  tempoRamp: 'dj.tr.tempoRamp', keyShiftBlend: 'dj.tr.keyShiftBlend', vocalOut: 'dj.tr.vocalOut',
 };
+
+/** A transition's name: "Beat blend (16 bars)", "Key shift blend (-2)". */
+export function transitionName(tr) {
+  return t(TRANSITIONS[tr.type], { bars: tr.bars ?? 0, semitones: keyShiftLabel(tr.semitones ?? 0) });
+}
+
+/** Pitch shift for display: "+2", "-1", nothing when unshifted. */
+export function keyShiftLabel(n) {
+  return n ? `${n > 0 ? '+' : ''}${n}` : '';
+}
+
+// Transitions that can be picked by hand for the next mix (the key shift needs the songs' keys,
+// so Auto DJ picks that one itself).
+const CHOICES = [
+  { type: 'beatBlend', bars: 16 }, { type: 'filterBlend', bars: 16 }, { type: 'breakdownBlend', bars: 8 },
+  { type: 'loopOut', bars: 8 }, { type: 'dropSwap', bars: 8 }, { type: 'vocalOut', bars: 16 }, { type: 'tempoRamp', bars: 32 },
+  { type: 'echoOut' }, { type: 'reverbWash' }, { type: 'spinBack' }, { type: 'brake' }, { type: 'crossfade', secs: 8 },
+  { type: 'balladGap' }, { type: 'cut' },
+];
+
+/** Options for the next-transition menu: Auto first, then every transition (value: its JSON). */
+export function transitionChoices() {
+  return [{ value: 'auto', label: t('dj.choose.auto') }, ...CHOICES.map((c) => ({ value: JSON.stringify(c), label: transitionName(c) }))];
+}
 
 /** "Beat blend (16 bars) in 0:42". */
 export function nextText(next) {
   if (!next) return '';
-  const what = t(TRANSITIONS[next.transition.type], { bars: next.transition.bars ?? 0 });
+  const what = transitionName(next.transition);
   return next.startsInS < 0.5 ? t('dj.tr.now', { what }) : t('dj.tr.in', { what, time: clock(next.startsInS) });
 }
 

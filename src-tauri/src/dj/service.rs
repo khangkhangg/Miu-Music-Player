@@ -223,6 +223,12 @@ pub fn dj_library(db: State<'_, SharedDb>) -> Result<Vec<DjSong>, String> {
     Ok(c.into_iter().map(|c| DjSong { song_id: c.song_id, analysis: c.analysis }).collect())
 }
 
+/// Pick the next transition by hand (`None`: Auto DJ picks the best fit).
+#[tauri::command]
+pub fn dj_choose_transition(transition: Option<super::autodj::Transition>, dj: State<'_, SharedDj>) -> Result<(), String> {
+    engine_do(&dj, |e| e.choose_transition(transition))
+}
+
 /// How Auto DJ mixes: smooth, party or chill (kept for next time).
 #[tauri::command]
 pub fn dj_set_style(style: super::autodj::Style, db: State<'_, SharedDb>, dj: State<'_, SharedDj>) -> Result<(), String> {

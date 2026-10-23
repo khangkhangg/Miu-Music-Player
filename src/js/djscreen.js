@@ -4,7 +4,7 @@
 import { t, translatePage } from './i18n.js';
 import {
   bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, fits, songMeta,
-  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection,
+  nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel,
 } from './dj.js';
 
 const POLL_MS = 50;
@@ -28,6 +28,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
   let queue = [];
   let listKey = '';
   let dragging = null; // the control being dragged, so polling does not move it back
+  let lastOnAir = null;
 
   const act = (action) => invoke('dj_action', { action }).catch(() => {});
   const songById = (id) => songs().find((s) => s.id === id);
@@ -87,6 +88,11 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     tempo.addEventListener('dblclick', () => { tempo.value = '0'; act({ type: 'tempo', deck: side, value: 0 }); });
     deck.querySelector('[data-ctl="play"]').addEventListener('click', () => act({ type: 'playPause', deck: side }));
     deck.querySelector('[data-ctl="sync"]').addEventListener('click', () => act({ type: 'sync', deck: side }));
+    // Key shift a semitone at a time (-6..6) and key lock, from the deck's state.
+    const deckState = () => state?.decks[SIDES.indexOf(side)] ?? {};
+    deck.querySelector('[data-ctl="keyUp"]').addEventListener('click', () => act({ type: 'keyShift', deck: side, semitones: Math.min(6, (deckState().keyShift ?? 0) + 1) }));
+    deck.querySelector('[data-ctl="keyDown"]').addEventListener('click', () => act({ type: 'keyShift', deck: side, semitones: Math.max(-6, (deckState().keyShift ?? 0) - 1) }));
+    deck.querySelector('[data-ctl="keyLock"]').addEventListener('click', () => act({ type: 'keyLock', deck: side, on: !deckState().keyLock }));
     const cue = deck.querySelector('[data-ctl="cue"]');
     cue.addEventListener('pointerdown', () => act({ type: 'cue', deck: side, pressed: true }));
     for (const ev of ['pointerup', 'pointerleave']) cue.addEventListener(ev, (e) => { if (ev === 'pointerup' || e.buttons) act({ type: 'cue', deck: side, pressed: false }); });
@@ -167,6 +173,10 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
   const sendAuto = () => invoke('dj_set_auto', { curve: $('dj-curve').value, queue }).catch(() => {});
   $('dj-auto').addEventListener('change', (e) => act({ type: 'autoDj', on: e.target.checked }));
   $('dj-curve').addEventListener('change', sendAuto);
+  $('dj-choose').addEventListener('change', (e) => {
+    const v = e.target.value;
+    invoke('dj_choose_transition', { transition: v === 'auto' ? null : JSON.parse(v) }).catch(showProblem);
+  });
   $('dj-style').addEventListener('change', (e) => invoke('dj_set_style', { style: e.target.value }).catch(showProblem));
   $('dj-phones').addEventListener('change', (e) => invoke('dj_set_phones', { name: e.target.value || null }).catch(showProblem));
   $('dj-search').addEventListener('input', () => renderList(true));
@@ -369,7 +379,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
         if (song) { img.onerror = () => { img.hidden = true; }; img.src = artUrl(song.id, size); }
       }
       const a = d.songId != null ? analyses.get(d.songId) : null;
-      field('key').textContent = a?.key ?? '';
+
       field('energy').textContent = a ? t('dj.energy', { n: a.energy }) : '';
     }
     if (d.loading && d.songId == null) field('title').textContent = t('dj.loading');
@@ -390,6 +400,19 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     field('onair').hidden = state.onAir !== side;
     const air = onAirAnalysis();
     const a = d.songId != null ? analyses.get(d.songId) : null;
+    // The key heard now (shifted), with the shift beside it.
+    const key = d.key ?? a?.key ?? '';
+    const shift = keyShiftLabel(d.keyShift ?? 0);
+    if (field('key').dataset.shown !== `${key}${shift}`) {
+      field('key').dataset.shown = `${key}${shift}`;
+      field('key').textContent = key;
+      if (shift && key) {
+        const small = document.createElement('small');
+        small.textContent = shift;
+        field('key').append(small);
+      }
+    }
+    el.querySelector('[data-ctl="keyLock"]').setAttribute('aria-pressed', String(!!d.keyLock));
     field('key').classList.toggle('fits', !!air && air.songId !== d.songId && fits(air, a));
     stripEl(side).querySelector('.dj-meter div').style.height = `${meterHeight(d.level) * 100}%`;  // i18n-ignore
     const p = d.durationS ? Math.min(1, d.positionS / d.durationS) : 0;
@@ -479,6 +502,11 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     SIDES.forEach((side, i) => renderDeck(side, i));
     if (dragging !== xfader) xfader.value = String(s.crossfader);
     $('dj-auto').checked = s.autoDj;
+    // A transition picked by hand is used once: after the mix the menu is back on Auto.
+    if (s.onAir !== lastOnAir) {
+      if (lastOnAir != null) $('dj-choose').value = 'auto';
+      lastOnAir = s.onAir;
+    }
     if (document.activeElement !== $('dj-style') && s.style) $('dj-style').value = s.style;
     $('dj-next').textContent = s.autoDj ? nextText(s.next) : '';
     if (s.problem) showProblem(s.problem);
@@ -516,6 +544,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onClose }) {
     }
     translatePage(root);
     root.querySelector('.dj-brand').title = t('dj.keysHelp');
+    $('dj-choose').replaceChildren(...transitionChoices().map((c) => new Option(c.label, c.value)));
     root.hidden = false;
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];

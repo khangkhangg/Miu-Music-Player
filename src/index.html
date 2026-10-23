@@ -674,23 +674,24 @@
     <header class="dj-top">
       <h1 class="dj-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg><span data-i18n="dj.title">DJ mode</span></h1>
       <label class="dj-switch"><input type="checkbox" id="dj-auto" role="switch"><span class="dj-switch-track" aria-hidden="true"></span><span data-i18n="dj.auto">Auto DJ</span></label>
-      <label class="dj-field"><span data-i18n="dj.curve">Energy</span>
-        <select id="dj-curve">
+      <label class="dj-field"><span class="dj-sr" data-i18n="dj.curve">Energy</span>
+        <select id="dj-curve" title="Energy" data-i18n-attr="title:dj.curve">
           <option value="warmUp" data-i18n="dj.curve.warmUp">Warm up</option>
           <option value="keep" data-i18n="dj.curve.keep" selected>Keep it going</option>
           <option value="buildUp" data-i18n="dj.curve.buildUp">Build up</option>
           <option value="windDown" data-i18n="dj.curve.windDown">Wind down</option>
         </select>
       </label>
-      <label class="dj-field"><span data-i18n="dj.style">Style</span>
-        <select id="dj-style">
+      <label class="dj-field"><span class="dj-sr" data-i18n="dj.style">Style</span>
+        <select id="dj-style" title="Style" data-i18n-attr="title:dj.style">
           <option value="smooth" data-i18n="dj.style.smooth" selected>Smooth</option>
           <option value="party" data-i18n="dj.style.party">Party</option>
           <option value="chill" data-i18n="dj.style.chill">Chill</option>
         </select>
       </label>
       <span class="dj-next" id="dj-next" role="status"></span>
-      <span class="dj-spacer"></span>
+      <select id="dj-choose" aria-label="Next transition" title="Next transition" data-i18n-attr="aria-label:dj.choose;title:dj.choose"></select>
+      <div class="dj-top-right">
       <span class="dj-analysis" id="dj-analysis" role="status"></span>
       <label class="dj-field dj-phones-pick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg><span class="dj-sr" data-i18n="dj.phones">Headphones</span>
         <select id="dj-phones"></select>
@@ -698,6 +699,7 @@
       <button class="dj-top-btn dj-ctl-btn" id="dj-ctl-btn" type="button" aria-expanded="false" aria-controls="dj-ctl-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="8" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/></svg><span id="dj-ctl-label" data-i18n="dj.ctl.title">Controller</span><span class="dj-ctl-dot" id="dj-ctl-dot" aria-hidden="true"></span></button>
       <button class="dj-top-btn" id="dj-party" type="button" data-i18n="dj.party">Party screen</button>
       <button class="dj-top-btn dj-exit" id="dj-exit" type="button" data-i18n="dj.exit">Exit DJ mode</button>
+      </div>
     </header>
 
     <div class="dj-waves">
@@ -715,7 +717,12 @@
         </div>
         <div class="dj-readout">
           <div class="dj-bpm"><b data-f="bpm">--</b><small data-i18n="dj.bpm">BPM</small></div>
-          <div class="dj-key" data-f="key"></div>
+          <div class="dj-keybox">
+            <button class="dj-mini" type="button" data-ctl="keyDown" aria-label="Key down a semitone" title="Key down a semitone" data-i18n-attr="aria-label:dj.keyDown;title:dj.keyDown">−</button>
+            <div class="dj-key" data-f="key"></div>
+            <button class="dj-mini" type="button" data-ctl="keyUp" aria-label="Key up a semitone" title="Key up a semitone" data-i18n-attr="aria-label:dj.keyUp;title:dj.keyUp">+</button>
+            <button class="dj-mini dj-lock" type="button" data-ctl="keyLock" aria-pressed="false" aria-label="Key lock" title="Key lock" data-i18n-attr="aria-label:dj.keyLock;title:dj.keyLock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+          </div>
           <div class="dj-energy" data-f="energy"></div>
           <div class="dj-time" data-f="time"></div>
         </div>
@@ -804,7 +811,12 @@
         </div>
         <div class="dj-readout">
           <div class="dj-bpm"><b data-f="bpm">--</b><small data-i18n="dj.bpm">BPM</small></div>
-          <div class="dj-key" data-f="key"></div>
+          <div class="dj-keybox">
+            <button class="dj-mini" type="button" data-ctl="keyDown" aria-label="Key down a semitone" title="Key down a semitone" data-i18n-attr="aria-label:dj.keyDown;title:dj.keyDown">−</button>
+            <div class="dj-key" data-f="key"></div>
+            <button class="dj-mini" type="button" data-ctl="keyUp" aria-label="Key up a semitone" title="Key up a semitone" data-i18n-attr="aria-label:dj.keyUp;title:dj.keyUp">+</button>
+            <button class="dj-mini dj-lock" type="button" data-ctl="keyLock" aria-pressed="false" aria-label="Key lock" title="Key lock" data-i18n-attr="aria-label:dj.keyLock;title:dj.keyLock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+          </div>
           <div class="dj-energy" data-f="energy"></div>
           <div class="dj-time" data-f="time"></div>
         </div>
