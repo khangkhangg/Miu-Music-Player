@@ -164,6 +164,22 @@ fn open_or_default<T>(name: Option<&str>, open: impl Fn(Option<&str>) -> Result<
     }
 }
 
+/// Windows answers 0x8889000A (AUDCLNT_E_DEVICE_IN_USE) while an exclusive-mode stream still
+/// holds the device; it is free a moment after that stream closes (the player leaving exclusive
+/// mode as DJ mode opens). Other errors are answered at once.
+fn retry_busy<T>(tries: u32, wait: Duration, mut f: impl FnMut() -> Result<T, String>) -> Result<T, String> {
+    let mut left = tries.max(1);
+    loop {
+        match f() {
+            Err(e) if left > 1 && e.contains("8889000A") => {
+                left -= 1;
+                std::thread::sleep(wait);
+            }
+            r => return r,
+        }
+    }
+}
+
 /// Opens a device by name in shared mode (`None`: the Windows default).
 fn open(name: Option<&str>) -> Result<DeviceOut, String> {
     let host = cpal::default_host();
@@ -347,7 +363,7 @@ impl DjEngine {
 }
 
 fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<String>, phones: Option<String>, ready: Sender<Result<(), String>>) {
-    let (mut out, missing) = match open_or_default(master.as_deref(), open) {
+    let (mut out, missing) = match open_or_default(master.as_deref(), |n| retry_busy(8, Duration::from_millis(150), || open(n))) {
         Ok(o) => o,
         Err(e) => {
             let _ = ready.send(Err(e));
@@ -548,6 +564,25 @@ mod tests {
         let t = decode_track(&stereo, 8, None).unwrap();
         assert_eq!((t.rate, t.frames()), (48_000, 960));
         assert!(decode_track(&dir.path().join("missing.mp3"), 9, None).is_err());
+    }
+
+    #[test]
+    fn busy_speakers_are_tried_again_for_a_moment() {
+        use std::cell::Cell;
+        let tries = Cell::new(0);
+        let busy_twice = || {
+            tries.set(tries.get() + 1);
+            if tries.get() < 3 { Err("A backend-specific error has occurred: 0x8889000A".to_string()) } else { Ok("speakers") }
+        };
+        assert_eq!(retry_busy(5, Duration::from_millis(1), busy_twice), Ok("speakers"));
+        assert_eq!(tries.get(), 3, "until the exclusive-mode player let go");
+        let missing = Cell::new(0);
+        let gone = || {
+            missing.set(missing.get() + 1);
+            Err::<&str, _>("output device \"X\" not found".to_string())
+        };
+        assert!(retry_busy(5, Duration::from_millis(1), gone).is_err());
+        assert_eq!(missing.get(), 1, "only a busy device is tried again");
     }
 
     #[test]

@@ -400,6 +400,20 @@ fn reopen(db: &State<'_, SharedDb>, player: &State<'_, SharedPlayer>) -> Result<
     player.switch_output(device.as_deref(), exclusive, second, eq)
 }
 
+/// For DJ mode: an exclusive-mode player holds the speakers even when paused, so it moves to
+/// shared mode while DJ mode is open (`shared_only`) and back after. Nothing to do when exclusive
+/// mode is off.
+pub fn reopen_output(db: &SharedDb, player: &SharedPlayer, shared_only: bool) -> Result<(), String> {
+    let (eq, device, exclusive, second) = {
+        let d = db.lock().map_err(|e| e.to_string())?;
+        (crate::settings::eq_settings(&d), crate::settings::output_device(&d), crate::settings::exclusive_output(&d), second_config(&d))
+    };
+    if !exclusive {
+        return Ok(());
+    }
+    player.switch_output(device.as_deref(), !shared_only, second, eq)
+}
+
 /// Choose an output device (`None` = Windows default); playback moves over without losing its place.
 #[tauri::command]
 pub fn set_output(device: Option<String>, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<OutputState, String> {

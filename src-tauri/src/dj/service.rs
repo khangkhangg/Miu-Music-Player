@@ -432,12 +432,16 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
         return Ok(s.engine.status());
     }
     let _ = player.run(crate::media_controls::Command::Pause);
+    // An exclusive-mode player holds the speakers even when paused: share them while DJ mode is open.
+    if let Err(e) = crate::audio::service::reopen_output(&db, &player, true) {
+        log::warn!("DJ mode: could not move the player to shared mode: {e}");
+    }
     let (master, phones, exclusive, style, transitions, hype) = {
         let d = db.lock().map_err(|e| e.to_string())?;
         (settings::output_device(&d), settings::dj_phones(&d), settings::exclusive_output(&d), settings::dj_style(&d), settings::dj_transitions(&d), settings::dj_hype(&d))
     };
     let engine = DjEngine::start(master, phones).map_err(|e| {
-        if exclusive { format!("{e} (exclusive mode holds the speakers: turn it off for DJ mode)") } else { e }
+        if exclusive { format!("{e} (another app may be holding the speakers in exclusive mode)") } else { e }
     })?;
     engine.set_style(style);
     engine.set_hype(hype);
@@ -466,9 +470,14 @@ pub fn dj_enter(app: tauri::AppHandle, db: State<'_, SharedDb>, player: State<'_
 
 /// Closes DJ mode and gives the speakers back to the normal player.
 #[tauri::command]
-pub fn dj_leave(dj: State<'_, SharedDj>) -> Result<(), String> {
+pub fn dj_leave(dj: State<'_, SharedDj>, db: State<'_, SharedDb>, player: State<'_, SharedPlayer>) -> Result<(), String> {
     let old = dj.lock().map_err(|e| e.to_string())?.take();
+    let was_open = old.is_some();
     drop(old); // waits for the engine to close its devices
+    // Back to exclusive (bit-perfect) mode if that is the setting.
+    if was_open {
+        crate::audio::service::reopen_output(&db, &player, false)?;
+    }
     Ok(())
 }
 
