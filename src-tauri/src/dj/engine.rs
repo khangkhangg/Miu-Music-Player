@@ -484,7 +484,7 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
         }
         if last_status.elapsed() >= STATUS_EVERY {
             last_status = Instant::now();
-            for side in auto.stems_wanted(&mixer) {
+            for side in auto.stems_wanted(&mixer).into_iter().chain(performer.stems_wanted(&mixer)) {
                 let Some(t) = mixer.deck(side).track().cloned() else { continue };
                 if stems_asked.insert((side as usize, t.song_id)) {
                     let tx = stem_tx.clone();

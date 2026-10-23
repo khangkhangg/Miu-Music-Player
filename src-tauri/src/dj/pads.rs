@@ -8,6 +8,9 @@ pub const PADS: usize = 4;
 /// drop and a hit on it.
 pub const RISER: usize = 4;
 pub const IMPACT: usize = 5;
+/// Hype's phrase marks: a cymbal crash on a new phrase and a snare fill into it.
+pub const CRASH: usize = 6;
+pub const FILL: usize = 7;
 
 /// Attack/release envelope so a sound starts and ends without a click.
 fn envelope(i: usize, n: usize, rate: u32) -> f32 {
@@ -89,6 +92,27 @@ pub fn sound(slot: usize, rate: u32) -> Vec<f32> {
             let phase = 2.0 * PI * (35.0 * t + 25.0 / 3.0 * (1.0 - (-3.0 * t).exp()));
             phase.sin() * (-t * 2.0).exp() + noise_at((t * r) as u64) * (-t * 4.0).exp() * 0.5
         }),
+        // Crash: bright noise (a high-pass of white noise) ringing out over two seconds.
+        CRASH => {
+            render(2.2, &|t| noise_at((t * r) as u64) * (-t * 2.2).exp())
+            .windows(2)
+            .map(|w| w[1] - w[0] * 0.95)
+            .chain(std::iter::once(0.0))
+            .collect()
+        }
+        // Fill: a snare roll of six hits getting closer together over half a second.
+        FILL => render(0.55, &|t| {
+            let hits = [0.0f32, 0.12, 0.22, 0.30, 0.37, 0.43, 0.48];
+            hits.iter()
+                .filter(|&&h| t >= h)
+                .map(|&h| {
+                    let d = t - h;
+                    let body = (2.0 * PI * 190.0 * d).sin() * (-d * 30.0).exp();
+                    let rattle = noise_at((t * r) as u64) * (-d * 22.0).exp();
+                    (0.6 * body + rattle) * (0.6 + 0.4 * h / 0.48)
+                })
+                .sum::<f32>()
+        }),
         _ => Vec::new(),
     };
     let peak = out.iter().fold(0.0f32, |m, v| m.max(v.abs()));
@@ -116,6 +140,27 @@ mod tests {
         let t = impact.len() / 8;
         assert!(rms(&impact[..t]) > rms(&impact[impact.len() - t..]) * 5.0, "it hits, then fades");
         assert!(impact.iter().chain(&riser).all(|s| s.abs() <= 0.9));
+    }
+
+    #[test]
+    fn a_crash_rings_bright_and_a_fill_rolls() {
+        let rms = |x: &[f32]| (x.iter().map(|s| s * s).sum::<f32>() / x.len().max(1) as f32).sqrt();
+        let crash = sound(CRASH, 48_000);
+        let secs = crash.len() as f32 / 48_000.0;
+        assert!((1.5..=3.0).contains(&secs), "crash {secs} s");
+        // Bright: sample-to-sample changes are large next to the level (lots of high frequencies).
+        let diff = crash.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum::<f32>().sqrt() / crash.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!(diff > 0.5, "bright: {diff}");
+        assert!(rms(&crash[..crash.len() / 8]) > rms(&crash[crash.len() * 7 / 8..]) * 4.0, "rings out");
+        let fill = sound(FILL, 48_000);
+        let secs = fill.len() as f32 / 48_000.0;
+        assert!((0.3..=0.8).contains(&secs), "a beat or so: {secs} s");
+        // Separate hits: the loudness drops between them.
+        let w = 480;
+        let env: Vec<f32> = fill.chunks(w).map(rms).collect();
+        let peaks = env.windows(3).filter(|x| x[1] > x[0] && x[1] >= x[2] && x[1] > 0.1).count();
+        assert!(peaks >= 4, "{peaks} hits");
+        assert!(crash.iter().chain(&fill).all(|s| s.abs() <= 0.9));
     }
 
     #[test]

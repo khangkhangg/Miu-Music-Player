@@ -29,6 +29,8 @@ pub struct HypeFx {
     pub gate: bool,
     /// Fake-out: silent.
     pub mute: bool,
+    /// Sing-along without stems: the voice range turned right down.
+    pub vocal_cut: bool,
 }
 
 /// A roll in progress: the slice caught first, then repeated.
@@ -61,6 +63,8 @@ struct Channel {
     last: (f32, f32, f32),
     level: f32,
     fx: HypeFx,
+    /// The sing-along's mid cut, its own EQ so the DJ's knobs stay where they are.
+    vocal: ThreeBand,
     stutter: Option<Stutter>,
     /// Gate/mute gain reached at the end of the last block, and the gate's own clock (s).
     fx_gain: f32,
@@ -69,7 +73,7 @@ struct Channel {
 
 impl Channel {
     fn new(rate: u32) -> Self {
-        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), reverb: Reverb::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0, fx: HypeFx::default(), stutter: None, fx_gain: 1.0, gate_clock: 0.0 }
+        Self { eq: ThreeBand::new(rate), eq_values: [0.0; 3], filter: DjFilter::new(rate), filter_value: 0.0, sweep: None, echo: Echo::new(rate), reverb: Reverb::new(rate), gain: 0.5, volume: 1.0, cue: false, last: (1.0, 1.0, std::f32::consts::FRAC_1_SQRT_2), level: 0.0, fx: HypeFx::default(), vocal: { let mut v = ThreeBand::new(rate); v.set(0.0, -1.0, 0.0); v }, stutter: None, fx_gain: 1.0, gate_clock: 0.0 }
     }
 }
 
@@ -128,7 +132,7 @@ impl Mixer {
             phones_volume: 1.0,
             last_out: (1.0, 1.0),
             scratch: [Vec::new(), Vec::new()],
-            pads: (0..=super::pads::IMPACT).map(|p| Arc::new(super::pads::sound(p, rate))).collect(),
+            pads: (0..=super::pads::FILL).map(|p| Arc::new(super::pads::sound(p, rate))).collect(),
             voices: Vec::new(),
         }
     }
@@ -300,6 +304,9 @@ impl Mixer {
             let trim = dsp::gain(ch.gain);
             ramp(buf, ch.last.0, trim);
             ch.eq.process(buf);
+            if ch.fx.vocal_cut {
+                ch.vocal.process(buf);
+            }
             if let Some(p) = ch.sweep.as_mut() {
                 *p = (*p + block_s / (SWEEP_BEATS * beat_s)).min(1.0);
                 let from = ch.filter_value.max(0.0);
@@ -448,6 +455,18 @@ mod tests {
         }
         let avg = sum.0 / sum.1 as f32;
         assert!(avg < 0.4 && avg > 0.15, "about half open: {avg}");
+    }
+
+    #[test]
+    fn hype_vocal_cut_takes_the_voice_range_down_and_keeps_the_bass() {
+        let mut m = solo(tone(1000.0, 0.5));
+        m.set_fx(D::A, HypeFx { vocal_cut: true, ..Default::default() });
+        let (master, _) = run(&mut m, 0.3);
+        assert!(peak(&master) < 0.2, "the voice range is down: {}", peak(&master));
+        let mut m = solo(tone(60.0, 0.5));
+        m.set_fx(D::A, HypeFx { vocal_cut: true, ..Default::default() });
+        let (master, _) = run(&mut m, 0.3);
+        assert!(peak(&master) > 0.35, "the bass stays: {}", peak(&master));
     }
 
     #[test]
