@@ -172,6 +172,8 @@ impl Mixer {
                     ch.filter.set(ch.filter_value);
                 }
             }
+            Action::KeyLock { deck, on } => self.deck_mut(deck).set_key_lock(on),
+            Action::KeyShift { deck, semitones } => self.deck_mut(deck).set_key_shift(semitones),
             Action::HotCue { deck, slot } => self.deck_mut(deck).hot_cue(slot as usize),
             Action::ClearHotCue { deck, slot } => self.deck_mut(deck).clear_hot_cue(slot as usize),
             Action::Loop { deck, beats } => {
@@ -440,6 +442,10 @@ mod tests {
         assert!(m.deck(D::B).hot_cues()[1].is_none());
         m.apply(&Action::Loop { deck: D::B, beats: Some(8) });
         assert!(m.deck(D::B).loop_s().is_some());
+        m.apply(&Action::KeyLock { deck: D::B, on: true });
+        assert!(m.deck(D::B).key_lock());
+        m.apply(&Action::KeyShift { deck: D::B, semitones: 1 });
+        assert_eq!(m.deck(D::B).key_shift(), 1);
         m.apply(&Action::Effect { deck: D::B, effect: Effect::SpinBack, on: true });
         run(&mut m, 1.5);
         assert!(!m.deck(D::B).is_playing(), "spun back to a stop");

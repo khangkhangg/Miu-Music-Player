@@ -119,6 +119,10 @@ pub enum Transition {
     Brake,
     /// A ballad ends almost by itself, a moment of quiet, the next one starts softly.
     BalladGap,
+    /// Big tempo gap: the old song glides to the new tempo with key lock, then a beat blend.
+    TempoRamp { bars: u8 },
+    /// Clashing keys: the new song is shifted a semitone or two to fit, then a beat blend.
+    KeyShiftBlend { bars: u8, semitones: i8 },
     /// The outgoing song is swept away with a high-pass; the new one drops in on a downbeat.
     EchoOut,
     /// A plain crossfade at the mix points, no beat-matching.
@@ -128,6 +132,25 @@ pub enum Transition {
 }
 
 /// How to mix from one song into the next.
+/// The speed the old song glides to so it plays at the new song's tempo (counting half and double
+/// time), when that is within 25 %: key lock keeps the pitch while it moves.
+pub fn ramp_target(from_bpm: f32, to_bpm: f32) -> Option<f64> {
+    if from_bpm <= 0.0 || to_bpm <= 0.0 {
+        return None;
+    }
+    [1.0, 2.0, 0.5]
+        .into_iter()
+        .map(|per| to_bpm as f64 * per / from_bpm as f64)
+        .filter(|r| (r - 1.0).abs() <= 0.25)
+        .min_by(|a, b| (a - 1.0).abs().total_cmp(&(b - 1.0).abs()))
+}
+
+/// The smallest pitch shift (up to two semitones) that puts the new song in a key that fits.
+fn key_shift_to_fit(from: &Analysis, to: &Analysis) -> Option<i8> {
+    let (a, b) = (from.key.as_deref()?, to.key.as_deref()?);
+    [1i8, -1, 2, -2].into_iter().find(|&s| super::analysis::shift_camelot(b, s).is_some_and(|k| keys_compatible(a, &k)))
+}
+
 /// How Auto DJ mixes: long smooth blends, party drama (drops, risers, tricks) or chilled filters,
 /// washes and fades.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -165,6 +188,9 @@ pub fn plan(from: &Analysis, to: &Analysis, style: Style, seed: u64) -> Transiti
     }
     let tempo_ok = tempo_change(from.bpm, to.bpm).is_some();
     let key_ok = keys_fit(from, to) != Some(false);
+    if !tempo_ok && key_ok && style != Style::Party && ramp_target(from.bpm, to.bpm).is_some() {
+        return TempoRamp { bars: 32 };
+    }
     if tempo_ok && key_ok {
         if party && to.structure.drop_s.is_some() && from.energy >= 6 {
             return DropSwap { bars: 8 };
@@ -188,7 +214,10 @@ pub fn plan(from: &Analysis, to: &Analysis, style: Style, seed: u64) -> Transiti
         };
     }
     if tempo_ok {
-        // In tempo but the keys clash: get the old song out of the way first.
+        // In tempo but the keys clash: tune the new song to fit, or get the old one out of the way.
+        if let Some(semitones) = key_shift_to_fit(from, to) {
+            return KeyShiftBlend { bars: 16, semitones };
+        }
         return if style == Style::Chill { ReverbWash } else { EchoOut };
     }
     // Far apart in tempo.
@@ -211,7 +240,7 @@ impl Transition {
     pub fn duration_s(self, from: &Analysis) -> f64 {
         match self {
             Transition::BeatBlend { bars } => bar_s(from).map_or(16.0, |b| b * bars as f64),
-            Transition::FilterBlend { bars } | Transition::BreakdownBlend { bars } | Transition::LoopOut { bars } | Transition::DropSwap { bars } => {
+            Transition::FilterBlend { bars } | Transition::BreakdownBlend { bars } | Transition::LoopOut { bars } | Transition::DropSwap { bars } | Transition::TempoRamp { bars } | Transition::KeyShiftBlend { bars, .. } => {
                 bar_s(from).map_or(16.0, |b| b * bars as f64)
             }
             Transition::EchoOut => bar_s(from).map_or(8.0, |b| b * 4.0),
@@ -354,6 +383,11 @@ mod tests {
         assert_eq!(p(&house, &song(126.0, "9A", 6, 0.8), Party), Transition::BeatBlend { bars: 8 }, "shorter at a party");
         assert_eq!(p(&house, &song(126.0, "9A", 6, 0.8), Chill), Transition::FilterBlend { bars: 16 });
         assert_eq!(p(&house, &song(90.0, "8A", 6, 0.8), Smooth), Transition::EchoOut, "big tempo jump");
+        assert_eq!(p(&house, &song(108.0, "8A", 6, 0.8), Smooth), Transition::TempoRamp { bars: 32 }, "a tempo gap key lock can bridge");
+        assert_eq!(p(&house, &song(124.0, "10A", 6, 0.8), Smooth), Transition::KeyShiftBlend { bars: 16, semitones: -2 }, "two semitones down fit the key");
+        assert_eq!(ramp_target(124.0, 108.0), Some(108.0 / 124.0));
+        assert_eq!(ramp_target(124.0, 60.0), Some(120.0 / 124.0), "half time");
+        assert_eq!(ramp_target(124.0, 80.0), None, "too far");
         assert_eq!(p(&house, &song(124.0, "2B", 6, 0.8), Smooth), Transition::EchoOut, "key clash");
         assert_eq!(p(&house, &song(124.0, "2B", 6, 0.8), Chill), Transition::ReverbWash, "key clash, chilled");
         assert_eq!(p(&house, &song(124.0, "8A", 6, 0.1), Smooth), Transition::Crossfade { secs: 8.0 }, "no clear beat");

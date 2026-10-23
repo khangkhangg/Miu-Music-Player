@@ -24,6 +24,8 @@ pub enum Target {
     Eq(Side, Band),
     /// -1 low-pass .. 0 off .. 1 high-pass.
     Filter(Side),
+    /// The old song's speed from where it was (0) to the new song's tempo (1), key-locked.
+    SpeedToIncoming,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +40,10 @@ pub enum Move {
     Stop,
     /// A transition sound (riser, impact).
     Pad(usize),
+    /// Match the new song's tempo and bars to the old one's (as it is now).
+    Sync,
+    KeyLock { side: Side, on: bool },
+    KeyShift { side: Side, semitones: i8 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -231,6 +237,30 @@ pub fn script(t: Transition, party: bool) -> Script {
             }
             (s, Entry::MixIn, false)
         }
+        Transition::TempoRamp { .. } => {
+            let mut s = vec![
+                at(0.0, Move::KeyLock { side: Side::Out, on: true }),
+                x(0.0, 0.0, -1.0, -1.0),
+                ramp(0.0, 0.5, Target::SpeedToIncoming, 0.0, 1.0),
+                at(0.5, Move::Sync),
+                at(0.5, Move::Play),
+                x(0.5, 1.0, -1.0, 1.0),
+                at(1.0, Move::Stop),
+            ];
+            s.extend(eq_swap(0.5, 1.0));
+            (s, Entry::MixIn, false)
+        }
+        Transition::KeyShiftBlend { semitones, .. } => {
+            let mut s = vec![
+                at(0.0, Move::KeyLock { side: Side::In, on: true }),
+                at(0.0, Move::KeyShift { side: Side::In, semitones }),
+                at(0.0, Move::Play),
+                x(0.0, 1.0, -1.0, 1.0),
+                at(1.0, Move::Stop),
+            ];
+            s.extend(eq_swap(0.0, 1.0));
+            (s, Entry::MixIn, true)
+        }
         Transition::Crossfade { .. } => (vec![at(0.0, Move::Play), x(0.0, 1.0, -1.0, 1.0), at(1.0, Move::Stop)], Entry::MixIn, false),
         Transition::BalladGap => {
             let s = vec![
@@ -263,7 +293,9 @@ mod tests {
     use crate::dj::autodj::Transition;
     use crate::dj::pads::{IMPACT, RISER};
 
-    const ALL: [Transition; 12] = [
+    const ALL: [Transition; 14] = [
+        Transition::TempoRamp { bars: 32 },
+        Transition::KeyShiftBlend { bars: 16, semitones: -2 },
         Transition::BeatBlend { bars: 16 },
         Transition::FilterBlend { bars: 8 },
         Transition::BreakdownBlend { bars: 8 },
@@ -367,6 +399,24 @@ mod tests {
         let s = script(Transition::LoopOut { bars: 8 }, false);
         assert_eq!(instants(&s, -1.0, 0.0).first(), Some(&&Move::Loop { side: Side::Out, beats: Some(8) }));
         assert!(moves_by(&s, 1.0).contains(&Move::Loop { side: Side::Out, beats: None }));
+    }
+
+    #[test]
+    fn the_tempo_ramp_glides_with_key_lock_then_blends() {
+        let s = script(Transition::TempoRamp { bars: 32 }, false);
+        assert_eq!(instants(&s, -1.0, 0.0).first(), Some(&&Move::KeyLock { side: Side::Out, on: true }));
+        assert_eq!(value_at(&s, Target::SpeedToIncoming, 0.0), Some(0.0));
+        assert_eq!(value_at(&s, Target::SpeedToIncoming, 0.5), Some(1.0), "at the new tempo half way");
+        let at_half: Vec<&Move> = instants(&s, 0.49, 0.5);
+        assert_eq!(at_half, vec![&Move::Sync, &Move::Play], "synced to the ramped tempo, then in");
+        assert_eq!(value_at(&s, Target::Crossfader, 0.5), Some(-1.0));
+    }
+
+    #[test]
+    fn the_key_shift_blend_tunes_the_new_song_first() {
+        let s = script(Transition::KeyShiftBlend { bars: 16, semitones: -2 }, false);
+        let first = moves_by(&s, 0.0);
+        assert_eq!(&first[..3], &[Move::KeyLock { side: Side::In, on: true }, Move::KeyShift { side: Side::In, semitones: -2 }, Move::Play]);
     }
 
     #[test]

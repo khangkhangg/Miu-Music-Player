@@ -76,6 +76,10 @@ pub enum Action {
     Browse { steps: i32 },
     LoadSelected { deck: Deck },
     AutoDj { on: bool },
+    /// Key lock: the tempo control leaves the pitch alone.
+    KeyLock { deck: Deck, on: bool },
+    /// Shift the pitch by semitones (-6..6) without changing the tempo.
+    KeyShift { deck: Deck, semitones: i8 },
 }
 
 #[cfg(test)]

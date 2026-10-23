@@ -75,6 +75,10 @@ pub struct DeckStatus {
     pub loop_s: Option<(f64, f64)>,
     pub echo: bool,
     pub sweep: bool,
+    /// The key heard now (Camelot), key lock and the pitch shift in semitones.
+    pub key: Option<String>,
+    pub key_lock: bool,
+    pub key_shift: i8,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -362,6 +366,9 @@ fn run(rx: Receiver<Cmd>, status: Arc<Mutex<EngineStatus>>, master: Option<Strin
                         loop_s: d.loop_s(),
                         echo: mixer.effects(side).0,
                         sweep: mixer.effects(side).1,
+                        key: d.key(),
+                        key_lock: d.key_lock(),
+                        key_shift: d.key_shift(),
                     };
                 }
                 s.crossfader = mixer.crossfader();

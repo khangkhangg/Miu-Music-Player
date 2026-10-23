@@ -297,6 +297,13 @@ pub fn camelot(tonic: usize, minor: bool) -> String {
     format!("{n}{}", if minor { 'A' } else { 'B' })
 }
 
+/// The Camelot key `semitones` up (or down): each semitone is seven steps around the wheel.
+pub fn shift_camelot(key: &str, semitones: i8) -> Option<String> {
+    let (n, letter) = key.split_at(key.len().checked_sub(1)?);
+    let n: i32 = n.parse().ok()?;
+    Some(format!("{}{letter}", (n - 1 + 7 * semitones as i32).rem_euclid(12) + 1))
+}
+
 /// Keys that mix well: the same, one step around the wheel, or the relative major/minor.
 pub fn keys_compatible(a: &str, b: &str) -> bool {
     let parse = |k: &str| -> Option<(i32, char)> {

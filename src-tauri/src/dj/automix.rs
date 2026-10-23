@@ -34,6 +34,9 @@ struct Mixing {
     incoming: Side,
     /// Progress at the last block (instant moves between it and now are due).
     prev_p: f32,
+    /// Tempo ramp: the old song's speed at the start and the speed it glides to.
+    speed_from: f64,
+    speed_to: Option<f64>,
 }
 
 #[derive(Default)]
@@ -206,7 +209,8 @@ impl AutoMix {
             }
             flatten(m, incoming);
             let duration_s = transition.duration_s(&from) / speed;
-            self.mixing = Some(Mixing { script, elapsed_s: 0.0, duration_s, incoming, prev_p: -1.0 });
+            let speed_to = autodj::ramp_target(from.bpm, to.bpm);
+            self.mixing = Some(Mixing { script, elapsed_s: 0.0, duration_s, incoming, prev_p: -1.0, speed_from: speed, speed_to });
         }
         self.step(m, live, frames)
     }
@@ -231,11 +235,18 @@ impl AutoMix {
         let deck = |r: Role| if r == Role::Out { live } else { incoming };
         for target in targets(&mx.script) {
             let Some(v) = script::value_at(&mx.script, target, p) else { continue };
+            if target == Target::SpeedToIncoming {
+                if let Some(to) = mx.speed_to {
+                    m.deck_mut(live).set_speed(mx.speed_from + (to - mx.speed_from) * v as f64);
+                }
+                continue;
+            }
             m.apply(&match target {
                 Target::Crossfader => Action::Crossfader { value: v * full(incoming) },
                 Target::Volume(r) => Action::Volume { deck: deck(r), value: v },
                 Target::Eq(r, band) => Action::Eq { deck: deck(r), band, value: v },
                 Target::Filter(r) => Action::Filter { deck: deck(r), value: v },
+                Target::SpeedToIncoming => continue,
             });
         }
         for mv in script::instants(&mx.script, mx.prev_p, p) {
@@ -250,6 +261,15 @@ impl AutoMix {
                 Move::Stop => m.deck_mut(live).pause(),
                 Move::Pad(slot) => {
                     m.apply(&Action::Pad { slot: slot as u8 });
+                }
+                Move::Sync => {
+                    m.apply(&Action::Sync { deck: incoming });
+                }
+                Move::KeyLock { side, on } => {
+                    m.apply(&Action::KeyLock { deck: deck(side), on });
+                }
+                Move::KeyShift { side, semitones } => {
+                    m.apply(&Action::KeyShift { deck: deck(side), semitones });
                 }
                 Move::Ramp { .. } => {}
             }
@@ -329,6 +349,27 @@ mod tests {
         assert_eq!(events, vec![Event::OnAir { deck: Side::B, song_id: 2 }]);
         let p = m.deck(Side::B).position_s();
         assert!((30.0..30.25).contains(&p), "the new song started on its drop: {p}");
+    }
+
+    #[test]
+    fn the_tempo_ramp_glides_the_old_song_to_the_new_tempo() {
+        let mut a = (*song(1, 120.0, 110.0, None)).analysis.clone().unwrap();
+        a.bpm = 124.0;
+        let old = Arc::new(Track { song_id: 1, rate: RATE, pcm: vec![0; 120 * RATE as usize * 2], analysis: Some(a) });
+        let mut b = (*song(2, 120.0, 100.0, None)).analysis.clone().unwrap();
+        b.bpm = 108.0;
+        let new = Arc::new(Track { song_id: 2, rate: RATE, pcm: vec![0; 120 * RATE as usize * 2], analysis: Some(b) });
+        let (mut m, mut auto) = ready(old, new, Transition::TempoRamp { bars: 32 });
+        run(&mut m, &mut auto, 0.05);
+        let starts = auto.next().unwrap().starts_in_s;
+        run(&mut m, &mut auto, starts + 0.05);
+        assert!(m.deck(Side::A).key_lock(), "key lock while the tempo moves");
+        let bar = 240.0 / 124.0;
+        run(&mut m, &mut auto, 16.0 * bar * 0.9);
+        assert!((m.deck(Side::A).bpm().unwrap() - 108.0).abs() < 4.0, "nearly at the new tempo: {:?}", m.deck(Side::A).bpm());
+        let events = run(&mut m, &mut auto, 20.0 * bar);
+        assert_eq!(events, vec![Event::OnAir { deck: Side::B, song_id: 2 }]);
+        assert!((m.deck(Side::B).bpm().unwrap() - 108.0).abs() < 0.5, "the new song at its own tempo: {:?}", m.deck(Side::B).bpm());
     }
 
     #[test]

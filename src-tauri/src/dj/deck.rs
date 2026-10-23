@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use super::analysis::Analysis;
+use super::stretch::Stretcher;
 
 /// How far the tempo control reaches either way.
 pub const TEMPO_RANGE: f64 = 0.08;
@@ -77,6 +78,15 @@ pub struct Deck {
     spin: Option<f64>,
     /// Brake in progress: the share of normal speed left (1 down to 0).
     braking: Option<f64>,
+    /// Key lock: the tempo moves, the pitch stays.
+    key_lock: bool,
+    /// Pitch shift in semitones (the tempo stays).
+    semitones: i8,
+    /// A speed set by Auto DJ beyond the tempo control's range (tempo ramps); None follows the control.
+    speed_override: Option<f64>,
+    stretcher: Option<(u32, Stretcher)>,
+    /// Where the stretcher left the play position (a different value means the deck jumped).
+    stretch_at: f64,
 }
 
 pub const HOT_CUES: usize = 4;
@@ -151,6 +161,35 @@ impl Deck {
 
     pub fn set_tempo(&mut self, value: f64) {
         self.tempo = value.clamp(-1.0, 1.0);
+        self.speed_override = None;
+    }
+
+    /// Speed against the song's own beyond the tempo control (Auto DJ's tempo ramps), 0.75..1.33.
+    pub fn set_speed(&mut self, ratio: f64) {
+        self.speed_override = Some(ratio.clamp(0.75, 1.33));
+    }
+
+    pub fn set_key_lock(&mut self, on: bool) {
+        self.key_lock = on;
+    }
+
+    pub fn key_lock(&self) -> bool {
+        self.key_lock
+    }
+
+    /// Shift the pitch by `semitones` (-6..6), the tempo unchanged.
+    pub fn set_key_shift(&mut self, semitones: i8) {
+        self.semitones = semitones.clamp(-6, 6);
+    }
+
+    pub fn key_shift(&self) -> i8 {
+        self.semitones
+    }
+
+    /// The key heard now (Camelot), the shift included.
+    pub fn key(&self) -> Option<String> {
+        let k = self.track.as_ref()?.analysis.as_ref()?.key.clone()?;
+        super::analysis::shift_camelot(&k, self.semitones)
     }
 
     pub fn tempo(&self) -> f64 {
@@ -163,7 +202,7 @@ impl Deck {
 
     /// Speed against the song's own, from the tempo control (what the BPM display follows).
     pub fn speed(&self) -> f64 {
-        1.0 + self.tempo * TEMPO_RANGE
+        self.speed_override.unwrap_or(1.0 + self.tempo * TEMPO_RANGE)
     }
 
     /// The tempo heard now, if the song has a beat.
@@ -300,6 +339,7 @@ impl Deck {
             return false;
         };
         self.tempo = ((speed - 1.0) / TEMPO_RANGE).clamp(-1.0, 1.0);
+        self.speed_override = None;
         // Our position counted in their beats, then the shortest move (±2 beats) onto their phase.
         let beat_s = 60.0 / mine;
         let ours = (self.position_s() - downbeat) / beat_s * per;
@@ -318,6 +358,9 @@ impl Deck {
             out.fill(0.0);
             return;
         };
+        if (self.key_lock || self.semitones != 0) && self.spin.is_none() && self.braking.is_none() {
+            return self.render_stretched(out, out_rate, &track);
+        }
         let frames = track.frames();
         let base = track.rate as f64 / out_rate as f64 * self.speed() * (1.0 + self.bend * 0.04);
         let pcm = &track.pcm;
@@ -374,6 +417,43 @@ impl Deck {
                 }
             }
         }
+    }
+
+    /// Key lock / key shift: the song through the time-stretcher (tempo and pitch apart).
+    fn render_stretched(&mut self, out: &mut [f32], out_rate: u32, track: &Arc<Track>) {
+        let frames = track.frames();
+        let pcm = &track.pcm;
+        let sample = |i: isize, ch: usize| -> f32 { pcm[i.clamp(0, frames as isize - 1) as usize * 2 + ch] as f32 / 32768.0 };
+        if !matches!(self.stretcher, Some((r, _)) if r == out_rate) {
+            self.stretcher = Some((out_rate, Stretcher::new(out_rate)));
+            self.stretch_at = f64::NAN;
+        }
+        let mut tempo = self.speed() * (1.0 + self.bend * 0.04);
+        if self.jog_bend.1 > 0 {
+            tempo *= self.jog_bend.0;
+            self.jog_bend.1 = self.jog_bend.1.saturating_sub(out.len() / 2);
+        }
+        let pitch = 2f64.powf(self.semitones as f64 / 12.0);
+        let jumped = (self.pos - self.stretch_at).abs() > 0.5 || self.stretch_at.is_nan();
+        let Some((_, st)) = self.stretcher.as_mut() else { return };
+        if jumped {
+            st.reset(self.pos);
+        }
+        st.render(out, &sample, tempo, pitch, track.rate as f64 / out_rate as f64);
+        self.pos = st.position();
+        if let Some((start, end)) = self.looping {
+            if self.pos >= end {
+                self.pos -= end - start;
+                st.reset(self.pos);
+            }
+        }
+        if self.pos >= frames as f64 {
+            self.pos = frames as f64;
+            self.playing = false;
+            self.previewing = false;
+            self.ended = true;
+        }
+        self.stretch_at = self.pos;
     }
 }
 
@@ -532,6 +612,78 @@ mod tests {
         let mut plain = Deck::default();
         plain.load(track(OUT, 60.0, None));
         assert!(!plain.set_loop(Some(4)), "no beat grid, no beat loop");
+    }
+
+    /// A steady 440 Hz tone at the output rate, with a 120 BPM beat grid and key 8A.
+    fn tone_track(secs: f64) -> Arc<Track> {
+        let pcm = (0..(OUT as f64 * secs) as usize)
+            .flat_map(|i| {
+                let v = ((2.0 * std::f64::consts::PI * 440.0 * i as f64 / OUT as f64).sin() * 16000.0) as i16;
+                [v, v]
+            })
+            .collect();
+        let mut a = analysis(120.0, 0.0, 0.0);
+        a.key = Some("8A".into());
+        Arc::new(Track { song_id: 1, rate: OUT, pcm, analysis: Some(a) })
+    }
+
+    fn frequency(x: &[f32]) -> f64 {
+        let left: Vec<f32> = x.chunks_exact(2).map(|f| f[0]).collect();
+        let ups = left.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
+        ups as f64 / (left.len() as f64 / OUT as f64)
+    }
+
+    #[test]
+    fn key_lock_keeps_the_pitch_when_the_tempo_moves() {
+        let mut d = Deck::default();
+        d.load(tone_track(10.0));
+        d.set_key_lock(true);
+        d.set_tempo(1.0);
+        d.play();
+        let out = render_secs(&mut d, 1.0);
+        assert!((frequency(&out[OUT as usize..]) - 440.0).abs() < 5.0, "{} Hz", frequency(&out[OUT as usize..]));
+        assert!((d.position_s() - 1.08).abs() < 0.03, "8 % faster: {}", d.position_s());
+        // Without key lock the pitch goes up with the tempo (vinyl).
+        let mut v = Deck::default();
+        v.load(tone_track(10.0));
+        v.set_tempo(1.0);
+        v.play();
+        let out = render_secs(&mut v, 1.0);
+        assert!((frequency(&out) - 440.0 * 1.08).abs() < 5.0);
+    }
+
+    #[test]
+    fn key_shift_moves_the_pitch_and_the_key_but_not_the_tempo() {
+        let mut d = Deck::default();
+        d.load(tone_track(10.0));
+        assert_eq!(d.key().as_deref(), Some("8A"));
+        d.set_key_shift(2);
+        assert_eq!(d.key().as_deref(), Some("10A"), "two semitones up is two steps on the wheel");
+        d.play();
+        let out = render_secs(&mut d, 1.0);
+        let want = 440.0 * 2f64.powf(2.0 / 12.0);
+        assert!((frequency(&out[OUT as usize / 2..]) - want).abs() < 6.0, "{} Hz", frequency(&out[OUT as usize / 2..]));
+        assert!((d.position_s() - 1.0).abs() < 0.03);
+        assert!((d.bpm().unwrap() - 120.0).abs() < 1e-9);
+        d.set_key_shift(-1);
+        assert_eq!(d.key().as_deref(), Some("1A"), "one down: 8A to 1A");
+    }
+
+    #[test]
+    fn auto_dj_can_go_past_the_tempo_range_with_key_lock() {
+        let mut d = Deck::default();
+        d.load(tone_track(10.0));
+        d.set_key_lock(true);
+        d.set_speed(1.2);
+        assert!((d.bpm().unwrap() - 144.0).abs() < 1e-6);
+        d.play();
+        let out = render_secs(&mut d, 1.0);
+        assert!((frequency(&out[OUT as usize / 2..]) - 440.0).abs() < 5.0);
+        d.seek_s(5.0);
+        render_secs(&mut d, 0.5);
+        assert!((d.position_s() - 5.6).abs() < 0.05, "a jump with key lock: {}", d.position_s());
+        d.set_tempo(0.0);
+        assert!((d.speed() - 1.0).abs() < 1e-9, "touching the tempo control hands it back");
     }
 
     #[test]
