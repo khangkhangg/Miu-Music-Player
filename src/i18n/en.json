@@ -695,5 +695,12 @@
   "party.relayOpening": "Opening the party link…",
   "party.relayOff": "The site has party links turned off right now.",
   "party.relayOffline": "Cannot reach musicplayer.vietnamcos.com. Trying again…",
-  "party.relayFailed": "The party link is not working ({code}). Trying again…"
+  "party.relayFailed": "The party link is not working ({code}). Trying again…",
+  "dj.section.intro": "Intro",
+  "dj.section.main": "Main",
+  "dj.section.build": "Build",
+  "dj.section.drop": "Drop",
+  "dj.section.breakdown": "Breakdown",
+  "dj.section.outro": "Outro",
+  "dj.mixZone": "Mix"
 }

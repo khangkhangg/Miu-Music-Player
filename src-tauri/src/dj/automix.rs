@@ -24,6 +24,9 @@ pub enum Event {
 pub struct Next {
     pub transition: Transition,
     pub starts_in_s: f64,
+    /// Where it starts in the outgoing song and how long it runs there (seconds of that song).
+    pub at_s: f64,
+    pub length_s: f64,
 }
 
 struct Mixing {
@@ -244,7 +247,7 @@ impl AutoMix {
             let start = autodj::start_at(&from, transition);
             let pos = m.deck(live).position_s();
             let speed = m.deck(live).speed();
-            self.next = Some(Next { transition, starts_in_s: ((start - pos) / speed).max(0.0) });
+            self.next = Some(Next { transition, starts_in_s: ((start - pos) / speed).max(0.0), at_s: start, length_s: transition.duration_s(&from) });
             if pos < start && !m.deck(live).ended() {
                 return None;
             }
@@ -420,6 +423,9 @@ mod tests {
         let (mut m, mut auto) = ready(song(1, 60.0, 50.0, None), song(2, 90.0, 80.0, Some(30.0)), Transition::DropSwap { bars: 8 });
         run(&mut m, &mut auto, 0.05);
         assert!((auto.next().unwrap().starts_in_s - 32.0).abs() < 0.2, "{:?}", auto.next());
+        // Where it sits in the old song, for the mix zone on its waveform: 32..48 s.
+        let n = auto.next().unwrap();
+        assert!((n.at_s - 32.0).abs() < 0.2 && (n.length_s - 16.0).abs() < 0.2, "{n:?}");
         run(&mut m, &mut auto, 47.9);
         assert!(!m.deck(Side::B).is_playing(), "still building");
         let events = run(&mut m, &mut auto, 0.2);

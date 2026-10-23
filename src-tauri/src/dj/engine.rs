@@ -184,12 +184,30 @@ fn open(name: Option<&str>) -> Result<DeviceOut, String> {
     Ok(DeviceOut { _stream: stream, producer, rate, channels, name, lost })
 }
 
-/// Peaks across the whole song on a deck, for the waveform overview.
+/// The whole song on a deck for its waveforms: loudness and [bass, mids, highs] in
+/// `OVERVIEW_BINS` bins (the overview), and the bands at `detail_rate` a second, flattened
+/// (the zoomed view).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Overview {
     pub song_id: i64,
     pub peaks: Vec<u8>,
+    pub bands: Vec<[u8; 3]>,
+    pub detail_rate: u32,
+    pub detail: Vec<u8>,
+}
+
+impl Overview {
+    pub fn of(t: &Track) -> Self {
+        let levels = t.bands(super::deck::BAND_RATE);
+        Overview {
+            song_id: t.song_id,
+            peaks: t.overview(OVERVIEW_BINS),
+            bands: super::deck::squeeze(&levels, OVERVIEW_BINS),
+            detail_rate: super::deck::BAND_RATE,
+            detail: levels.into_iter().flatten().collect(),
+        }
+    }
 }
 
 const OVERVIEW_BINS: usize = 600;
@@ -238,10 +256,16 @@ impl DjEngine {
         let (tx, status, overviews) = (self.tx.clone(), self.status.clone(), self.overviews.clone());
         std::thread::spawn(move || match decode_track(&path, song_id, analysis) {
             Ok(t) => {
+                // The deck first; the waveforms follow (the screen asks again until they are there).
+                let t = Arc::new(t);
                 if let Ok(mut o) = overviews.lock() {
-                    o[side as usize] = Some(Overview { song_id, peaks: t.overview(OVERVIEW_BINS) });
+                    o[side as usize] = None;
                 }
-                let _ = tx.send(Cmd::Loaded(side, Arc::new(t)));
+                let _ = tx.send(Cmd::Loaded(side, t.clone()));
+                let o = Overview::of(&t);
+                if let Ok(mut slot) = overviews.lock() {
+                    slot[side as usize] = Some(o);
+                }
             }
             Err(e) => {
                 log::warn!("DJ deck: cannot load {}: {e}", path.display());

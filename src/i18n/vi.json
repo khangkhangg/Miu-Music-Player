@@ -695,5 +695,12 @@
   "party.relayOpening": "Đang mở đường dẫn tiệc…",
   "party.relayOff": "Trang web đang tắt đường dẫn tiệc.",
   "party.relayOffline": "Không kết nối được musicplayer.vietnamcos.com. Đang thử lại…",
-  "party.relayFailed": "Đường dẫn tiệc đang lỗi ({code}). Đang thử lại…"
+  "party.relayFailed": "Đường dẫn tiệc đang lỗi ({code}). Đang thử lại…",
+  "dj.section.intro": "Mở đầu",
+  "dj.section.main": "Thân bài",
+  "dj.section.build": "Dồn lên",
+  "dj.section.drop": "Drop",
+  "dj.section.breakdown": "Lắng",
+  "dj.section.outro": "Kết",
+  "dj.mixZone": "Chuyển bài"
 }

@@ -67,10 +67,11 @@
 
 /* Waveform overviews */
 .dj-waves { display: grid; gap: 4px; }
-.dj-wave { position: relative; height: 40px; background: var(--dj-panel); border-radius: 6px; overflow: hidden; cursor: pointer; }
-.dj-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.dj-wave path { fill: var(--deck); stroke: none; opacity: 0.85; }
-.dj-wave-played { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(0, 0, 0, 0.55); pointer-events: none; }
+.dj-zoom { display: block; width: 100%; height: 88px; background: var(--dj-panel); border-radius: 6px; }
+.dj-wave { position: relative; height: 52px; background: var(--dj-panel); border-radius: 6px; overflow: hidden; cursor: pointer; border-left: 3px solid var(--deck); }
+.dj-wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.dj-wave-played { position: absolute; inset: 12px auto 0 0; width: 0; background: rgba(0, 0, 0, 0.5); pointer-events: none; }
+.dj-wave-left { position: absolute; right: 6px; bottom: 3px; font-size: 11px; font-variant-numeric: tabular-nums; color: #fff; background: rgba(0, 0, 0, 0.55); padding: 0 4px; border-radius: 3px; pointer-events: none; }
 .dj-wave-head { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #fff; pointer-events: none; }
 
 /* The desk: deck A | mixer | deck B */

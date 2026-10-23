@@ -22,6 +22,25 @@ pub const TEMPO_RANGE: f64 = 0.08;
 const JOG_TURN_S: f64 = 1.8;
 /// A jog turned while playing bends the speed for this long.
 const JOG_BEND_S: f64 = 0.05;
+/// Band levels a second for the zoomed waveform (a beat at 128 BPM is about 47 of them).
+pub const BAND_RATE: u32 = 100;
+
+/// Band levels squeezed into `bins` (RMS of each stretch), for the whole-song overview.
+pub fn squeeze(levels: &[[u8; 3]], bins: usize) -> Vec<[u8; 3]> {
+    (0..bins)
+        .map(|b| {
+            let s = &levels[b * levels.len() / bins..(b + 1) * levels.len() / bins];
+            if s.is_empty() {
+                return [0, 0, 0];
+            }
+            let mut out = [0u8; 3];
+            for (k, o) in out.iter_mut().enumerate() {
+                *o = (s.iter().map(|v| (v[k] as f64).powi(2)).sum::<f64>() / s.len() as f64).sqrt().round() as u8;
+            }
+            out
+        })
+        .collect()
+}
 
 /// A song decoded for a deck.
 pub struct Track {
@@ -55,6 +74,56 @@ impl Track {
                 (rms * 255.0 / 32768.0).min(255.0) as u8
             })
             .collect()
+    }
+
+    /// The song as `per_s` levels a second in three bands, [bass, mids, highs] (RMS, 0..255), for
+    /// waveforms coloured by sound: kicks, voices and synths, hats. Split at 200 Hz and 4 kHz with
+    /// two-pole filters (gentle, but plenty to tell a kick from a hi-hat).
+    pub fn bands(&self, per_s: u32) -> Vec<[u8; 3]> {
+        let frames = self.frames();
+        let rate = self.rate.max(1) as f64;
+        let n = frames * per_s as usize / self.rate.max(1) as usize;
+        let coef = |hz: f64| 1.0 - (-std::f64::consts::TAU * hz / rate).exp();
+        let (a_lo, a_hi) = (coef(200.0), coef(4000.0));
+        // Filter states: low-pass 200 Hz x2, low-pass 4 kHz x2, high-pass 200 Hz x2 (on the 4 kHz
+        // low-passed signal), high-pass 4 kHz x2.
+        let mut st = [0.0f64; 8];
+        let mut out = Vec::with_capacity(n);
+        let mut sums = [0.0f64; 3];
+        let mut count = 0usize;
+        let mut bin = 0usize;
+        let scale = 255.0 / 16384.0;
+        for f in 0..frames {
+            let x = (self.pcm[2 * f] as f64 + self.pcm[2 * f + 1] as f64) / 2.0;
+            st[0] += a_lo * (x - st[0]);
+            st[1] += a_lo * (st[0] - st[1]);
+            let low = st[1];
+            st[2] += a_hi * (x - st[2]);
+            st[3] += a_hi * (st[2] - st[3]);
+            let below_hi = st[3];
+            st[4] += a_lo * (below_hi - st[4]);
+            let h1 = below_hi - st[4];
+            st[5] += a_lo * (h1 - st[5]);
+            let mid = h1 - st[5];
+            st[6] += a_hi * (x - st[6]);
+            let g1 = x - st[6];
+            st[7] += a_hi * (g1 - st[7]);
+            let high = g1 - st[7];
+            sums[0] += low * low;
+            sums[1] += mid * mid;
+            sums[2] += high * high;
+            count += 1;
+            if (f + 1) * per_s as usize / self.rate.max(1) as usize > bin {
+                // Highs carry little energy even in a loud hi-hat: shown twice as big.
+                let gain = [1.0, 1.0, 2.0];
+                out.push([0, 1, 2].map(|k| ((sums[k] / count as f64).sqrt() * scale * gain[k]).min(255.0) as u8));
+                sums = [0.0; 3];
+                count = 0;
+                bin += 1;
+            }
+        }
+        out.truncate(n);
+        out
     }
 
     /// The beat grid (tempo, downbeat), when the song has one.
@@ -790,6 +859,46 @@ mod tests {
         pcm[100] = i16::MAX;
         let t = Track { song_id: 1, rate: 1000, pcm, analysis: None };
         assert!(t.overview(4)[0] < 20, "{:?}", t.overview(4));
+    }
+
+    fn tone(hz: f64, rate: u32, secs: f64) -> Vec<i16> {
+        (0..(rate as f64 * secs) as usize)
+            .flat_map(|i| {
+                let v = ((i as f64 * hz * std::f64::consts::TAU / rate as f64).sin() * 12000.0) as i16;
+                [v, v]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_bands_say_whether_it_is_bass_voice_or_hats() {
+        let rate = 44100;
+        let mut pcm = tone(55.0, rate, 1.0);
+        pcm.extend(tone(1000.0, rate, 1.0));
+        pcm.extend(tone(9000.0, rate, 1.0));
+        pcm.extend(vec![0; rate as usize * 2]);
+        let t = Track { song_id: 1, rate, pcm, analysis: None };
+        let b = t.bands(BAND_RATE);
+        assert_eq!(b.len(), 4 * BAND_RATE as usize, "{BAND_RATE} levels a second");
+        let at = |s: f64| b[(s * BAND_RATE as f64) as usize];
+        let [l, m, h] = at(0.5);
+        assert!(l > 100 && l > 3 * m && l > 3 * h, "bass {:?}", at(0.5));
+        let [l, m, h] = at(1.5);
+        assert!(m > 100 && m > 2 * l && m > 2 * h, "mids {:?}", at(1.5));
+        let [l, m, h] = at(2.5);
+        assert!(h > 100 && h > 3 * l && h > 2 * m, "highs {:?}", at(2.5));
+        assert_eq!(at(3.5), [0, 0, 0]);
+    }
+
+    #[test]
+    fn the_band_overview_squeezes_the_song_into_bins() {
+        let mut pcm = tone(55.0, 8000, 1.0);
+        pcm.extend(vec![0; 8000 * 2]);
+        let t = Track { song_id: 1, rate: 8000, pcm, analysis: None };
+        let o = squeeze(&t.bands(BAND_RATE), 4);
+        assert_eq!(o.len(), 4);
+        assert!(o[0][0] > 100 && o[1][0] > 100 && o[2].iter().all(|v| *v < 10) && o[3] == [0, 0, 0], "{o:?}"); // a few ms of filter tail
+        assert!(squeeze(&[], 4).iter().all(|b| *b == [0, 0, 0]));
     }
 
     #[test]

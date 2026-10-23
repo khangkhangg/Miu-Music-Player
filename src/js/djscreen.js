@@ -3,13 +3,16 @@
 
 import { t, translatePage } from './i18n.js';
 import {
-  bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, waveformPath, fits, songMeta,
+  bpmLabel, tempoLabel, timeLeft, knobDrag, knobKey, meterHeight, fits, songMeta,
   nextText, holdProgress, filterSongsForDj, analysisText, jogTurns, keyAction, loopBeats, learnControl, moveSelection, transitionChoices, keyShiftLabel, kindChoices, transitionsSummary,
 } from './dj.js';
+import { drawOverview, drawZoom, sectionSpans, phraseTimes, mixZone, cueMarks, deckSpeed } from './djwave.js';
 
 const POLL_MS = 50;
 const LIST_MAX = 300;
 const SIDES = ['A', 'B'];
+/** Seconds of music across the zoomed waveform. */
+const ZOOM_S = 6;
 
 export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   const $ = (id) => document.getElementById(id);
@@ -24,6 +27,11 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
   let analyses = new Map();
   let shownIds = [undefined, undefined];
   let overviewIds = [undefined, undefined];
+  let overviewData = [null, null];
+  let overviewDrawn = ['', ''];
+  let stateAt = 0;
+  let zoomFrame = 0;
+  let deckColours = [];
   const played = new Set();
   let queue = [];
   let listKey = '';
@@ -383,12 +391,58 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
 
   async function loadOverview(side, i, songId) {
     overviewIds[i] = songId;
-    const path = waveEl(side).querySelector('path');
-    path.setAttribute('d', '');
+    overviewData[i] = null;
+    overviewDrawn[i] = '';
     if (songId == null) return;
     const o = await invoke('dj_overview', { deck: side }).catch(() => null);
-    if (o && o.songId === songId && overviewIds[i] === songId) path.setAttribute('d', waveformPath(o.peaks, 1000, 40));
-    else overviewIds[i] = null; // not decoded yet: ask again on the next poll
+    if (o && o.songId === songId && overviewIds[i] === songId) overviewData[i] = o;
+    else overviewIds[i] = null; // not ready yet: ask again on the next poll
+  }
+
+  /** The whole-song waveform, drawn again only when something on it changed. */
+  function renderOverview(side, i, d) {
+    const canvas = waveEl(side).querySelector('canvas');
+    const o = overviewData[i];
+    const a = d.songId != null ? analyses.get(d.songId) : null;
+    const mix = state.autoDj && state.onAir === side ? mixZone(state.next, d.durationS) : null;
+    const marks = cueMarks(d);
+    const key = JSON.stringify([d.songId, !!o, canvas.clientWidth, canvas.clientHeight, marks, mix && [Math.round(mix.from * 500), Math.round(mix.to * 500)], !!a]);
+    if (key === overviewDrawn[i]) return;
+    overviewDrawn[i] = key;
+    drawOverview(canvas, {
+      bands: o?.bands ?? [],
+      sections: sectionSpans(a, d.durationS),
+      phrases: phraseTimes(a, d.durationS),
+      durationS: d.durationS,
+      mix,
+      ...marks,
+    }, { label: (kind) => t(`dj.section.${kind}`), mixLabel: t('dj.mixZone') });
+  }
+
+  /** The zoomed waveform, every frame while the booth is open: positions run on between polls. */
+  function renderZoom() {
+    zoomFrame = 0;
+    if (root.hidden || !state) return;
+    if (!deckColours.length) deckColours = SIDES.map((side) => getComputedStyle(deckEl(side)).getPropertyValue('--deck').trim() || '#fff'); // i18n-ignore
+    const since = (performance.now() - stateAt) / 1000;
+    const lanes = state.decks.map((d, i) => {
+      const o = overviewData[i];
+      if (d.songId == null) return null;
+      const a = analyses.get(d.songId);
+      const speed = deckSpeed(d, a);
+      return {
+        positionS: d.positionS + (d.playing ? Math.min(since, 0.25) * speed : 0),
+        speed,
+        analysis: a,
+        detail: o?.songId === d.songId ? o.detail : null,
+        rate: o?.detailRate ?? 100,
+        hotCues: d.hotCues,
+        loop: d.loopS,
+        colour: deckColours[i],
+      };
+    });
+    drawZoom($('dj-zoom'), lanes, ZOOM_S);
+    zoomFrame = requestAnimationFrame(renderZoom);
   }
 
   function onAirAnalysis() {
@@ -453,6 +507,8 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     const wave = waveEl(side);
     wave.querySelector('.dj-wave-played').style.width = `${p * 100}%`;
     wave.querySelector('.dj-wave-head').style.left = `${p * 100}%`;
+    wave.querySelector('.dj-wave-left').textContent = timeLeft(d);
+    renderOverview(side, i, d);
   }
 
   function renderParty() {
@@ -531,6 +587,8 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     const s = await invoke('dj_state').catch(() => null);
     if (!s || root.hidden) return;
     state = s;
+    stateAt = performance.now();
+    if (!zoomFrame) zoomFrame = requestAnimationFrame(renderZoom);
     for (const d of s.decks) if (d.songId != null) played.add(d.songId);
     if (queue.length && queue.some((id) => played.has(id))) { queue = queue.filter((id) => !played.has(id)); sendAuto(); }
     SIDES.forEach((side, i) => renderDeck(side, i));
@@ -583,6 +641,7 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     root.hidden = false;
     shownIds = [undefined, undefined];
     overviewIds = [undefined, undefined];
+    overviewDrawn = ['', ''];
     await Promise.all([refreshLibrary(), refreshOutputs()]);
     onOpen?.();
     refreshControllers();
@@ -603,6 +662,8 @@ export function setupDj({ invoke, listen, songs, artUrl, onOpen, onClose }) {
     setPanel(false);
     clearInterval(timer);
     timer = null;
+    cancelAnimationFrame(zoomFrame);
+    zoomFrame = 0;
     party.hidden = true;
     root.hidden = true;
     await invoke('dj_leave').catch(() => {});

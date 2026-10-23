@@ -704,8 +704,9 @@
     </header>
 
     <div class="dj-waves">
-      <div class="dj-wave" data-deck="A"><svg preserveAspectRatio="none" viewBox="0 0 1000 40" aria-hidden="true"><path/></svg><div class="dj-wave-played"></div><div class="dj-wave-head"></div></div>
-      <div class="dj-wave" data-deck="B"><svg preserveAspectRatio="none" viewBox="0 0 1000 40" aria-hidden="true"><path/></svg><div class="dj-wave-played"></div><div class="dj-wave-head"></div></div>
+      <canvas class="dj-zoom" id="dj-zoom" aria-hidden="true"></canvas>
+      <div class="dj-wave" data-deck="A"><canvas aria-hidden="true"></canvas><div class="dj-wave-played"></div><div class="dj-wave-head"></div><span class="dj-wave-left"></span></div>
+      <div class="dj-wave" data-deck="B"><canvas aria-hidden="true"></canvas><div class="dj-wave-played"></div><div class="dj-wave-head"></div><span class="dj-wave-left"></span></div>
     </div>
 
     <div class="dj-desk">
