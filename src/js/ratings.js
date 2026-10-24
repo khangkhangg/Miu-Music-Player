@@ -18,6 +18,28 @@ function duplicates(list) {
   return list.filter(s => s.duplicateGroup != null).sort((a, b) => a.duplicateGroup - b.duplicateGroup);
 }
 
+const LOSSLESS = new Set(['flac', 'alac', 'wav', 'aiff', 'ape', 'wavpack']);
+
+/** Which copy is better to keep: liked over not rated over disliked, then lossless, then the best sound, then artwork. */
+function better(x, y) {
+  const score = (s) => [s.rating ?? 0, LOSSLESS.has(s.format) ? 1 : 0, s.bitDepth ?? 0, s.sampleRate ?? 0, s.bitrateKbps ?? 0, s.hasArtwork ? 1 : 0];
+  const a = score(x);
+  const b = score(y);
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false; // a tie keeps the one listed first
+}
+
+/** The ids of every copy but the best one of each song with duplicates, to select and delete. */
+export function extraCopies(list) {
+  const keep = new Map();
+  for (const s of list) {
+    if (s.duplicateGroup == null) continue;
+    const k = keep.get(s.duplicateGroup);
+    if (!k || better(s, k)) keep.set(s.duplicateGroup, s);
+  }
+  return list.filter((s) => s.duplicateGroup != null && keep.get(s.duplicateGroup) !== s).map((s) => s.id);
+}
+
 export function filterSongs(list, filter) {
   if (filter === 'duplicates') return duplicates(list);
   const f = FILTERS.find(x => x.id === filter) ?? FILTERS[0];

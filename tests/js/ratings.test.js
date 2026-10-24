@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextRating, filterSongs, ratingCounts, filterChips } from '../../src/js/ratings.js';
+import { nextRating, filterSongs, ratingCounts, filterChips, extraCopies } from '../../src/js/ratings.js';
 
 test('like toggles between liked and not rated', () => {
   assert.equal(nextRating(0, 'like'), 1);
@@ -64,4 +64,30 @@ test('a duplicates chip appears only when there are copies, or while it is open'
   assert.equal(filterChips(withCopies, 'all').at(-1).label, 'Duplicates 4');
   assert.equal(filterChips(list, 'all').some(c => c.id === 'duplicates'), false);
   assert.deepEqual(filterChips(list, 'duplicates').at(-1), { id: 'duplicates', label: 'Duplicates 0', active: true });
+});
+
+test('extra copies: every copy but the best one of each song', () => {
+  const song = (id, group, more = {}) => ({ id, duplicateGroup: group, rating: 0, format: 'mp3', bitrateKbps: 128, hasArtwork: false, title: 't', ...more });
+  const list = [
+    song(1, 7, { bitrateKbps: 128 }),
+    song(2, 7, { bitrateKbps: 320 }),
+    song(3, 7, { bitrateKbps: 320, hasArtwork: true }),
+    song(4, 9, { format: 'flac', bitrateKbps: 900 }),
+    song(5, 9, { rating: 1 }),
+    song(6, 11),
+    song(7, 11),
+    song(8, null),
+    song(9, 12, { rating: -1, format: 'flac' }),
+    song(10, 12),
+  ];
+  assert.deepEqual(extraCopies(list).sort((a, b) => a - b), [1, 2, 4, 7, 9]);
+  // 3: higher bitrate, then artwork. 5: liked beats lossless. 6: same, the first one kept.
+  // 10: a disliked copy goes even when it sounds better. 8 has no copies.
+  assert.deepEqual(extraCopies([]), []);
+});
+
+test('extra copies: lossless beats lossy, then bit depth and sample rate', () => {
+  const song = (id, more) => ({ id, duplicateGroup: 1, rating: 0, ...more });
+  assert.deepEqual(extraCopies([song(1, { format: 'mp3', bitrateKbps: 320 }), song(2, { format: 'flac', bitrateKbps: 700 })]), [1]);
+  assert.deepEqual(extraCopies([song(1, { format: 'flac', bitDepth: 24, sampleRate: 96000 }), song(2, { format: 'flac', bitDepth: 16, sampleRate: 44100 })]), [2]);
 });

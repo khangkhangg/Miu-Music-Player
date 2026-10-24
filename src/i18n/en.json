@@ -768,5 +768,9 @@
   "dj.lengthLevel.auto": "auto",
   "party.singAlong": "Everybody sing!",
   "party.singIt": "Sing it!",
-  "party.pick": "{name}'s pick!"
+  "party.pick": "{name}'s pick!",
+  "duplicates.select": "Select extra copies",
+  "duplicates.selectHint": "Keeps the best copy of each song (liked, then best sound) and selects the rest",
+  "duplicates.delete": "Delete selected",
+  "duplicates.deleteN": "Delete {n} selected"
 }

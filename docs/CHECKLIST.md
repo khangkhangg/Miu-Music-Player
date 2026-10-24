@@ -108,6 +108,9 @@ Commands: `cargo test` (in `src-tauri/`), `node --test` (repo root), both must p
   16/44.1 in 96 s (1.5 GB), second run all hits in 0.1 s. No cache size limit yet.
 - [x] **F3.6 Duplicate detection** — *Test first:* same audio, different names → duplicate; different audio same tags → not.
   Verified in the app 2026-10-20 (Duplicates chip, path tooltip). Fingerprint = first 30 s at 16-bit + length within 1 s.
+  **Select extra copies** keeps the best copy of each song (liked over not rated over disliked, then lossless, bit
+  depth, sample rate, bitrate, artwork; a tie keeps the first) and selects the rest; **Delete selected** sends them to
+  the Recycle Bin. *Test first:* which copy is kept. Checked in the app 2026-10-24 (not deleted).
 
 ## Phase 4 – Sync engine
 - [ ] **F4.1 Sync plan diff** — *Test first:* local liked set vs device set → add / update metadata / remove.

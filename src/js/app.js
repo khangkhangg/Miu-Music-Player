@@ -4,7 +4,7 @@ import { deviceCard } from './device.js';
 import { folderItems, librarySummary, encodingOptions } from './folders.js';
 import { songRow, visibleRange, scrollToShow } from './songs.js';
 import { nowPlaying, seekTarget, nextRepeat, repeatButton, skipTarget, playButtonAction, startIndex } from './player.js';
-import { nextRating, filterSongs, filterChips, applyRated } from './ratings.js';
+import { nextRating, filterSongs, filterChips, applyRated, extraCopies } from './ratings.js';
 import { deletePrompt, deleteResult } from './delete.js';
 import { searchSongs } from './search.js';
 import { sortSongs, indexEntries, sortLocale } from './sort.js';
@@ -153,6 +153,13 @@ if (invoke) {
     if (ms != null) invoke('player_seek', { ms });
   });
   document.getElementById('delete-all').addEventListener('click', () => confirmDelete(shown.filter(x => x.rating === -1)));
+  // Duplicates: select every copy but the best one of each song, then delete them in one go.
+  document.getElementById('dup-select').addEventListener('click', () => {
+    selection = { selected: new Set(extraCopies(shown)), anchor: null };
+    markSelection();
+    updateEditButton();
+  });
+  document.getElementById('dup-delete').addEventListener('click', () => confirmDelete(selectedSongs()));
   setupEq();
   setupOutput();
   setupLyrics();
@@ -1233,6 +1240,9 @@ function updateEditButton() {
   b.hidden = n === 0;
   b.textContent = t('editor.editN', { n });
   document.getElementById('pl-add').hidden = n === 0;
+  const del = document.getElementById('dup-delete');
+  del.disabled = n === 0;
+  del.textContent = n ? t('duplicates.deleteN', { n }) : t('duplicates.delete');
   if (openPlaylist) showPlaylistHeader();
 }
 

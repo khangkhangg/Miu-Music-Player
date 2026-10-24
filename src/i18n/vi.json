@@ -768,5 +768,9 @@
   "dj.lengthLevel.auto": "tự động",
   "party.singAlong": "Cả nhà cùng hát!",
   "party.singIt": "Hát nào!",
-  "party.pick": "Bài của {name}!"
+  "party.pick": "Bài của {name}!",
+  "duplicates.select": "Chọn các bản thừa",
+  "duplicates.selectHint": "Giữ bản tốt nhất của mỗi bài (đã thích, rồi chất lượng tốt nhất) và chọn các bản còn lại",
+  "duplicates.delete": "Xóa bài đã chọn",
+  "duplicates.deleteN": "Xóa {n} bài đã chọn"
 }
